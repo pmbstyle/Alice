@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, BrowserView, shell, ipcMain } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -44,23 +44,21 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 
 async function createWindow() {
   win = new BrowserWindow({
-    title: 'Main window',
+    title: 'Alice',
     icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    transparent: true,
+    frame: false,
+    width: 500,
+    height: 500,
+    resizable: true,
     webPreferences: {
-      preload,
-      // Warning: Enable nodeIntegration and disable contextIsolation is not secure in production
-      // nodeIntegration: true,
-
-      // Consider using contextBridge.exposeInMainWorld
-      // Read more on https://www.electronjs.org/docs/latest/tutorial/context-isolation
-      // contextIsolation: false,
+      preload
     },
   })
 
-  if (VITE_DEV_SERVER_URL) { // #298
+  if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
-    // Open devTool if the app is not packaged
-    win.webContents.openDevTools()
+    //win.webContents.openDevTools()
   } else {
     win.loadFile(indexHtml)
   }
@@ -76,6 +74,9 @@ async function createWindow() {
     return { action: 'deny' }
   })
   // win.webContents.on('will-navigate', (event, url) => { }) #344
+  ipcMain.on('resize', (event, arg) => {
+    win.setSize(arg.width, arg.height)
+  })
 }
 
 app.whenReady().then(createWindow)
@@ -116,5 +117,17 @@ ipcMain.handle('open-win', (_, arg) => {
     childWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
   } else {
     childWindow.loadFile(indexHtml, { hash: arg })
+  }
+})
+
+app.on('certificate-error', (event, webContents, url, err, certificate, cb) => {
+  if (err) console.error(err)
+
+  /* eslint-disable */
+  if (url === 'https://192.168.4.39:5000/chat') {
+    event.preventDefault()
+    cb(true)
+  } else {
+    cb(false)
   }
 })

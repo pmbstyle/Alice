@@ -1,5 +1,9 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
+contextBridge.exposeInMainWorld('electron', {
+  resize: (dimensions) => ipcRenderer.send('resize', dimensions),
+})
+
 // --------- Expose some API to the Renderer process ---------
 contextBridge.exposeInMainWorld('ipcRenderer', {
   on(...args: Parameters<typeof ipcRenderer.on>) {

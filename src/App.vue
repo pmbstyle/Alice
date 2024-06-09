@@ -70,16 +70,11 @@ import chatIcon from './assets/images/chat.svg'
 
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import axios from 'axios'
-import { useSpeechRecognition } from '@vueuse/core'
 import { useConversationStore } from './stores/conversationStore'
 import { storeToRefs } from 'pinia'
 
-const conversationStore = useConversationStore()
 
-const { isListening, result, start, stop } = useSpeechRecognition({
-  continuous: true,
-  lang: 'en-US',
-})
+const conversationStore = useConversationStore()
 
 const { messages } = storeToRefs(conversationStore)
 
@@ -102,106 +97,96 @@ const chatInput = ref<string>('')
 
 const openChat = ref<boolean>(false)
 
-watch(result, (newResult) => {
-  recognizedText.value = newResult
-  // if (recognizedText.value.length > 0 && chatHistory.value.length > 0) {
-  //   chatHistory.value[chatHistory.value.length - 1].content[0].text.value = recognizedText.value
-  // }
-}, { immediate: true })
+let mediaRecorder: MediaRecorder | null = null
+let audioChunks: BlobPart[] = []
+let silenceTimeout: NodeJS.Timeout | null = null
 
-const requestMicrophonePermission = async () => {
-  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    console.error('navigator.mediaDevices is not supported in this browser.')
-    statusMessage.value = 'Microphone access is not supported in this browser.'
-    return false
-  }
-  
-  try {
-    await navigator.mediaDevices.getUserMedia({ audio: true })
-    return true
-  } catch (error) {
-    console.error('Microphone permission denied or unavailable:', error)
-    statusMessage.value = 'Microphone access denied or unavailable'
-    return false
-  }
-}
+const silenceThreshold = -30
+const minRMSValue = 1e-10
+const bufferLength = 10
+let rmsBuffer = Array(bufferLength).fill(0)
+let dynamicSilenceThreshold = silenceThreshold
 
-const startListening = async () => {
-  if (!isRecording.value || !isRecordingRequested.value) return
+const startListening = () => {
+  if(!isRecordingRequested.value) return
+  statusMessage.value = 'Listening'
+  recognizedText.value = ''
+  navigator.mediaDevices.getUserMedia({ audio: true })
+    .then(stream => {
+      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+      const source = audioContext.createMediaStreamSource(stream)
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 2048
+      const bufferLength = analyser.frequencyBinCount
+      const dataArray = new Uint8Array(bufferLength)
+      source.connect(analyser)
 
-  const hasPermission = await requestMicrophonePermission()
-  if (!hasPermission) {
-    isRecording.value = false
-    return
-  }
-
-  start()
-  await nextTick()
-  scrollChat()
-
-  const audioContextInstance = new AudioContext()
-  const analyser = audioContextInstance.createAnalyser()
-  const bufferLength = analyser.frequencyBinCount
-  const dataArray = new Uint8Array(bufferLength)
-
-  let stream: MediaStream
-
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-  } catch (error) {
-    console.error('Error accessing microphone:', error)
-    statusMessage.value = 'Microphone access denied or unavailable'
-    isRecording.value = false
-    return
-  }
-
-  const source = audioContextInstance.createMediaStreamSource(stream)
-  source.connect(analyser)
-
-  let silenceCounter = 0
-  const silenceThreshold = 200
-
-  const checkSilence = () => {
-    if (!isRecording.value) return
-
-    statusMessage.value = 'Listening'
-
-    analyser.getByteFrequencyData(dataArray)
-    const isSilent = dataArray.every(value => value < silenceThreshold)
-
-    if (isSilent) {
-      silenceCounter++
-    } else {
-      silenceCounter = 0
-    }
-
-    if (silenceCounter > 299) {
-      if (recognizedText.value.length > 0) {
-        stop()
-        isRecording.value = false
-        processRequest(recognizedText.value)
-        recognizedText.value = ''
-        silenceCounter = 0
-      } else {
-        silenceCounter = 0
-        requestAnimationFrame(checkSilence)
-        statusMessage.value = 'Listening'
+      mediaRecorder = new MediaRecorder(stream)
+      mediaRecorder.start()
+      mediaRecorder.ondataavailable = event => {
+        audioChunks.push(event.data)
       }
-    } else {
-      requestAnimationFrame(checkSilence)
-    }
-  }
+      mediaRecorder.onstop = async () => {
+        console.log('MediaRecorder stopped...')
+        statusMessage.value = 'Stop listening'
+        if(!isRecordingRequested.value) return
+        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
+        const arrayBuffer = await audioBlob.arrayBuffer()
+        const transcription = await conversationStore.transcribeAudioMessage(arrayBuffer)
+        recognizedText.value = transcription
+        processRequest(transcription)
+      }
 
-  checkSilence()
+      let silenceCounter = 0
+      let isSilent = false
+
+      const detectSilence = () => {
+        analyser.getByteTimeDomainData(dataArray)
+        let sumSquares = 0.0
+        for (let i = 0; i < bufferLength; i++) {
+          const normalized = (dataArray[i] / 128.0) - 1.0
+          sumSquares += normalized * normalized
+        }
+        const rms = Math.sqrt(sumSquares / bufferLength)
+        rmsBuffer.shift()
+        rmsBuffer.push(rms)
+        const avgRMS = rmsBuffer.reduce((sum, val) => sum + val, 0) / rmsBuffer.length
+        const db = 20 * Math.log10(Math.max(avgRMS, minRMSValue))
+
+        if (avgRMS > 0) {
+          dynamicSilenceThreshold = Math.max(dynamicSilenceThreshold, db - 10)
+        }
+
+        isSilent = (db < dynamicSilenceThreshold)
+        isSilent ? silenceCounter++ : silenceCounter = 0
+
+        //console.log('counter: ', silenceCounter, ' db: ', db)
+
+        if (silenceCounter > 499) {
+          stopListening()
+          silenceCounter = 0
+        } else {
+          requestAnimationFrame(detectSilence)
+        }
+      }
+
+      detectSilence();
+    })
+    .catch(error => console.error('Error accessing media devices:', error))
+  isRecording.value = true
 }
 
-const toggleRecording = async () => {
+const stopListening = () => {
+  if (!mediaRecorder) return
+  mediaRecorder.stop()
+  audioChunks = []
+  isRecording.value = false
+}
+
+const toggleRecording = () => {
   isRecordingRequested.value = !isRecordingRequested.value
   if (!isRecordingRequested.value) {
-    isRecording.value = false
-    stop()
-    stopVideo()
-    statusMessage.value = 'Stand by'
+    stopListening()
   } else {
     isRecording.value = true
     startListening()
@@ -222,6 +207,7 @@ const playAudio = async (audioDataURI: string) => {
       audioSource.value.buffer = audioBuffer
       audioSource.value.connect(audioContext.value.destination)
       audioSource.value.onended = () => {
+        statusMessage.value = 'Stand by'
         isPlaying.value = false
         isRecording.value = true
         startListening()
@@ -312,9 +298,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  if (isRecording.value) {
-    stop()
-  }
   if (audioContext.value) {
     audioContext.value.close()
   }

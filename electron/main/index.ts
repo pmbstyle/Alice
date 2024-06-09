@@ -1,4 +1,4 @@
-import { app, BrowserWindow, BrowserView, shell, ipcMain } from 'electron'
+import { app, BrowserWindow, BrowserView, shell, ipcMain, session } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -78,6 +78,16 @@ async function createWindow() {
     win.setSize(arg.width, arg.height)
   })
 }
+
+app.on('ready', () => {
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    if (permission === 'media') {
+      callback(true)
+    } else {
+      callback(false)
+    }
+  })
+})
 
 app.whenReady().then(createWindow)
 

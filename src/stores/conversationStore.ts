@@ -12,6 +12,7 @@ import {
  } from '../api/assistant.ts'
 
 import { tts } from '../api/tts.ts'
+import { transcribeAudio } from '../api/stt.ts'
 
 export const useConversationStore = defineStore('conversation', () => {
     
@@ -66,6 +67,12 @@ export const useConversationStore = defineStore('conversation', () => {
         return arrayBuffer
     }
 
+    const transcribeAudioMessage = async (audioBuffer: Buffer) => {
+        const response = await transcribeAudio(audioBuffer)
+        console.log('transcribeAudioMessage', response)
+        return response
+    }
+
     return {
         assistant,
         messages,
@@ -75,6 +82,7 @@ export const useConversationStore = defineStore('conversation', () => {
         getMessages,
         sendMessageToThread,
         deleteMessageFromThread,
-        chat
+        chat,
+        transcribeAudioMessage
     }
 })

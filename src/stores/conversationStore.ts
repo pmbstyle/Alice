@@ -6,17 +6,18 @@ import {
     getThread,
     listMessages,
     sendMessage,
-    deleteMessage,
     runAssistant,
     checkingStatus
- } from '../api/assistant.ts'
-
-import { tts } from '../api/tts.ts'
-import { transcribeAudio } from '../api/stt.ts'
+ } from '../api/assistant'
+import { tts } from '../api/tts';
+import { transcribeAudio } from '../api/stt';
 
 export const useConversationStore = defineStore('conversation', () => {
     
-    const assistant = ref<any>(getAssistantData())
+    const assistant = ref<any>()
+    getAssistantData().then((data) => {
+        assistant.value = data
+    })
 
     const thread = ref<any>()
 
@@ -33,11 +34,6 @@ export const useConversationStore = defineStore('conversation', () => {
 
     const sendMessageToThread = async (message: any) => {
         await sendMessage(thread.value, message)
-        getMessages(thread.value)
-    }
-
-    const deleteMessageFromThread = async (messageId: string) => {
-        await deleteMessage(thread.value, messageId)
         getMessages(thread.value)
     }
 
@@ -81,7 +77,6 @@ export const useConversationStore = defineStore('conversation', () => {
         createNewThread,
         getMessages,
         sendMessageToThread,
-        deleteMessageFromThread,
         chat,
         transcribeAudioMessage
     }

@@ -35,7 +35,7 @@
               >
                 <div class="chat-bubble mb-2"
                   :class="{ 'chat-bubble-primary': message.role === 'assistant' }"
-                  v-html="messageMarkdown(message.content[0].text.value)">
+                  v-html="messageMarkdown((message.content[0] as any).text.value)">
                 </div>
               </div>
             </template>
@@ -85,7 +85,7 @@ const audioPlayer = ref<HTMLAudioElement | null>(null)
 const aiVideo = ref<HTMLVideoElement | null>(null)
 const isPlaying = ref<boolean>(false)
 const isInProgress = ref<boolean>(false)
-const chatHistory = ref<{ role: string, content: string }[]>(messages)
+const chatHistory = ref<{ role: string, content: string }[]>(messages as any)
 const chatHistoryDisplay = computed(() => { 
   let history = [...chatHistory.value]
   return history.reverse()
@@ -113,7 +113,7 @@ const startListening = () => {
   recognizedText.value = ''
   navigator.mediaDevices.getUserMedia({ audio: true })
     .then(stream => {
-      const audioContext = new (window.AudioContext || window.webkitAudioContext)()
+      const audioContext = new (window.AudioContext)()
       const source = audioContext.createMediaStreamSource(stream)
       const analyser = audioContext.createAnalyser()
       analyser.fftSize = 2048
@@ -132,7 +132,7 @@ const startListening = () => {
         if(!isRecordingRequested.value) return
         const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
         const arrayBuffer = await audioBlob.arrayBuffer()
-        const transcription = await conversationStore.transcribeAudioMessage(arrayBuffer)
+        const transcription = await conversationStore.transcribeAudioMessage(arrayBuffer as Buffer)
         recognizedText.value = transcription
         processRequest(transcription)
       }
@@ -201,7 +201,7 @@ const playAudio = async (audioDataURI: string) => {
         audioContext.value.close()
       }
       audioContext.value = new AudioContext()
-      const audioBuffer = await audioContext.value.decodeAudioData(audioDataURI)
+      const audioBuffer = await audioContext.value.decodeAudioData(audioDataURI as ArrayBuffer)
       audioSource.value = audioContext.value.createBufferSource()
 
       audioSource.value.buffer = audioBuffer
@@ -238,7 +238,7 @@ const togglePlaying = () => {
       startListening()
     }
   } else {
-    audioSource.value.start()
+    audioSource?.value.start()
     isPlaying.value = true
   }
 }
@@ -253,7 +253,7 @@ const processRequest = async (text:string) => {
   await conversationStore.sendMessageToThread(input)
   chatInput.value = ''
   const audioURI = await conversationStore.chat()
-  await playAudio(audioURI)
+  await playAudio(audioURI as string)
   scrollChat()
 }
 
@@ -287,20 +287,14 @@ const toggleChat = async () => {
   openChat.value = !openChat.value
   await nextTick()
   if (openChat.value) {
-    window.electron.resize({ width: 1200, height: 500 })
+    (window as any).electron.resize({ width: 1200, height: 500 })
   } else {
-    window.electron.resize({ width: 500, height: 500 })
+    (window as any).electron.resize({ width: 500, height: 500 })
   }
 }
 
 onMounted(async () => {
   await conversationStore.createNewThread()
-})
-
-onUnmounted(() => {
-  if (audioContext.value) {
-    audioContext.value.close()
-  }
 })
 </script>
 

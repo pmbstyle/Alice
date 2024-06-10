@@ -10,8 +10,7 @@ export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
     const convertedFile = await toFile(audioBuffer, 'audio.wav');
     const response = await openai.audio.transcriptions.create({
         file: convertedFile,
-        model: "whisper-1",
-        response_format: "text",
-    });
-    return response
+        model: "whisper-1"
+    })
+    return response?.text
 }

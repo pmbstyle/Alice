@@ -6,11 +6,8 @@ const openai = new OpenAI({
     apiKey: import.meta.env.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
 })
-
-const assistant = await openai.beta.assistants.retrieve(import.meta.env.VITE_ASSISTANT_ID)
-
-export const getAssistantData = () => {
-    return assistant
+export const getAssistantData = async () => {
+    return await openai.beta.assistants.retrieve(import.meta.env.VITE_ASSISTANT_ID)
 }
 export const assistantList = async () => {
     const assistantList = await openai.beta.assistants.list()
@@ -35,11 +32,6 @@ export const listMessages = async (threadId: string) => {
 export const sendMessage = async (threadId: string, message: any) => {
     const response = await openai.beta.threads.messages.create(threadId, message)
     return response
-}
-
-export const deleteMessage = async (threadId: string, messageId: string) => {
-    const response = await openai.beta.threads.messages.delete(threadId, messageId)
-    return response.deleted
 }
 
 export const runAssistant = async (threadId: string, assistantId: string) => {

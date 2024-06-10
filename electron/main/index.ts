@@ -1,10 +1,9 @@
-import { app, BrowserWindow, BrowserView, shell, ipcMain, session } from 'electron'
+import { app, BrowserWindow, screen, shell, ipcMain, session } from 'electron'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
 
-const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // The built directory structure
@@ -51,6 +50,7 @@ async function createWindow() {
     width: 500,
     height: 500,
     resizable: true,
+    alwaysOnTop: true,
     webPreferences: {
       preload
     },
@@ -76,6 +76,21 @@ async function createWindow() {
   // win.webContents.on('will-navigate', (event, url) => { }) #344
   ipcMain.on('resize', (event, arg) => {
     win.setSize(arg.width, arg.height)
+  })
+  ipcMain.on('mini', (event, arg) => {
+    let display = screen.getPrimaryDisplay()
+    if(arg.minimize) {
+      let x = display.bounds.width - 230
+      let y = display.bounds.height - 260
+      win.setPosition(x, y)
+      win.setSize(210, 210)
+    } else {
+      let x = display.bounds.width / 2 - 250
+      let y = display.bounds.height / 2 - 250
+      win.setPosition(x, y)
+      win.setSize(500, 500)
+    }
+    
   })
 }
 

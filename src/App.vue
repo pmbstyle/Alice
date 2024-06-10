@@ -1,56 +1,58 @@
 <template>
-  <div class="drawer drawer-end">
-    <input id="my-drawer-4" type="checkbox" class="drawer-toggle" />
-    <div class="h-screen flex w-full items-center justify-start relative">
-      <div class="avatar-wrapper flex container h-full items-center justify-center relative z-2">
-        <div class="avatar" :class="{'open': openChat}">
-          <div
-            class="rounded-full ring ring-offset-base-100 ring-offset-2 relative overflow-hidden w-[480px] h-[480px] !flex justify-center items-center z-20"
-            :class="{ 'ring-success': isPlaying }">
-            <audio ref="audioPlayer" class="hidden"></audio>
-            <video class="max-w-screen-sm h-full rounded-full ring" ref="aiVideo" :src="videoSrc" loop muted :autoplay="isPlaying"></video>
-            <div class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black bg-opacity-60">
-              <div class="pb-2 rounded-lg flex items-center justify-center gap-8">
-                <img :src="isRecordingRequested ? micIconActive : micIcon" class="indicator" @click="toggleRecording"/>
-                <img :src="isPlaying ? speakerIconInactive : speakerIcon" class="indicator" @click="togglePlaying"/>
-                <img :src="chatIcon" class="indicator" @click="toggleChat()"/>
-              </div>
-              <div class="text-center dragable">
-                {{ statusMessage }}
-              </div>
+  <div class="h-screen flex w-full items-center justify-start relative">
+    <div class="avatar-wrapper flex container h-full items-center justify-center relative z-2" :class="{'mini':isMinimized}">
+      <div class="avatar" :class="{'open': openChat}">
+        <div
+          class="rounded-full ring ring-offset-base-100 ring-offset-2 relative overflow-hidden !flex justify-center items-center z-20"
+          :class="{ 'ring-success': isPlaying, 'w-[200px] h-[200px]':isMinimized, 'w-[480px] h-[480px]': !isMinimized }">
+          <audio ref="audioPlayer" class="hidden"></audio>
+          <video class="max-w-screen-sm h-full rounded-full ring" ref="aiVideo" :src="videoSrc" loop muted :autoplay="isPlaying"></video>
+          <div class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black bg-opacity-60">
+            <div class="pb-2 rounded-lg flex items-center justify-center gap-8">
+              <img :src="isRecordingRequested ? micIconActive : micIcon" class="indicator" :class="{'mini':isMinimized}" @click="toggleRecording"/>
+              <img :src="isPlaying ? speakerIconInactive : speakerIcon" class="indicator" :class="{'mini':isMinimized}" @click="togglePlaying"/>
+              <img :src="chatIcon" class="indicator" :class="{'hidden':isMinimized}" @click="toggleChat()"/>
             </div>
+            <div class="text-center dragable" :class="{'text-xs':isMinimized}">
+              {{ statusMessage }}
+            </div>
+          </div>
+          <div class="absolute right-2 z-80" :class="{'top-[80px]':isMinimized, 'top-[220px]':!isMinimized}">
+            <button class="btn btn-circle bg-default border-0" :class="{'btn-sm':isMinimized}" @click="toggleMinimize">
+              <img :src="isMinimized ? maxiIcon : miniIcon" class="indicator" :class="{'mini':isMinimized}"/>
+            </button>
           </div>
         </div>
-        <div
-          class="chat-wrapper h-[480px] ml-[380px] bg-gray-900 bg-opacity-90 flex flex-col absolute z-10 rounded-r-lg"
-          :class="{ 'open': openChat }"
-          >
-          <div id="chatHistory" class="messages-wrapper pb-14 w-full">
-            <template v-if="chatHistoryDisplay.length">
-              <div
-                class="chat mb-2"
-                v-for="(message, index) in chatHistoryDisplay"
-                :key="index"
-                :class="{ 'chat-start': message.role === 'assistant', 'chat-end': message.role === 'user' }"
-              >
-                <div class="chat-bubble mb-2"
-                  :class="{ 'chat-bubble-primary': message.role === 'assistant' }"
-                  v-html="messageMarkdown((message.content[0] as any).text.value)">
-                </div>
+      </div>
+      <div
+        class="chat-wrapper h-[480px] ml-[380px] bg-gray-900 bg-opacity-90 flex flex-col absolute z-10 rounded-r-lg"
+        :class="{ 'open': openChat }"
+        >
+        <div id="chatHistory" class="messages-wrapper pb-14 w-full">
+          <template v-if="chatHistoryDisplay.length">
+            <div
+              class="chat mb-2"
+              v-for="(message, index) in chatHistoryDisplay"
+              :key="index"
+              :class="{ 'chat-start': message.role === 'assistant', 'chat-end': message.role === 'user' }"
+            >
+              <div class="chat-bubble mb-2"
+                :class="{ 'chat-bubble-primary': message.role === 'assistant' }"
+                v-html="messageMarkdown((message.content[0] as any).text.value)">
               </div>
-            </template>
-            <div class="mt-4" v-if="isInProgress">
-              <span class="loading loading-ball loading-xs" v-for="n in 3" :key="n"></span>
             </div>
+          </template>
+          <div class="mt-4" v-if="isInProgress">
+            <span class="loading loading-ball loading-xs" v-for="n in 3" :key="n"></span>
           </div>
-          <div class="w-full pt-4 pr-4">
-            <input
-              v-model="chatInput"
-              @keyup.enter="chatInputHandle"
-              class="input w-full rounded-lg bg-gray-800 text-white"
-              placeholder="Type your message here..."
-            />
-          </div>
+        </div>
+        <div class="w-full pt-4 pr-4">
+          <input
+            v-model="chatInput"
+            @keyup.enter="chatInputHandle"
+            class="input w-full rounded-lg bg-gray-800 text-white"
+            placeholder="Type your message here..."
+          />
         </div>
       </div>
     </div>
@@ -67,6 +69,8 @@ import micIconActive from './assets/images/mic-active.svg'
 import speakerIcon from './assets/images/speaker.svg'
 import speakerIconInactive from './assets/images/speaker-inactive.svg'
 import chatIcon from './assets/images/chat.svg'
+import miniIcon from './assets/images/mini.svg'
+import maxiIcon from './assets/images/maxi.svg'
 
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import axios from 'axios'
@@ -96,12 +100,13 @@ const audioSource = ref<AudioBufferSourceNode | null>(null)
 const chatInput = ref<string>('')
 
 const openChat = ref<boolean>(false)
+const isMinimized = ref<boolean>(false)
 
 let mediaRecorder: MediaRecorder | null = null
 let audioChunks: BlobPart[] = []
 let silenceTimeout: NodeJS.Timeout | null = null
 
-const silenceThreshold = -30
+const silenceThreshold = 43
 const minRMSValue = 1e-10
 const bufferLength = 10
 let rmsBuffer = Array(bufferLength).fill(0)
@@ -151,16 +156,14 @@ const startListening = () => {
         rmsBuffer.shift()
         rmsBuffer.push(rms)
         const avgRMS = rmsBuffer.reduce((sum, val) => sum + val, 0) / rmsBuffer.length
-        const db = 20 * Math.log10(Math.max(avgRMS, minRMSValue))
+        const db = 20 * Math.log10(Math.max(avgRMS, minRMSValue)) * -1
 
-        if (avgRMS > 0) {
-          dynamicSilenceThreshold = Math.max(dynamicSilenceThreshold, db - 10)
-        }
+        // if (avgRMS > 0) {
+        //   dynamicSilenceThreshold = Math.max(dynamicSilenceThreshold, db - 10)
+        // }
 
-        isSilent = (db < dynamicSilenceThreshold)
+        isSilent = (db > silenceThreshold)
         isSilent ? silenceCounter++ : silenceCounter = 0
-
-        //console.log('counter: ', silenceCounter, ' db: ', db)
 
         if (silenceCounter > 499) {
           stopListening()
@@ -293,14 +296,28 @@ const toggleChat = async () => {
   }
 }
 
+const toggleMinimize = async () => {
+  isMinimized.value = !isMinimized.value
+  await nextTick()
+  if (isMinimized.value) {
+    (window as any).electron.mini({minimize:true})
+  } else {
+    (window as any).electron.mini({minimize:false})
+  }
+}
+
 onMounted(async () => {
   await conversationStore.createNewThread()
+  await processRequest('Hi Alice! Lets get it rolling.')
 })
 </script>
 
 <style scoped lang="postcss">
 .avatar-wrapper {
   height:500px;
+  &.mini {
+    height:200px;
+  }
 }
 .indicator {
   cursor: pointer;
@@ -308,6 +325,9 @@ onMounted(async () => {
   @apply p-2 rounded-full touch-auto w-14; 
   &:hover {
     @apply bg-primary bg-opacity-10;
+  }
+  &.mini {
+    @apply w-4 h-4 p-0;
   }
 }
 .avatar{

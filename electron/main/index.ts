@@ -44,7 +44,7 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Alice',
-    icon: path.join(process.env.VITE_PUBLIC, 'favicon.ico'),
+    icon: path.join(process.env.VITE_PUBLIC, 'app_logo.png'),
     transparent: true,
     frame: false,
     width: 500,
@@ -53,7 +53,7 @@ async function createWindow() {
     alwaysOnTop: true,
     webPreferences: {
       preload
-    },
+    }
   })
 
   if (VITE_DEV_SERVER_URL) {

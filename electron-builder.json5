@@ -1,9 +1,9 @@
 // @see https://www.electron.build/configuration/configuration
 {
   "$schema": "https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json",
-  "appId": "alicetheapp",
+  "appId": "aliceapp",
   "asar": true,
-  "productName": "Alice the App",
+  "productName": "Alice app",
   "directories": {
     "output": "release/${version}"
   },

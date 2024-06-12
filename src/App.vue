@@ -17,7 +17,10 @@
               {{ statusMessage }}
             </div>
           </div>
-          <div class="absolute right-2 z-80" :class="{'top-[80px]':isMinimized, 'top-[220px]':!isMinimized}">
+          <div class="absolute w-full px-2 flex justify-between z-80" :class="{'top-[80px]':isMinimized, 'top-[220px]':!isMinimized}">
+            <button class="btn btn-circle bg-disabled border-0 opacity-50" :class="{'btn-sm':isMinimized}" disabled>
+              <img :src="eyeIcon" class="indicator" :class="{'mini':isMinimized}"/>
+            </button>
             <button class="btn btn-circle bg-default border-0" :class="{'btn-sm':isMinimized}" @click="toggleMinimize">
               <img :src="isMinimized ? maxiIcon : miniIcon" class="indicator" :class="{'mini':isMinimized}"/>
             </button>
@@ -60,17 +63,23 @@
 </template>
 
 <script setup lang="ts">
-import bg from './assets/images/bg.jpg'
-import AiAvatarStatic from './assets/images/ai-avatar-static.png'
-import UserAvatarStatic from './assets/images/user-avatar-static.png'
-import videoSrc from './assets/videos/video.mp4'
-import micIcon from './assets/images/mic.svg'
-import micIconActive from './assets/images/mic-active.svg'
-import speakerIcon from './assets/images/speaker.svg'
-import speakerIconInactive from './assets/images/speaker-inactive.svg'
-import chatIcon from './assets/images/chat.svg'
-import miniIcon from './assets/images/mini.svg'
-import maxiIcon from './assets/images/maxi.svg'
+import {
+  bg,
+  AiAvatarStatic,
+  UserAvatarStatic,
+  videoSrc,
+  micIcon,
+  micIconActive,
+  speakerIcon,
+  speakerIconInactive,
+  chatIcon,
+  miniIcon,
+  maxiIcon,
+  eyeIcon,
+  eyeActiveIcon
+} from './utils/assetsImport.ts'
+
+import { messageMarkdown } from './utils/markdown.ts'
 
 import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
 import axios from 'axios'
@@ -270,15 +279,6 @@ const scrollChat = () => {
   }
 }
 
-const messageMarkdown = (text: string) => {
-  let output = text.replace(/(\r\n|\n|\r)/gm, '<br>')
-  output = output.replace(/(https?:\/\/[^\s]+)/gm, '<a href="$1" target="_blank">$1</a>')
-  output = output.replace(/(\*\*|__)(.*?)\1/g, '<strong>$2</strong>')
-  output = output.replace(/(^|\s)#([^\s]+)/gm, '$1<span class="hashtag">#$2</span>')
-  output = output.replace(/(^|\s)@([^\s]+)/gm, '$1<span class="mention">@$2</span>')
-  return output
-}
-
 const stopVideo = () => {
   if (aiVideo.value) {
     aiVideo.value.pause()
@@ -308,7 +308,7 @@ const toggleMinimize = async () => {
 
 onMounted(async () => {
   await conversationStore.createNewThread()
-  await processRequest('Hi Alice! Lets get it rolling.')
+  await processRequest('Hi Alice! Lets get it rolling. Are you ready?')
 })
 </script>
 

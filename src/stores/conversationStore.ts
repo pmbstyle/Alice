@@ -7,21 +7,20 @@ import {
     listMessages,
     sendMessage,
     runAssistant,
-    checkingStatus
- } from '../api/assistant'
-import { tts } from '../api/tts';
-import { transcribeAudio } from '../api/stt';
+    checkingStatus,
+    retrieveRelevantMemories
+} from '../api/assistant'
+import { tts } from '../api/tts'
+import { transcribeAudio } from '../api/stt'
 
 export const useConversationStore = defineStore('conversation', () => {
-    
     const assistant = ref<any>()
     getAssistantData().then((data) => {
         assistant.value = data
     })
 
     const thread = ref<any>()
-
-    const message = ref<any>({})
+    const message = ref<any>()
     const messages = ref<any>([])
 
     const createNewThread = async () => {
@@ -37,13 +36,12 @@ export const useConversationStore = defineStore('conversation', () => {
         getMessages(thread.value)
     }
 
-    const chat = async () => {
-        const id = await runAssistant(thread.value, assistant.value.id)
+    const chat = async (memories) => {
+        const id = await runAssistant(thread.value, assistant.value.id, memories)
         return new Promise((resolve, reject) => {
             let pollingInterval = setInterval(async () => {
                 const status = await checkingStatus(thread.value, id)
                 if (status) {
-                    console.log('status', status)
                     clearInterval(pollingInterval)
                     await getMessages(thread.value)
                     let audio = await ttsMessage(messages.value[0].content[0].text.value)
@@ -53,20 +51,28 @@ export const useConversationStore = defineStore('conversation', () => {
         })
     }
 
-    const ttsMessage = async (message:string) => {
+    const ttsMessage = async (message: string) => {
         const response = await tts(message)
         if (!response.ok) {
             throw new Error('Network response was not ok')
         }
         const arrayBuffer = await response.arrayBuffer()
-    
         return arrayBuffer
     }
 
     const transcribeAudioMessage = async (audioBuffer: Buffer) => {
         const response = await transcribeAudio(audioBuffer)
-        console.log('transcribeAudioMessage', response)
         return response
+    }
+
+    const createOpenAIPrompt = async (newMessage: string) => {
+        const relevantMemories = await retrieveRelevantMemories(newMessage)
+        const memoryMessages = relevantMemories.map(memory => ({ role: 'assistant', content: memory }))
+        const userMessage = { role: 'user', content: newMessage }
+        return {
+            message: userMessage,
+            history: memoryMessages
+        }
     }
 
     return {
@@ -78,6 +84,7 @@ export const useConversationStore = defineStore('conversation', () => {
         getMessages,
         sendMessageToThread,
         chat,
-        transcribeAudioMessage
+        transcribeAudioMessage,
+        createOpenAIPrompt
     }
 })

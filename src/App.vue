@@ -167,10 +167,6 @@ const startListening = () => {
         const avgRMS = rmsBuffer.reduce((sum, val) => sum + val, 0) / rmsBuffer.length
         const db = 20 * Math.log10(Math.max(avgRMS, minRMSValue)) * -1
 
-        // if (avgRMS > 0) {
-        //   dynamicSilenceThreshold = Math.max(dynamicSilenceThreshold, db - 10)
-        // }
-
         isSilent = (db > silenceThreshold)
         isSilent ? silenceCounter++ : silenceCounter = 0
 
@@ -261,10 +257,11 @@ const chatInputHandle = async () => {
 
 const processRequest = async (text:string) => {
   statusMessage.value = 'Processing'
-  let input = { role: 'user', content: text }
-  await conversationStore.sendMessageToThread(input)
+  const prompt = await conversationStore.createOpenAIPrompt(text)
+  console.log('prompt:',prompt)
+  await conversationStore.sendMessageToThread(prompt.message)
   chatInput.value = ''
-  const audioURI = await conversationStore.chat()
+  const audioURI = await conversationStore.chat(prompt.history)
   await playAudio(audioURI as string)
   scrollChat()
 }
@@ -308,7 +305,7 @@ const toggleMinimize = async () => {
 
 onMounted(async () => {
   await conversationStore.createNewThread()
-  await processRequest('Hi Alice! Lets get it rolling. Are you ready?')
+  // await processRequest('Hi Alice! Lets get it rolling. Are you ready?')
 })
 </script>
 

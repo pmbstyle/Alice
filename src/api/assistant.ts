@@ -1,15 +1,11 @@
 import OpenAI from 'openai'
 import { Pinecone } from '@pinecone-database/pinecone'
-
-// Initialize OpenAI and Pinecone
 const openai = new OpenAI({
     organization: "org-dxUPPlh6v3IBU1vruTWgEH0R",
     project: "proj_tQ4lbY7lC5J9IYOK2UI7t76h",
     apiKey: import.meta.env.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
 })
-
-const namespace = 'ns1'
 
 const pinecone = new Pinecone({
     apiKey: import.meta.env.VITE_PINECONE_API_KEY
@@ -36,10 +32,33 @@ export const listMessages = async (threadId: string) => {
     return messages.data
 }
 
-export const sendMessage = async (threadId: string, message: any) => {
+export const sendMessage = async (threadId: string, message: any, assistant: string, store: boolean = true) => {
     const response = await openai.beta.threads.messages.create(threadId, message)
-    await indexMessage(threadId, message.role, message)
+    response.assistant_id = assistant
+    if (store) await indexMessage(threadId, message.role, response)
     return response
+}
+
+export const visionMessage = async (image: any) => {
+    const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Describe what is in this screenshot" },
+              {
+                type: "image_url",
+                image_url: {
+                  "url": image,
+                  "detail": "high"
+                },
+              },
+            ],
+          },
+        ],
+      })
+      return response.choices[0].message.content
 }
 
 export const runAssistant = async (threadId: string, assistantId: string, history: any = []) => {
@@ -60,8 +79,6 @@ export const checkingStatus = async (threadId: string, runId: string) => {
     const status = runObject.status
     return status == 'completed'
 }
-
-// Embedding and Vector Database Functions
 const embedText = async (text: any) => {
     text = JSON.stringify(text)
     try {
@@ -84,7 +101,7 @@ const indexMessage = async (conversationId: string, role: string, content: any) 
         [{
             id: `${conversationId}-${role}-${Date.now()}`,
             values: embedding,
-            metadata: content
+            metadata: {role: role, content: JSON.stringify(content.content[0].text.value)}
         }]
     )
 }

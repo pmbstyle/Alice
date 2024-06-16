@@ -3,7 +3,7 @@ import { defineStore } from 'pinia'
 import {
     getAssistantData,
     createThread,
-    getThread,
+    visionMessage,
     listMessages,
     sendMessage,
     runAssistant,
@@ -16,7 +16,7 @@ import { transcribeAudio } from '../api/stt'
 export const useConversationStore = defineStore('conversation', () => {
     const assistant = ref<any>()
     getAssistantData().then((data) => {
-        assistant.value = data
+        assistant.value = data.id
     })
 
     const thread = ref<any>()
@@ -31,13 +31,13 @@ export const useConversationStore = defineStore('conversation', () => {
         messages.value = await listMessages(threadId)
     }
 
-    const sendMessageToThread = async (message: any) => {
-        await sendMessage(thread.value, message)
+    const sendMessageToThread = async (message: any, store: boolean = true) => {
+        await sendMessage(thread.value, message, assistant.value, store)
         getMessages(thread.value)
     }
 
-    const chat = async (memories) => {
-        const id = await runAssistant(thread.value, assistant.value.id, memories)
+    const chat = async (memories: any) => {
+        const id = await runAssistant(thread.value, assistant.value, memories)
         return new Promise((resolve, reject) => {
             let pollingInterval = setInterval(async () => {
                 const status = await checkingStatus(thread.value, id)
@@ -65,14 +65,22 @@ export const useConversationStore = defineStore('conversation', () => {
         return response
     }
 
-    const createOpenAIPrompt = async (newMessage: string) => {
-        const relevantMemories = await retrieveRelevantMemories(newMessage)
-        const memoryMessages = relevantMemories.map(memory => ({ role: 'assistant', content: memory }))
-        const userMessage = { role: 'user', content: newMessage }
+    const createOpenAIPrompt = async (newMessage: string, store: boolean = true) => {
+        let memoryMessages: any[] = []
+        if (store) {
+            const relevantMemories = await retrieveRelevantMemories(newMessage)
+            memoryMessages = relevantMemories.map(memory => ({ role: 'assistant', content: memory }))
+        }
+        let userMessage = { role: 'user', content: newMessage }
         return {
             message: userMessage,
             history: memoryMessages
         }
+    }
+
+    const describeImage = async (image: string) => {
+        const response = await visionMessage(image)
+        return response
     }
 
     return {
@@ -85,6 +93,7 @@ export const useConversationStore = defineStore('conversation', () => {
         sendMessageToThread,
         chat,
         transcribeAudioMessage,
-        createOpenAIPrompt
+        createOpenAIPrompt,
+        describeImage
     }
 })

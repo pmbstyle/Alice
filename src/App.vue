@@ -18,8 +18,8 @@
             </div>
           </div>
           <div class="absolute w-full px-2 flex justify-between z-80" :class="{'top-[80px]':isMinimized, 'top-[220px]':!isMinimized}">
-            <button class="btn btn-circle bg-disabled border-0 opacity-50" :class="{'btn-sm':isMinimized}" disabled>
-              <img :src="eyeIcon" class="indicator" :class="{'mini':isMinimized}"/>
+            <button class="btn btn-circle bg-disabled border-0" :class="{'btn-sm':isMinimized}" @click="takeScreenShot">
+              <img :src="takingScreenShot ? eyeIcon : eyeActiveIcon" class="indicator" :class="{'mini':isMinimized}"/>
             </button>
             <button class="btn btn-circle bg-default border-0" :class="{'btn-sm':isMinimized}" @click="toggleMinimize">
               <img :src="isMinimized ? maxiIcon : miniIcon" class="indicator" :class="{'mini':isMinimized}"/>
@@ -101,6 +101,7 @@ const isInProgress = ref<boolean>(false)
 const chatHistory = ref<{ role: string, content: string }[]>(messages as any)
 const chatHistoryDisplay = computed(() => { 
   let history = [...chatHistory.value]
+  history = history.filter(message => {!message.content[0].text.value.includes('[start screenshot]')})
   return history.reverse()
 })
 const statusMessage = ref<string>('Ready to chat')
@@ -120,6 +121,11 @@ const minRMSValue = 1e-10
 const bufferLength = 10
 let rmsBuffer = Array(bufferLength).fill(0)
 let dynamicSilenceThreshold = silenceThreshold
+
+const storeMessage = ref<boolean>(true)
+
+const screenShot = ref<string>('')
+const takingScreenShot = ref<boolean>(false)
 
 const startListening = () => {
   if(!isRecordingRequested.value) return
@@ -148,6 +154,7 @@ const startListening = () => {
         const arrayBuffer = await audioBlob.arrayBuffer()
         const transcription = await conversationStore.transcribeAudioMessage(arrayBuffer as Buffer)
         recognizedText.value = transcription
+        storeMessage.value = true
         processRequest(transcription)
       }
 
@@ -189,6 +196,7 @@ const stopListening = () => {
   mediaRecorder.stop()
   audioChunks = []
   isRecording.value = false
+  statusMessage.value = 'Stand by'
 }
 
 const toggleRecording = () => {
@@ -198,6 +206,25 @@ const toggleRecording = () => {
   } else {
     isRecording.value = true
     startListening()
+  }
+}
+
+const togglePlaying = () => {
+  if (isPlaying.value) {
+    audioPlayer.value?.pause()
+    stopVideo()
+    if (audioContext.value) {
+      audioContext.value.close()
+      audioContext.value = null
+    }
+    isPlaying.value = false
+    if(isRecordingRequested.value) {
+      isRecording.value = true
+      startListening()
+    }
+  } else {
+    audioSource?.value.start()
+    isPlaying.value = true
   }
 }
 
@@ -232,34 +259,18 @@ const playAudio = async (audioDataURI: string) => {
   }
 }
 
-const togglePlaying = () => {
-  if (isPlaying.value) {
-    audioPlayer.value?.pause()
-    stopVideo()
-    if (audioContext.value) {
-      audioContext.value.close()
-      audioContext.value = null
-    }
-    isPlaying.value = false
-    if(isRecordingRequested.value) {
-      isRecording.value = true
-      startListening()
-    }
-  } else {
-    audioSource?.value.start()
-    isPlaying.value = true
-  }
-}
-
 const chatInputHandle = async () => {
-  if (chatInput.value.length > 0) processRequest(chatInput.value)
+  if (chatInput.value.length > 0) {
+    storeMessage.value = true
+    processRequest(chatInput.value)
+  }
 }
 
 const processRequest = async (text:string) => {
   statusMessage.value = 'Processing'
-  const prompt = await conversationStore.createOpenAIPrompt(text)
+  const prompt = await conversationStore.createOpenAIPrompt(text, storeMessage.value)
   console.log('prompt:',prompt)
-  await conversationStore.sendMessageToThread(prompt.message)
+  await conversationStore.sendMessageToThread(prompt.message, storeMessage.value)
   chatInput.value = ''
   const audioURI = await conversationStore.chat(prompt.history)
   await playAudio(audioURI as string)
@@ -303,9 +314,19 @@ const toggleMinimize = async () => {
   }
 }
 
+const takeScreenShot = async () => {
+  takingScreenShot.value = true
+  statusMessage.value = 'Taking a screenshot'
+  screenShot.value = await (window as any).ipcRenderer.screenshot()
+  const description = await conversationStore.describeImage(screenShot.value)
+  let prompt = {role: 'user', content:'Here is a description of the users screenshot: [start screenshot]'+JSON.stringify(description)+'[/end screenshot]'}
+  await conversationStore.sendMessageToThread(prompt, false)
+  statusMessage.value = 'Screenshot stored'
+  takingScreenShot.value = false
+}
+
 onMounted(async () => {
   await conversationStore.createNewThread()
-  // await processRequest('Hi Alice! Lets get it rolling. Are you ready?')
 })
 </script>
 

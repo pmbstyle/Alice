@@ -46,6 +46,7 @@
   "dependencies": {
     "@pinecone-database/pinecone": "^2.2.2",
     "fs": "^0.0.1-security",
+    "node-screenshots": "^0.2.0",
     "path": "^0.12.7"
   }
 }

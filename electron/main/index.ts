@@ -1,5 +1,4 @@
-import { app, BrowserWindow, screen, shell, ipcMain, session } from 'electron'
-import { createRequire } from 'node:module'
+import { app, BrowserWindow, screen, shell, ipcMain, session, desktopCapturer } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -90,7 +89,16 @@ async function createWindow() {
       win.setPosition(x, y)
       win.setSize(500, 500)
     }
-    
+  })
+  ipcMain.handle('screenshot', async (event, arg) => {
+    const source = await desktopCapturer.getSources({ 
+      types: ['screen'],
+      thumbnailSize : {
+        width: 1200,
+        height: 1200
+      }
+    })
+    return source[0].thumbnail.toDataURL()
   })
 }
 

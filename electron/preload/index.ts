@@ -2,7 +2,10 @@ import { ipcRenderer, contextBridge } from 'electron'
 
 contextBridge.exposeInMainWorld('electron', {
   resize: (dimensions) => ipcRenderer.send('resize', dimensions),
-  mini: (minimize) => ipcRenderer.send('mini', minimize)
+  mini: (minimize) => ipcRenderer.send('mini', minimize),
+  screenshot: () => ipcRenderer.send('screenshot'),
+  showOverlay: () => ipcRenderer.send('show-overlay'),
+  getScreenshot: () => ipcRenderer.send('get-screenshot')
 })
 
 // --------- Expose some API to the Renderer process ---------
@@ -23,7 +26,11 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
     const [channel, ...omit] = args
     return ipcRenderer.invoke(channel, ...omit)
   },
-  screenshot: async () => {return await ipcRenderer.invoke('screenshot')},
+  once(...args: Parameters<typeof ipcRenderer.once>) {
+    const [channel, listener] = args
+    return ipcRenderer.once(channel, (event, ...args) => listener(event, ...args))
+  }
+
   // You can expose other APTs you need here.
   // ...
 })
@@ -38,6 +45,10 @@ function domReady(condition: DocumentReadyState[] = ['complete', 'interactive'])
         if (condition.includes(document.readyState)) {
           resolve(true)
         }
+      })
+      document.addEventListener('screenshot-saved', () => {
+        console.log('resolver')
+        resolve(true)
       })
     }
   })

@@ -3,8 +3,9 @@
     <div class="avatar-wrapper flex container h-full items-center justify-center relative z-2" :class="{'mini':isMinimized}">
       <div class="avatar" :class="{'open': openChat}">
         <div
-          class="rounded-full ring ring-offset-base-100 ring-offset-2 relative overflow-hidden !flex justify-center items-center z-20"
-          :class="{ 'ring-success': isPlaying, 'w-[200px] h-[200px]':isMinimized, 'w-[480px] h-[480px]': !isMinimized }">
+          class="rounded-full ring ring-offset-base-100 ring-offset-2 relative overflow-hidden !flex justify-center items-center z-20 bg-no-repeat bg-cover bg-center"
+          :class="{ 'ring-success': isPlaying, 'w-[200px] h-[200px]':isMinimized, 'w-[480px] h-[480px]': !isMinimized }"
+          :style="{backgroundImage:`url('${bg}'`}">
           <audio ref="audioPlayer" class="hidden"></audio>
           <video class="max-w-screen-sm h-full rounded-full ring" ref="aiVideo" :src="videoSrc" loop muted :autoplay="isPlaying"></video>
           <div class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black bg-opacity-60">
@@ -101,7 +102,7 @@ const isInProgress = ref<boolean>(false)
 const chatHistory = ref<{ role: string, content: string }[]>(messages as any)
 const chatHistoryDisplay = computed(() => { 
   let history = [...chatHistory.value]
-  history = history.filter(message => {!message.content[0].text.value.includes('[start screenshot]')})
+  history = history.filter(item =>!item.content[0].text.value.includes('[start screenshot]'))
   return history.reverse()
 })
 const statusMessage = ref<string>('Ready to chat')
@@ -315,14 +316,21 @@ const toggleMinimize = async () => {
 }
 
 const takeScreenShot = async () => {
-  takingScreenShot.value = true
-  statusMessage.value = 'Taking a screenshot'
-  screenShot.value = await (window as any).ipcRenderer.screenshot()
-  const description = await conversationStore.describeImage(screenShot.value)
-  let prompt = {role: 'user', content:'Here is a description of the users screenshot: [start screenshot]'+JSON.stringify(description)+'[/end screenshot]'}
-  await conversationStore.sendMessageToThread(prompt, false)
-  statusMessage.value = 'Screenshot stored'
-  takingScreenShot.value = false
+  if(!takingScreenShot.value) {
+    takingScreenShot.value = true
+    statusMessage.value = 'Taking a screenshot'
+    await (window as any).electron.showOverlay()
+  } else {
+    const dataURI = await (window as any).ipcRenderer.invoke('get-screenshot')
+    console.log('vue dataURI:', dataURI)
+    screenShot.value = dataURI
+    statusMessage.value = 'Screenshot taken'
+    const description = await conversationStore.describeImage(screenShot.value)
+    let prompt = {role: 'user', content:'Here is a description of the users screenshot: [start screenshot]'+JSON.stringify(description)+'[/end screenshot]'}
+    await conversationStore.sendMessageToThread(prompt, false)
+    statusMessage.value = 'Screenshot stored'
+    takingScreenShot.value = false
+  }
 }
 
 onMounted(async () => {

@@ -37,8 +37,11 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 let win: BrowserWindow | null = null
+let overlayWindow: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
+
+let screenshotDataURL: string | null = null
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -100,6 +103,47 @@ async function createWindow() {
     })
     return source[0].thumbnail.toDataURL()
   })
+
+  ipcMain.on('show-overlay', () => {
+    overlayWindow.show()
+  })
+
+  ipcMain.handle('hide-overlay', () => {
+    overlayWindow.hide()
+  })
+
+  ipcMain.handle('save-screenshot', (event, dataURL) => {
+    screenshotDataURL = dataURL
+  })
+
+  ipcMain.handle('get-screenshot', () => {
+    return screenshotDataURL
+  })
+}
+
+async function createOverlayWindow() {
+  const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  overlayWindow = new BrowserWindow({
+    width,
+    height,
+    transparent: true,
+    frame: false,
+    alwaysOnTop: true,
+    fullscreen: true,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: false,
+      nodeIntegration: true
+    }
+  })
+
+  overlayWindow.loadFile('overlay.html')
+  overlayWindow.hide()
+
+  ipcMain.handle('capture-screen', async () => {
+    const sources = await desktopCapturer.getSources({ types: ['screen'] })
+    return sources
+  })
 }
 
 app.on('ready', () => {
@@ -112,7 +156,10 @@ app.on('ready', () => {
   })
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  createWindow();
+  createOverlayWindow();
+});
 
 app.on('window-all-closed', () => {
   win = null

@@ -1,5 +1,5 @@
 
-import bg from '../assets/images/bg.jpg'
+import bg from '../assets/images/bg.png'
 import AiAvatarStatic from '../assets/images/ai-avatar-static.png'
 import UserAvatarStatic from '../assets/images/user-avatar-static.png'
 import videoSrc from '../assets/videos/video.mp4'

@@ -46,6 +46,7 @@
   "dependencies": {
     "@pinecone-database/pinecone": "^2.2.2",
     "fs": "^0.0.1-security",
-    "path": "^0.12.7"
+    "path": "^0.12.7",
+    "vue-router": "^4.4.0"
   }
 }

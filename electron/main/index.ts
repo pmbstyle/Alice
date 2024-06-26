@@ -5,16 +5,6 @@ import os from 'node:os'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-// The built directory structure
-//
-// ├─┬ dist-electron
-// │ ├─┬ main
-// │ │ └── index.js    > Electron-Main
-// │ └─┬ preload
-// │   └── index.mjs   > Preload-Scripts
-// ├─┬ dist
-// │ └── index.html    > Electron-Renderer
-//
 process.env.APP_ROOT = path.join(__dirname, '../..')
 
 export const MAIN_DIST = path.join(process.env.APP_ROOT, 'dist-electron')
@@ -25,10 +15,8 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, 'public')
   : RENDERER_DIST
 
-// Disable GPU Acceleration for Windows 7
 if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 
-// Set application name for Windows 10+ notifications
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 if (!app.requestSingleInstanceLock()) {
@@ -40,7 +28,6 @@ let win: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
-
 let screenshotDataURL: string | null = null
 
 async function createWindow() {
@@ -65,32 +52,38 @@ async function createWindow() {
     win.loadFile(indexHtml)
   }
 
-  // Test actively push message to the Electron-Renderer
+  win.on('closed', () => {
+    win = null
+  })
+
   win.webContents.on('did-finish-load', () => {
     win?.webContents.send('main-process-message', new Date().toLocaleString())
   })
 
-  // Make all links open with the browser, not with the application
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https:')) shell.openExternal(url)
     return { action: 'deny' }
   })
-  // win.webContents.on('will-navigate', (event, url) => { }) #344
+
   ipcMain.on('resize', (event, arg) => {
-    win.setSize(arg.width, arg.height)
+    if (win) {
+      win.setSize(arg.width, arg.height)
+    }
   })
   ipcMain.on('mini', (event, arg) => {
-    let display = screen.getPrimaryDisplay()
-    if(arg.minimize) {
-      let x = display.bounds.width - 230
-      let y = display.bounds.height - 260
-      win.setPosition(x, y)
-      win.setSize(210, 210)
-    } else {
-      let x = display.bounds.width / 2 - 250
-      let y = display.bounds.height / 2 - 250
-      win.setPosition(x, y)
-      win.setSize(500, 500)
+    if (win) {
+      let display = screen.getPrimaryDisplay()
+      if(arg.minimize) {
+        let x = display.bounds.width - 230
+        let y = display.bounds.height - 260
+        win.setPosition(x, y)
+        win.setSize(210, 210)
+      } else {
+        let x = display.bounds.width / 2 - 250
+        let y = display.bounds.height / 2 - 250
+        win.setPosition(x, y)
+        win.setSize(500, 500)
+      }
     }
   })
   ipcMain.handle('screenshot', async (event, arg) => {
@@ -105,11 +98,11 @@ async function createWindow() {
   })
 
   ipcMain.on('show-overlay', () => {
-    overlayWindow.show()
+    overlayWindow?.show()
   })
 
   ipcMain.handle('hide-overlay', () => {
-    overlayWindow.hide()
+    overlayWindow?.hide()
   })
 
   ipcMain.handle('save-screenshot', (event, dataURL) => {
@@ -131,14 +124,20 @@ async function createOverlayWindow() {
     alwaysOnTop: true,
     fullscreen: true,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: false,
-      nodeIntegration: true
+      preload
     }
   })
-
-  overlayWindow.loadFile('overlay.html')
+  const arg = 'overlay'
+  if (VITE_DEV_SERVER_URL) {
+    overlayWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
+  } else {
+    overlayWindow.loadFile(indexHtml, { hash: arg })
+  }
   overlayWindow.hide()
+
+  overlayWindow.on('closed', () => {
+    overlayWindow = null
+  })
 
   ipcMain.handle('capture-screen', async () => {
     const sources = await desktopCapturer.getSources({ types: ['screen'] })
@@ -159,16 +158,16 @@ app.on('ready', () => {
 app.whenReady().then(() => {
   createWindow();
   createOverlayWindow();
-});
+})
 
 app.on('window-all-closed', () => {
   win = null
+  overlayWindow = null
   if (process.platform !== 'darwin') app.quit()
 })
 
 app.on('second-instance', () => {
   if (win) {
-    // Focus on the main window if the user tried to open another
     if (win.isMinimized()) win.restore()
     win.focus()
   }
@@ -183,7 +182,6 @@ app.on('activate', () => {
   }
 })
 
-// New window example arg: new windows url
 ipcMain.handle('open-win', (_, arg) => {
   const childWindow = new BrowserWindow({
     webPreferences: {
@@ -203,7 +201,6 @@ ipcMain.handle('open-win', (_, arg) => {
 app.on('certificate-error', (event, webContents, url, err, certificate, cb) => {
   if (err) console.error(err)
 
-  /* eslint-disable */
   if (url === 'https://192.168.4.39:5000/chat') {
     event.preventDefault()
     cb(true)

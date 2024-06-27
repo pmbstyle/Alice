@@ -12,6 +12,8 @@ import miniIcon from '../assets/images/mini.svg'
 import maxiIcon from '../assets/images/maxi.svg'
 import eyeIcon from '../assets/images/eye.svg'
 import eyeActiveIcon from '../assets/images/eye-active.svg'
+import cameraIcon from '../assets/images/camera.svg'
+import uploadIcon from '../assets/images/upload.svg'
 
 export {
   bg,
@@ -26,5 +28,7 @@ export {
   miniIcon,
   maxiIcon,
   eyeIcon,
-  eyeActiveIcon
+  eyeActiveIcon,
+  cameraIcon,
+  uploadIcon
 }

@@ -19,11 +19,11 @@
               </div>
             </div>
             <div class="absolute w-full px-2 flex justify-between z-80" :class="{'top-[80px]':isMinimized, 'top-[220px]':!isMinimized}">
-              <button class="btn btn-circle bg-disabled border-0" :class="{'btn-sm':isMinimized}" @click="takeScreenShot">
-                <img :src="takingScreenShot ? eyeIcon : eyeActiveIcon" class="indicator" :class="{'mini':isMinimized}"/>
+              <button class="btn btn-circle bg-disabled border-0 p-2" :class="{'btn-sm':isMinimized}" @click="takeScreenShot">
+                <img :src="takingScreenShot ? uploadIcon : cameraIcon" class="indicator indicator-side" :class="{'mini':isMinimized}"/>
               </button>
-              <button class="btn btn-circle bg-default border-0" :class="{'btn-sm':isMinimized}" @click="toggleMinimize">
-                <img :src="isMinimized ? maxiIcon : miniIcon" class="indicator" :class="{'mini':isMinimized}"/>
+              <button class="btn btn-circle bg-default border-0 p-2" :class="{'btn-sm':isMinimized}" @click="toggleMinimize">
+                <img :src="isMinimized ? maxiIcon : miniIcon" class="indicator indicator-side" :class="{'mini':isMinimized}"/>
               </button>
             </div>
           </div>
@@ -66,8 +66,6 @@
   <script setup lang="ts">
   import {
     bg,
-    AiAvatarStatic,
-    UserAvatarStatic,
     videoSrc,
     micIcon,
     micIconActive,
@@ -76,8 +74,8 @@
     chatIcon,
     miniIcon,
     maxiIcon,
-    eyeIcon,
-    eyeActiveIcon
+    cameraIcon,
+    uploadIcon
   } from '../utils/assetsImport.ts'
   
   import { messageMarkdown } from '../utils/markdown.ts'
@@ -354,6 +352,9 @@
     }
     &.mini {
       @apply w-4 h-4 p-0;
+    }
+    &.indicator-side {
+      @apply rounded-none p-0;
     }
   }
   .avatar{

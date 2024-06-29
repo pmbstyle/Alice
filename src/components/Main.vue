@@ -7,7 +7,7 @@
             :class="{ 'ring-success': isPlaying, 'w-[200px] h-[200px]':isMinimized, 'w-[480px] h-[480px]': !isMinimized }"
             :style="{backgroundImage:`url('${bg}'`}">
             <audio ref="audioPlayer" class="hidden"></audio>
-            <video class="max-w-screen-sm h-full rounded-full ring" ref="aiVideo" :src="videoSrc" loop muted :autoplay="isPlaying"></video>
+            <video class="max-w-screen-sm h-full rounded-full ring" ref="aiVideo" :src="videoSource" loop muted :autoplay="isPlaying"></video>
             <div class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black bg-opacity-60">
               <div class="pb-2 rounded-lg flex items-center justify-center gap-8">
                 <img :src="isRecordingRequested ? micIconActive : micIcon" class="indicator" :class="{'mini':isMinimized}" @click="toggleRecording"/>
@@ -67,6 +67,8 @@
   import {
     bg,
     videoSrc,
+    videoSrcStandBy,
+    videoSrcProcessing,
     micIcon,
     micIconActive,
     speakerIcon,
@@ -80,8 +82,7 @@
   
   import { messageMarkdown } from '../utils/markdown.ts'
   
-  import { ref, watch, onMounted, onUnmounted, nextTick, computed } from 'vue'
-  import axios from 'axios'
+  import { ref, onMounted, nextTick, computed } from 'vue'
   import { useConversationStore } from '../stores/conversationStore'
   import { storeToRefs } from 'pinia'
   
@@ -95,6 +96,7 @@
   const isRecording = ref<boolean>(false)
   const audioPlayer = ref<HTMLAudioElement | null>(null)
   const aiVideo = ref<HTMLVideoElement | null>(null)
+  const videoSource = ref<string>(videoSrcStandBy)
   const isPlaying = ref<boolean>(false)
   const isInProgress = ref<boolean>(false)
   const chatHistory = ref<{ role: string, content: string }[]>(messages as any)
@@ -119,7 +121,6 @@
   const minRMSValue = 1e-10
   const bufferLength = 10
   let rmsBuffer = Array(bufferLength).fill(0)
-  let dynamicSilenceThreshold = silenceThreshold
   
   const storeMessage = ref<boolean>(true)
   
@@ -211,7 +212,7 @@
   const togglePlaying = () => {
     if (isPlaying.value) {
       audioPlayer.value?.pause()
-      stopVideo()
+      videoSource.value = videoSrcStandBy
       if (audioContext.value) {
         audioContext.value.close()
         audioContext.value = null
@@ -245,12 +246,13 @@
           isPlaying.value = false
           isRecording.value = true
           startListening()
-          stopVideo()
+          videoSource.value = videoSrcStandBy
         }
         audioSource.value.start()
         statusMessage.value = 'Playing response'
         if (audioPlayer.value) {
           audioPlayer.value.src = audioDataURI
+          videoSource.value = videoSrc
           aiVideo.value?.play()
           await audioPlayer.value.play()
         }
@@ -267,6 +269,7 @@
   
   const processRequest = async (text:string) => {
     statusMessage.value = 'Processing'
+    videoSource.value = videoSrcProcessing
     const prompt = await conversationStore.createOpenAIPrompt(text, storeMessage.value)
     console.log('prompt:',prompt)
     await conversationStore.sendMessageToThread(prompt.message, storeMessage.value)
@@ -333,6 +336,7 @@
   
   onMounted(async () => {
     await conversationStore.createNewThread()
+    aiVideo.value?.play()
   })
   </script>
   

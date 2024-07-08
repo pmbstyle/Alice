@@ -5,7 +5,8 @@ contextBridge.exposeInMainWorld('electron', {
   mini: (minimize) => ipcRenderer.send('mini', minimize),
   screenshot: () => ipcRenderer.send('screenshot'),
   showOverlay: () => ipcRenderer.send('show-overlay'),
-  getScreenshot: () => ipcRenderer.send('get-screenshot')
+  getScreenshot: () => ipcRenderer.send('get-screenshot'),
+  closeApp: () => ipcRenderer.send('close-app')
 })
 
 // --------- Expose some API to the Renderer process ---------

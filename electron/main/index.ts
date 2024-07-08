@@ -112,6 +112,10 @@ async function createWindow() {
   ipcMain.handle('get-screenshot', () => {
     return screenshotDataURL
   })
+
+  ipcMain.on('close-app', () => {
+    app.quit()
+  })
 }
 
 async function createOverlayWindow() {

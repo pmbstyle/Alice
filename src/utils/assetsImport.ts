@@ -1,4 +1,3 @@
-
 import bg from '../assets/images/bg.png'
 import AiAvatarStatic from '../assets/images/ai-avatar-static.png'
 import UserAvatarStatic from '../assets/images/user-avatar-static.png'
@@ -16,6 +15,7 @@ import eyeIcon from '../assets/images/eye.svg'
 import eyeActiveIcon from '../assets/images/eye-active.svg'
 import cameraIcon from '../assets/images/camera.svg'
 import uploadIcon from '../assets/images/upload.svg'
+import closeIcon from '../assets/images/close.svg'
 
 export {
   bg,
@@ -34,5 +34,6 @@ export {
   eyeIcon,
   eyeActiveIcon,
   cameraIcon,
-  uploadIcon
+  uploadIcon,
+  closeIcon
 }

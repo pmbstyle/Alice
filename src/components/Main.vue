@@ -19,11 +19,28 @@
               </div>
             </div>
             <div class="absolute w-full px-2 flex justify-between z-80" :class="{'top-[80px]':isMinimized, 'top-[220px]':!isMinimized}">
-              <button class="btn btn-circle bg-disabled border-0 p-2" :class="{'btn-sm':isMinimized}" @click="takeScreenShot">
-                <img :src="takingScreenShot ? uploadIcon : cameraIcon" class="indicator indicator-side" :class="{'mini':isMinimized}"/>
+              <button
+                class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side tooltip tooltip-right"
+                data-tip="Screenshot"
+                :class="{'btn-sm':isMinimized}"
+                @click="takeScreenShot">
+                  <img :src="takingScreenShot ? uploadIcon : cameraIcon" class="indicator indicator-side" :class="{'mini':isMinimized}"/>
               </button>
-              <button class="btn btn-circle bg-default border-0 p-2" :class="{'btn-sm':isMinimized}" @click="toggleMinimize">
-                <img :src="isMinimized ? maxiIcon : miniIcon" class="indicator indicator-side" :class="{'mini':isMinimized}"/>
+              <button
+                class="btn btn-circle bg-default border-0 p-2 btn-indicator-side tooltip tooltip-left"
+                :data-tip="isMinimized ? 'Maximize' : 'Minimize'"
+                :class="{'btn-sm':isMinimized}"
+                @click="toggleMinimize">
+                  <img :src="isMinimized ? maxiIcon : miniIcon" class="indicator indicator-side" :class="{'mini':isMinimized}"/>
+              </button>
+            </div>
+            <div class="absolute w-full flex justify-center z-80 top-2">
+              <button
+                class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side tooltip tooltip-bottom"
+                data-tip="Close Link"
+                :class="{'btn-sm':isMinimized}"
+                @click="closeWindow()">
+                  <img :src="closeIcon" class="indicator indicator-side"/>
               </button>
             </div>
           </div>
@@ -77,7 +94,8 @@
     miniIcon,
     maxiIcon,
     cameraIcon,
-    uploadIcon
+    uploadIcon,
+    closeIcon
   } from '../utils/assetsImport.ts'
   
   import { messageMarkdown } from '../utils/markdown.ts'
@@ -130,6 +148,7 @@
   const startListening = () => {
     if(!isRecordingRequested.value) return
     statusMessage.value = 'Listening'
+    updateVideo('stand-by')
     recognizedText.value = ''
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(stream => {
@@ -197,6 +216,7 @@
     audioChunks = []
     isRecording.value = false
     statusMessage.value = 'Stand by'
+    updateVideo('stand-by')
   }
   
   const toggleRecording = () => {
@@ -213,6 +233,7 @@
     if (isPlaying.value) {
       audioPlayer.value?.pause()
       videoSource.value = videoSrcStandBy
+      updateVideo('stand-by')
       if (audioContext.value) {
         audioContext.value.close()
         audioContext.value = null
@@ -245,15 +266,14 @@
           statusMessage.value = 'Stand by'
           isPlaying.value = false
           isRecording.value = true
+          updateVideo('stand-by')
           startListening()
-          videoSource.value = videoSrcStandBy
         }
         audioSource.value.start()
         statusMessage.value = 'Playing response'
         if (audioPlayer.value) {
           audioPlayer.value.src = audioDataURI
-          videoSource.value = videoSrc
-          aiVideo.value?.play()
+          updateVideo('speaking')
           await audioPlayer.value.play()
         }
       }
@@ -269,13 +289,15 @@
   
   const processRequest = async (text:string) => {
     statusMessage.value = 'Processing'
-    videoSource.value = videoSrcProcessing
+    updateVideo('processing')
     const prompt = await conversationStore.createOpenAIPrompt(text, storeMessage.value)
     console.log('prompt:',prompt)
     await conversationStore.sendMessageToThread(prompt.message, storeMessage.value)
+    scrollChat()
     chatInput.value = ''
     const audioURI = await conversationStore.chat(prompt.history)
     await playAudio(audioURI as string)
+    updateVideo('speaking')
     scrollChat()
   }
   
@@ -333,6 +355,28 @@
       takingScreenShot.value = false
     }
   }
+  const updateVideo = async (type:string) => {
+    switch (type) {
+      case 'stand-by':
+        videoSource.value = videoSrcStandBy
+        break
+      case 'processing':
+        videoSource.value = videoSrcProcessing
+        break
+      case 'speaking':
+        videoSource.value = videoSrc
+        break
+      default:
+        videoSource.value = videoSrcStandBy
+        break      
+    }
+    await nextTick()
+    aiVideo.value?.play()
+  }
+
+  const closeWindow = () => {
+    (window as any).electron.closeApp()
+  }
   
   onMounted(async () => {
     await conversationStore.createNewThread()
@@ -345,6 +389,11 @@
     height:500px;
     &.mini {
       height:200px;
+    }
+    &:hover {
+      .btn-indicator-side {
+        opacity: 1;
+      }
     }
   }
   .indicator {
@@ -359,6 +408,18 @@
     }
     &.indicator-side {
       @apply rounded-none p-0;
+      &:hover {
+        @apply bg-opacity-0;
+      }
+    }
+  }
+
+  .btn-indicator-side {
+    transition: all 0.3s ease-in-out;
+    opacity:0;
+    @apply bg-opacity-30;
+    &:hover {
+      @apply bg-opacity-80;
     }
   }
   .avatar{

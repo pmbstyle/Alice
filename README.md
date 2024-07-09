@@ -1,79 +1,41 @@
-# electron-vite-vue
+# Alice App
 
-🥳 Really simple `Electron` + `Vue` + `Vite` boilerplate.
-
-<!-- [![awesome-vite](https://awesome.re/mentioned-badge.svg)](https://github.com/vitejs/awesome-vite) -->
-<!-- [![Netlify Status](https://api.netlify.com/api/v1/badges/ae3863e3-1aec-4eb1-8f9f-1890af56929d/deploy-status)](https://app.netlify.com/sites/electron-vite/deploys) -->
-<!-- [![GitHub license](https://img.shields.io/github/license/caoxiemeihao/electron-vite-vue)](https://github.com/electron-vite/electron-vite-vue/blob/main/LICENSE) -->
-<!-- [![GitHub stars](https://img.shields.io/github/stars/caoxiemeihao/electron-vite-vue?color=fa6470)](https://github.com/electron-vite/electron-vite-vue) -->
-<!-- [![GitHub forks](https://img.shields.io/github/forks/caoxiemeihao/electron-vite-vue)](https://github.com/electron-vite/electron-vite-vue) -->
-[![GitHub Build](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml/badge.svg)](https://github.com/electron-vite/electron-vite-vue/actions/workflows/build.yml)
-[![GitHub Discord](https://img.shields.io/badge/chat-discord-blue?logo=discord)](https://discord.gg/sRqjYpEAUK)
+Alice App is a Vue.js application that provides an interactive AI assistant with voice recognition, text-to-speech, and image recognition capabilities. It utilizes OpenAI's GPT-4 language model and various APIs for natural language processing, speech recognition, and computer vision tasks.
 
 ## Features
 
-📦 Out of the box  
-🎯 Based on the official [template-vue-ts](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-vue-ts), less invasive  
-🌱 Extensible, really simple directory structure  
-💪 Support using Node.js API in Electron-Renderer  
-🔩 Support C/C++ native addons  
-🖥 It's easy to implement multiple windows  
+- Voice recognition: Users can speak to the AI assistant, and their speech is transcribed into text using OpenAI's Whisper API.
+- Text-to-speech: The AI assistant can respond with synthesized speech using OpenAI's TTS API.
+- Image recognition: Users can take screenshots, and the AI assistant can describe the contents of the image using OpenAI's Vision API.
+- Conversation history: The application stores and retrieves relevant conversation history to provide context-aware responses.
+- Pinecone vector database: Conversation messages are embedded and stored in a Pinecone vector database for efficient retrieval of relevant memories.
 
-## Quick Setup
+## Technologies Used
 
-```sh
-# clone the project
-git clone https://github.com/electron-vite/electron-vite-vue.git
+- Vue.js
+- Pinia (State Management)
+- OpenAI API (GPT-4, Whisper, TTS, Vision)
+- Pinecone (Vector Database)
+- Electron (Desktop Application)
 
-# enter the project directory
-cd electron-vite-vue
+## Getting Started
 
-# install dependency
-npm install
+1. Clone the repository: `git clone https://github.com/pmbstyle/alice-app.git`
+2. Install dependencies: `npm install`
+3. Set up environment variables with your OpenAI and Pinecone API keys.
+4. Run the development server: `npm run dev`
+5. Build the Electron app: `npm run build`
 
-# develop
-npm run dev
-```
+## Contributing
 
-## Debug
+Contributions are welcome! Please follow the standard GitHub workflow for contributing to this project:
 
-![electron-vite-react-debug.gif](https://github.com/electron-vite/electron-vite-react/blob/main/electron-vite-react-debug.gif?raw=true)
+1. Fork the repository
+2. Create a new branch: `git checkout -b my-feature-branch`
+3. Make your changes and commit them: `git commit -m 'Add some feature'`
+4. Push to the branch: `git push origin my-feature-branch`
+5. Submit a pull request
 
-## Directory
+## License
 
-```diff
-+ ├─┬ electron
-+ │ ├─┬ main
-+ │ │ └── index.ts    entry of Electron-Main
-+ │ └─┬ preload
-+ │   └── index.ts    entry of Preload-Scripts
-  ├─┬ src
-  │ └── main.ts       entry of Electron-Renderer
-  ├── index.html
-  ├── package.json
-  └── vite.config.ts
-```
-
-<!--
-## Be aware
-
-🚨 By default, this template integrates Node.js in the Renderer process. If you don't need it, you just remove the option below. [Because it will modify the default config of Vite](https://github.com/electron-vite/vite-plugin-electron-renderer#config-presets-opinionated).
-
-```diff
-# vite.config.ts
-
-export default {
-  plugins: [
--   // Use Node.js API in the Renderer-process
--   renderer({
--     nodeIntegration: true,
--   }),
-  ],
-}
-```
--->
-
-## FAQ
-
-- [C/C++ addons, Node.js modules - Pre-Bundling](https://github.com/electron-vite/vite-plugin-electron-renderer#dependency-pre-bundling)
-- [dependencies vs devDependencies](https://github.com/electron-vite/vite-plugin-electron-renderer#dependencies-vs-devdependencies)
+This project is licensed under the [MIT License](LICENSE).

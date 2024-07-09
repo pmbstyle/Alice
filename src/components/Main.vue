@@ -133,7 +133,6 @@
   
   let mediaRecorder: MediaRecorder | null = null
   let audioChunks: BlobPart[] = []
-  let silenceTimeout: NodeJS.Timeout | null = null
   
   const silenceThreshold = 43
   const minRMSValue = 1e-10
@@ -244,7 +243,7 @@
         startListening()
       }
     } else {
-      audioSource?.value.start()
+      audioSource.value?.start()
       isPlaying.value = true
     }
   }
@@ -311,13 +310,6 @@
     }
   }
   
-  const stopVideo = () => {
-    if (aiVideo.value) {
-      aiVideo.value.pause()
-      aiVideo.value.currentTime = 0
-    }
-  }
-  
   const toggleChat = async () => {
     openChat.value = !openChat.value
     await nextTick()
@@ -332,7 +324,14 @@
     isMinimized.value = !isMinimized.value
     await nextTick()
     if (isMinimized.value) {
-      (window as any).electron.mini({minimize:true})
+      if(openChat.value) {
+        toggleChat()
+        setTimeout(() => {
+          (window as any).electron.mini({minimize:true})
+        }, 1000)
+      } else {
+        (window as any).electron.mini({minimize:true})
+      }
     } else {
       (window as any).electron.mini({minimize:false})
     }

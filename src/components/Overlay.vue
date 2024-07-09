@@ -29,8 +29,6 @@
 
   async function onMouseUp(e) {
     if (!selectionBox) return
-    const endX = e.clientX
-    const endY = e.clientY
     const rect = selectionBox.getBoundingClientRect()
     document.body.removeChild(selectionBox)
 
@@ -47,7 +45,6 @@
         }
       }
     })
-    console.log('image', image)
 
     const track = image.getVideoTracks()[0]
     const capture = new ImageCapture(track)

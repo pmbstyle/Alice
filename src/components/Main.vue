@@ -83,9 +83,6 @@
   <script setup lang="ts">
   import {
     bg,
-    videoSrc,
-    videoSrcStandBy,
-    videoSrcProcessing,
     micIcon,
     micIconActive,
     speakerIcon,
@@ -97,6 +94,8 @@
     uploadIcon,
     closeIcon
   } from '../utils/assetsImport.ts'
+
+  import { setVideo } from '../utils/videoProcess.ts'
   
   import { messageMarkdown } from '../utils/markdown.ts'
   
@@ -114,7 +113,7 @@
   const isRecording = ref<boolean>(false)
   const audioPlayer = ref<HTMLAudioElement | null>(null)
   const aiVideo = ref<HTMLVideoElement | null>(null)
-  const videoSource = ref<string>(videoSrcStandBy)
+  const videoSource = ref<string>('')
   const isPlaying = ref<boolean>(false)
   const isInProgress = ref<boolean>(false)
   const chatHistory = ref<{ role: string, content: string }[]>(messages as any)
@@ -147,7 +146,7 @@
   const startListening = () => {
     if(!isRecordingRequested.value) return
     statusMessage.value = 'Listening'
-    updateVideo('stand-by')
+    updateVideo('STAND_BY')
     recognizedText.value = ''
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(stream => {
@@ -215,7 +214,7 @@
     audioChunks = []
     isRecording.value = false
     statusMessage.value = 'Stand by'
-    updateVideo('stand-by')
+    updateVideo('STAND_BY')
   }
   
   const toggleRecording = () => {
@@ -231,8 +230,7 @@
   const togglePlaying = () => {
     if (isPlaying.value) {
       audioPlayer.value?.pause()
-      videoSource.value = videoSrcStandBy
-      updateVideo('stand-by')
+      updateVideo('STAND_BY')
       if (audioContext.value) {
         audioContext.value.close()
         audioContext.value = null
@@ -265,14 +263,14 @@
           statusMessage.value = 'Stand by'
           isPlaying.value = false
           isRecording.value = true
-          updateVideo('stand-by')
+          updateVideo('STAND_BY')
           startListening()
         }
         audioSource.value.start()
         statusMessage.value = 'Playing response'
         if (audioPlayer.value) {
           audioPlayer.value.src = audioDataURI
-          updateVideo('speaking')
+          updateVideo('SPEAKING')
           await audioPlayer.value.play()
         }
       }
@@ -288,7 +286,7 @@
   
   const processRequest = async (text:string) => {
     statusMessage.value = 'Processing'
-    updateVideo('processing')
+    updateVideo('PROCESSING')
     const prompt = await conversationStore.createOpenAIPrompt(text, storeMessage.value)
     console.log('prompt:',prompt)
     await conversationStore.sendMessageToThread(prompt.message, storeMessage.value)
@@ -296,7 +294,7 @@
     chatInput.value = ''
     const audioURI = await conversationStore.chat(prompt.history)
     await playAudio(audioURI as string)
-    updateVideo('speaking')
+    updateVideo('SPEAKING')
     scrollChat()
   }
   
@@ -354,23 +352,14 @@
       takingScreenShot.value = false
     }
   }
-  const updateVideo = async (type:string) => {
-    switch (type) {
-      case 'stand-by':
-        videoSource.value = videoSrcStandBy
-        break
-      case 'processing':
-        videoSource.value = videoSrcProcessing
-        break
-      case 'speaking':
-        videoSource.value = videoSrc
-        break
-      default:
-        videoSource.value = videoSrcStandBy
-        break      
+  const updateVideo = async (type: string) => {
+    const playVideo = async (videoType: string) => {
+      videoSource.value = setVideo(videoType)
+      await nextTick()
+      aiVideo.value?.play()
     }
-    await nextTick()
-    aiVideo.value?.play()
+
+    await playVideo(type)
   }
 
   const closeWindow = () => {
@@ -379,7 +368,7 @@
   
   onMounted(async () => {
     await conversationStore.createNewThread()
-    aiVideo.value?.play()
+    updateVideo('STAND_BY')
   })
   </script>
   

@@ -27,8 +27,9 @@ export const getThread = async (threadId: string) => {
     return thread
 }
 
-export const listMessages = async (threadId: string) => {
+export const listMessages = async (threadId: string, last: boolean = false) => {
     const messages = await openai.beta.threads.messages.list(threadId)
+    if(last) await indexMessage(threadId, messages.data[0].role, messages.data[0])
     return messages.data
 }
 

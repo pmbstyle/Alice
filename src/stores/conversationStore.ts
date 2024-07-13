@@ -27,8 +27,8 @@ export const useConversationStore = defineStore('conversation', () => {
         thread.value = await createThread()
     }
 
-    const getMessages = async (threadId: string) => {
-        messages.value = await listMessages(threadId)
+    const getMessages = async (threadId: string, last: boolean = false) => {
+        messages.value = await listMessages(threadId, last)
     }
 
     const sendMessageToThread = async (message: any, store: boolean = true) => {
@@ -43,7 +43,7 @@ export const useConversationStore = defineStore('conversation', () => {
                 const status = await checkingStatus(thread.value, id)
                 if (status) {
                     clearInterval(pollingInterval)
-                    await getMessages(thread.value)
+                    await getMessages(thread.value, true)
                     let audio = await ttsMessage(messages.value[0].content[0].text.value)
                     resolve(audio)
                 }

@@ -100,35 +100,40 @@
   import { messageMarkdown } from '../utils/markdown.ts'
   
   import { ref, onMounted, nextTick, computed } from 'vue'
-  import { useConversationStore } from '../stores/conversationStore'
+  import { useGeneralStore } from '../stores/generalStore.ts'
+  import { useConversationStore } from '../stores/openAIStore.ts'
   import { storeToRefs } from 'pinia'
   
   
+  const generalStore = useGeneralStore()
   const conversationStore = useConversationStore()
   
-  const { messages } = storeToRefs(conversationStore)
-  
-  const recognizedText = ref<string>('')
-  const isRecordingRequested = ref<boolean>(false)
-  const isRecording = ref<boolean>(false)
-  const audioPlayer = ref<HTMLAudioElement | null>(null)
-  const aiVideo = ref<HTMLVideoElement | null>(null)
-  const videoSource = ref<string>('')
-  const isPlaying = ref<boolean>(false)
-  const isInProgress = ref<boolean>(false)
-  const chatHistory = ref<{ role: string, content: string }[]>(messages as any)
-  const chatHistoryDisplay = computed(() => { 
+  const {
+    provider,
+    setProvider,
+    messages,
+    recognizedText,
+    isRecordingRequested,
+    isRecording,
+    audioPlayer,
+    aiVideo,
+    videoSource,
+    isPlaying,
+    isInProgress,
+    chatHistory,
+    statusMessage,
+    audioContext,
+    audioSource,
+    chatInput,
+    openChat,
+    isMinimized
+  } = storeToRefs(generalStore)
+
+  const chatHistoryDisplay = computed(() => {
     let history = [...chatHistory.value]
     history = history.filter(item =>!item.content[0].text.value.includes('[start screenshot]'))
     return history.reverse()
   })
-  const statusMessage = ref<string>('Ready to chat')
-  const audioContext = ref<AudioContext | null>(null)
-  const audioSource = ref<AudioBufferSourceNode | null>(null)
-  const chatInput = ref<string>('')
-  
-  const openChat = ref<boolean>(false)
-  const isMinimized = ref<boolean>(false)
   
   let mediaRecorder: MediaRecorder | null = null
   let audioChunks: BlobPart[] = []

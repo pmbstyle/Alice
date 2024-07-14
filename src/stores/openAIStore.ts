@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { defineStore } from 'pinia'
+import { defineStore, storeToRefs } from 'pinia'
 import {
     getAssistantData,
     createThread,
@@ -9,19 +9,21 @@ import {
     runAssistant,
     checkingStatus,
     retrieveRelevantMemories
-} from '../api/assistant'
-import { tts } from '../api/tts'
-import { transcribeAudio } from '../api/stt'
+} from '../api/openAI/assistant'
+import { tts } from '../api/openAI/tts'
+import { transcribeAudio } from '../api/openAI/stt'
+import { useGeneralStore } from './generalStore'
 
 export const useConversationStore = defineStore('conversation', () => {
+
+    const { messages } = storeToRefs(useGeneralStore())
+
     const assistant = ref<any>()
     getAssistantData().then((data) => {
         assistant.value = data.id
     })
 
     const thread = ref<any>()
-    const message = ref<any>()
-    const messages = ref<any>([])
 
     const createNewThread = async () => {
         thread.value = await createThread()
@@ -85,8 +87,6 @@ export const useConversationStore = defineStore('conversation', () => {
 
     return {
         assistant,
-        messages,
-        message,
         thread,
         createNewThread,
         getMessages,

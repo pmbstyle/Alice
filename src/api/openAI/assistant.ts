@@ -1,20 +1,15 @@
 import OpenAI from 'openai'
-import { Pinecone } from '@pinecone-database/pinecone'
+import { setIndex, getRelatedMessages } from '../pinecone/pinecone'
+
 const openai = new OpenAI({
-    organization: "org-dxUPPlh6v3IBU1vruTWgEH0R",
-    project: "proj_tQ4lbY7lC5J9IYOK2UI7t76h",
+    organization: import.meta.env.VITE_OPENAI_ORGANIZATION,
+    project: import.meta.env.VITE_OPENAI_PROJECT,
     apiKey: import.meta.env.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true
 })
 
-const pinecone = new Pinecone({
-    apiKey: import.meta.env.VITE_PINECONE_API_KEY
-})
-
-const index = pinecone.Index('conversations')
-
 export const getAssistantData = async () => {
-    return await openai.beta.assistants.retrieve(import.meta.env.VITE_ASSISTANT_ID)
+    return await openai.beta.assistants.retrieve(import.meta.env.VITE_OPENAI_ASSISTANT_ID)
 }
 
 export const createThread = async () => {
@@ -98,22 +93,11 @@ const embedText = async (text: any) => {
 
 const indexMessage = async (conversationId: string, role: string, content: any) => {
     const embedding = await embedText(content)
-    await index.upsert(
-        [{
-            id: `${conversationId}-${role}-${Date.now()}`,
-            values: embedding,
-            metadata: {role: role, content: JSON.stringify(content.content[0].text.value)}
-        }]
-    )
+    await setIndex(conversationId, role, content, embedding)
 }
 
 export const retrieveRelevantMemories = async (content: string, topK = 5) => {
     let embedding = await embedText(content)
-    const results = await index.query({
-        vector: embedding,
-        topK,
-        includeValues: true,
-        includeMetadata: true
-    })
-    return results.matches.map(match => match.metadata.content)
+    const results = await getRelatedMessages(topK, embedding)
+    return results
 }

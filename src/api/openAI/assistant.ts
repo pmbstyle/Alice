@@ -37,7 +37,7 @@ export const sendMessage = async (threadId: string, message: any, assistant: str
 
 export const visionMessage = async (image: any) => {
     const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "user",

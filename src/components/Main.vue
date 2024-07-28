@@ -3,11 +3,13 @@
       <div class="avatar-wrapper flex container h-full items-center justify-center relative z-2" :class="{'mini':isMinimized}">
         <div class="avatar" :class="{'open': openChat}">
           <div
-            class="rounded-full ring ring-offset-base-100 ring-offset-2 relative overflow-hidden !flex justify-center items-center z-20 bg-no-repeat bg-cover bg-center"
+            class="avatar-ring"
             :class="{ 'ring-success': isPlaying, 'w-[200px] h-[200px]':isMinimized, 'w-[480px] h-[480px]': !isMinimized }"
             :style="{backgroundImage:`url('${bg}'`}">
             <audio ref="audioPlayer" class="hidden"></audio>
-            <video class="max-w-screen-sm h-full rounded-full ring" ref="aiVideo" :src="videoSource" loop muted :autoplay="isPlaying"></video>
+            <video class="max-w-screen-md rounded-full ring"
+              :class="{'h-[200px]':isMinimized, 'h-[480px]': !isMinimized }"
+              ref="aiVideo" :src="videoSource" loop muted :autoplay="isPlaying"></video>
             <div class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black bg-opacity-60">
               <div class="pb-2 rounded-lg flex items-center justify-center gap-8">
                 <img :src="isRecordingRequested ? micIconActive : micIcon" class="indicator" :class="{'mini':isMinimized}" @click="toggleRecording"/>
@@ -36,7 +38,7 @@
             </div>
             <div class="absolute w-full flex justify-center z-80 top-2">
               <button
-                class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side tooltip tooltip-bottom"
+                class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side close tooltip tooltip-bottom"
                 data-tip="Close Link"
                 :class="{'btn-sm':isMinimized}"
                 @click="closeWindow()">
@@ -383,7 +385,12 @@
     &.mini {
       height:200px;
     }
-    &:hover {
+    .avatar-ring {
+      @apply rounded-full ring ring-offset-base-100 ring-offset-2
+      relative overflow-hidden !flex justify-center items-center
+      z-20 bg-no-repeat bg-cover bg-center shadow-md;
+    }
+    .avatar:hover {
       .btn-indicator-side {
         opacity: 1;
       }
@@ -413,6 +420,9 @@
     @apply bg-opacity-30;
     &:hover {
       @apply bg-opacity-80;
+      &.close {
+        @apply bg-red-500;
+      }
     }
   }
   .avatar{
@@ -427,15 +437,16 @@
     cursor: move;
   }
   .chat-wrapper {
-    @apply max-w-0 overflow-hidden opacity-0 flex flex-col;
+    @apply max-w-0 overflow-hidden opacity-0 flex flex-col border-4 border-transparent;
     transition: width .1s ease-in-out;
     transition: opacity .3s ease-in-out;
+    transition: border .3s ease-in-out;
     .messages-wrapper {
       flex:1;
       overflow-y:scroll;
     }
     &.open {
-      @apply w-full max-w-[960px] py-4 pl-[300px] opacity-100;
+      @apply w-full max-w-[960px] py-4 pl-[300px] opacity-100 border-blue-500/50 shadow-md;
     }
   }
   </style>

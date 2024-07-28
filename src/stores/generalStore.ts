@@ -24,6 +24,8 @@ export const useGeneralStore = defineStore('general', () => {
   const openChat = ref<boolean>(false)
   const isMinimized = ref<boolean>(false)
 
+  const storeMessage = ref<boolean>(false)
+
   const setProvider = (provider: string) => {
     provider = provider || 'openai'
   }
@@ -46,6 +48,7 @@ export const useGeneralStore = defineStore('general', () => {
     audioSource,
     chatInput,
     openChat,
-    isMinimized
+    isMinimized,
+    storeMessage
   }
 })

@@ -26,6 +26,8 @@ export const useGeneralStore = defineStore('general', () => {
 
   const storeMessage = ref<boolean>(false)
 
+  const takingScreenShot = ref<boolean>(false)
+
   const setProvider = (provider: string) => {
     provider = provider || 'openai'
   }
@@ -49,6 +51,7 @@ export const useGeneralStore = defineStore('general', () => {
     chatInput,
     openChat,
     isMinimized,
-    storeMessage
+    storeMessage,
+    takingScreenShot
   }
 })

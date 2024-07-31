@@ -44,7 +44,7 @@
     "vue-tsc": "^2.0.6"
   },
   "dependencies": {
-    "@pinecone-database/pinecone": "^2.2.2",
+    "@pinecone-database/pinecone": "^3.0.0",
     "fs": "^0.0.1-security",
     "path": "^0.12.7",
     "vue-router": "^4.4.0"

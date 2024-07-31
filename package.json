@@ -1,0 +1,52 @@
+{
+  "name": "electron-vue-vite",
+  "version": "0.7.9",
+  "main": "dist-electron/main/index.js",
+  "description": "Alice app",
+  "author": "pmb",
+  "license": "MIT",
+  "private": true,
+  "keywords": [
+    "electron",
+    "rollup",
+    "vite",
+    "vue3",
+    "vue"
+  ],
+  "debug": {
+    "env": {
+      "VITE_DEV_SERVER_URL": "http://127.0.0.1:3344/"
+    }
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && electron-builder",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "autoprefixer": "^10.4.19",
+    "axios": "^1.6.8",
+    "daisyui": "^4.11.1",
+    "dotenv": "^16.4.5",
+    "electron": "^30.1.0",
+    "electron-builder": "^24.13.3",
+    "openai": "^4.49.0",
+    "pinia": "^2.1.7",
+    "postcss": "^8.4.38",
+    "tailwindcss": "^3.4.3",
+    "typescript": "^5.4.2",
+    "vite": "^5.1.5",
+    "vite-plugin-electron": "^0.28.4",
+    "vite-plugin-electron-renderer": "^0.14.5",
+    "vue": "^3.4.21",
+    "vue-tsc": "^2.0.6"
+  },
+  "dependencies": {
+    "@pinecone-database/pinecone": "^2.2.2",
+    "fs": "^0.0.1-security",
+    "path": "^0.12.7",
+    "vue-router": "^4.4.0"
+  }
+}

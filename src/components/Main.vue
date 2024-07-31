@@ -20,9 +20,9 @@
         <Chat @processRequest="processRequest"/>
       </div>
     </div>
-  </template>
-  
-  <script setup lang="ts">
+</template>
+
+<script setup lang="ts">
   import Actions from './Actions.vue'
   import Chat from './Chat.vue'
   import { bg } from '../utils/assetsImport.ts'
@@ -31,10 +31,10 @@
   import { useGeneralStore } from '../stores/generalStore.ts'
   import { useConversationStore } from '../stores/openAIStore.ts'
   import { storeToRefs } from 'pinia'
-  
+
   const generalStore = useGeneralStore()
   const conversationStore = useConversationStore()
-  
+
   const {
     recognizedText,
     isRecordingRequested,
@@ -52,17 +52,17 @@
     storeMessage,
     takingScreenShot
   } = storeToRefs(generalStore)
-  
+
   let mediaRecorder: MediaRecorder | null = null
   let audioChunks: BlobPart[] = []
-  
+
   const silenceThreshold = 43
   const minRMSValue = 1e-10
   const bufferLength = 10
   let rmsBuffer = Array(bufferLength).fill(0)
-  
+
   const screenShot = ref<string>('')
-  
+
   const startListening = () => {
     if(!isRecordingRequested.value) return
     statusMessage.value = 'Listening'
@@ -77,7 +77,7 @@
         const bufferLength = analyser.frequencyBinCount
         const dataArray = new Uint8Array(bufferLength)
         source.connect(analyser)
-  
+
         mediaRecorder = new MediaRecorder(stream)
         mediaRecorder.start()
         mediaRecorder.ondataavailable = event => {
@@ -94,10 +94,10 @@
           storeMessage.value = true
           processRequest(transcription)
         }
-  
+
         let silenceCounter = 0
         let isSilent = false
-  
+
         const detectSilence = () => {
           analyser.getByteTimeDomainData(dataArray)
           let sumSquares = 0.0
@@ -110,10 +110,10 @@
           rmsBuffer.push(rms)
           const avgRMS = rmsBuffer.reduce((sum, val) => sum + val, 0) / rmsBuffer.length
           const db = 20 * Math.log10(Math.max(avgRMS, minRMSValue)) * -1
-  
+
           isSilent = (db > silenceThreshold)
           isSilent ? silenceCounter++ : silenceCounter = 0
-  
+
           if (silenceCounter > 499) {
             stopListening()
             silenceCounter = 0
@@ -121,13 +121,13 @@
             requestAnimationFrame(detectSilence)
           }
         }
-  
+
         detectSilence();
       })
       .catch(error => console.error('Error accessing media devices:', error))
     isRecording.value = true
   }
-  
+
   const stopListening = () => {
     if (!mediaRecorder) return
     mediaRecorder.stop()
@@ -136,7 +136,7 @@
     statusMessage.value = 'Stand by'
     updateVideo('STAND_BY')
   }
-  
+
   const toggleRecording = () => {
     isRecordingRequested.value = !isRecordingRequested.value
     if (!isRecordingRequested.value) {
@@ -146,7 +146,7 @@
       startListening()
     }
   }
-  
+
   const togglePlaying = () => {
     if (isPlaying.value) {
       audioPlayer.value?.pause()
@@ -165,7 +165,7 @@
       isPlaying.value = true
     }
   }
-  
+
   const playAudio = async (audioDataURI: string) => {
     if (audioPlayer.value) {
       if (!isPlaying.value) {
@@ -176,7 +176,7 @@
         audioContext.value = new AudioContext()
         const audioBuffer = await audioContext.value.decodeAudioData(audioDataURI as ArrayBuffer)
         audioSource.value = audioContext.value.createBufferSource()
-  
+
         audioSource.value.buffer = audioBuffer
         audioSource.value.connect(audioContext.value.destination)
         audioSource.value.onended = () => {
@@ -196,7 +196,7 @@
       }
     }
   }
-  
+
   const processRequest = async (text:string) => {
     statusMessage.value = 'Processing'
     updateVideo('PROCESSING')
@@ -210,7 +210,7 @@
     updateVideo('SPEAKING')
     scrollChat()
   }
-  
+
   const scrollChat = () => {
     const chatHistoryElement = document.getElementById('chatHistory')
     if (chatHistoryElement) {
@@ -220,7 +220,7 @@
       })
     }
   }
-  
+
   const takeScreenShot = async () => {
     if(!takingScreenShot.value) {
       takingScreenShot.value = true
@@ -246,31 +246,31 @@
     }
     await playVideo(type)
   }
-  
+
   onMounted(async () => {
     await conversationStore.createNewThread()
     updateVideo('STAND_BY')
   })
-  </script>
-  
-  <style scoped lang="postcss">
-  .avatar-wrapper {
-    height:500px;
-    &.mini {
-      height:200px;
-    }
-    .avatar-ring {
-      @apply rounded-full ring ring-offset-base-100 ring-offset-2
-      relative overflow-hidden !flex justify-center items-center
-      z-20 bg-no-repeat bg-cover bg-center shadow-md;
-    }
-  }
+</script>
 
-  .avatar{
-    transition: all .1s ease-in-out;
-    &.open {
-      @apply pr-[505px];
-    }
+<style scoped lang="postcss">
+.avatar-wrapper {
+  height:500px;
+  &.mini {
+    height:200px;
   }
-  </style>
+  .avatar-ring {
+    @apply rounded-full ring ring-offset-base-100 ring-offset-2
+    relative overflow-hidden !flex justify-center items-center
+    z-20 bg-no-repeat bg-cover bg-center shadow-md;
+  }
+}
+
+.avatar{
+  transition: all .1s ease-in-out;
+  &.open {
+    @apply pr-[505px];
+  }
+}
+</style>
   

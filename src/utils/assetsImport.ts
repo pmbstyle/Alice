@@ -1,6 +1,4 @@
 import bg from '../assets/images/bg.png'
-import AiAvatarStatic from '../assets/images/ai-avatar-static.png'
-import UserAvatarStatic from '../assets/images/user-avatar-static.png'
 import videoSrc from '../assets/videos/speaking.mp4'
 import videoSrcStandBy from '../assets/videos/standby.mp4'
 import videoSrcProcessing from '../assets/videos/processing.mp4'
@@ -19,8 +17,6 @@ import closeIcon from '../assets/images/close.svg'
 
 export {
   bg,
-  AiAvatarStatic,
-  UserAvatarStatic,
   videoSrc,
   videoSrcStandBy,
   videoSrcProcessing,

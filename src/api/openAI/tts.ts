@@ -1,10 +1,10 @@
 import OpenAI from "openai"
 
 const openai = new OpenAI({
-    organization: "org-dxUPPlh6v3IBU1vruTWgEH0R",
-    project: "proj_tQ4lbY7lC5J9IYOK2UI7t76h",
-    apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-    dangerouslyAllowBrowser: true
+  organization: import.meta.env.VITE_OPENAI_ORGANIZATION,
+  project: import.meta.env.VITE_OPENAI_PROJECT,
+  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
+  dangerouslyAllowBrowser: true
 })
 
 export const tts = async (text: string) => {

@@ -317,7 +317,6 @@
       await nextTick()
       aiVideo.value?.play()
     }
-
     await playVideo(type)
   }
 

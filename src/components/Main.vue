@@ -221,16 +221,6 @@
     }
   }
   
-  const toggleChat = async () => {
-    openChat.value = !openChat.value
-    await nextTick()
-    if (openChat.value) {
-      (window as any).electron.resize({ width: 1200, height: 500 })
-    } else {
-      (window as any).electron.resize({ width: 500, height: 500 })
-    }
-  }
-  
   const takeScreenShot = async () => {
     if(!takingScreenShot.value) {
       takingScreenShot.value = true

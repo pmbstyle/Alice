@@ -8,12 +8,11 @@ const openai = new OpenAI({
 })
 
 export const tts = async (text: string) => {
-  console.log('text', text)
-  const mp3 = await openai.audio.speech.create({
+  const response = await openai.audio.speech.create({
     model: "tts-1",
     voice: "nova",
     input: text,
-    response_format: "wav"
+    response_format: "mp3"
   })
-  return mp3
+  return response
 }

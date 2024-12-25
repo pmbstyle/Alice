@@ -1,4 +1,4 @@
-# Alice App
+# Alice
 
 Say 'Hi' to Alice 👋
 

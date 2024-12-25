@@ -166,34 +166,39 @@
     }
   }
 
-  const playAudio = async (audioDataURI: string) => {
+  const playAudio = async (audioResponse: Response) => {
     if (audioPlayer.value) {
-      if (!isPlaying.value) {
-        isPlaying.value = true
-        if (audioContext.value) {
-          audioContext.value.close()
-        }
-        audioContext.value = new AudioContext()
-        const audioBuffer = await audioContext.value.decodeAudioData(audioDataURI as ArrayBuffer)
-        audioSource.value = audioContext.value.createBufferSource()
+      const mediaSource = new MediaSource()
+      audioPlayer.value.src = URL.createObjectURL(mediaSource)
 
-        audioSource.value.buffer = audioBuffer
-        audioSource.value.connect(audioContext.value.destination)
-        audioSource.value.onended = () => {
-          statusMessage.value = 'Stand by'
-          isPlaying.value = false
-          isRecording.value = true
-          updateVideo('STAND_BY')
-          startListening()
+      audioPlayer.value.addEventListener('ended', () => {
+        statusMessage.value = 'Stand by'
+        isPlaying.value = false
+        isRecording.value = true
+        updateVideo('STAND_BY')
+        startListening()
+      })
+      
+      mediaSource.addEventListener('sourceopen', () => {
+        const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')
+        const reader = audioResponse.body?.getReader()
+        
+        function pushChunk() {
+          reader?.read().then(({done, value}) => {
+            if (done) {
+              mediaSource.endOfStream()
+              return
+            }
+            sourceBuffer.appendBuffer(value)
+            sourceBuffer.addEventListener('updateend', pushChunk, { once: true })
+          })
         }
-        audioSource.value.start()
-        statusMessage.value = 'Playing response'
-        if (audioPlayer.value) {
-          audioPlayer.value.src = audioDataURI
-          updateVideo('SPEAKING')
-          await audioPlayer.value.play()
-        }
-      }
+        
+        pushChunk()
+      })
+      
+      updateVideo('SPEAKING')
+      await audioPlayer.value.play()
     }
   }
 

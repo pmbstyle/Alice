@@ -1,6 +1,6 @@
 {
   "name": "electron-vue-vite",
-  "version": "0.7.9",
+  "version": "0.7.10",
   "main": "dist-electron/main/index.js",
   "description": "Alice app",
   "author": "pmb",
@@ -46,6 +46,7 @@
   "dependencies": {
     "@pinecone-database/pinecone": "^2.2.2",
     "fs": "^0.0.1-security",
+    "groq-sdk": "^0.9.1",
     "path": "^0.12.7",
     "vue-router": "^4.4.0"
   }

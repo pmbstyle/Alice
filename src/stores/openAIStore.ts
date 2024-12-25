@@ -54,12 +54,8 @@ export const useConversationStore = defineStore('conversation', () => {
 	}
 
 	const ttsMessage = async (message: string) => {
-		const response = await tts(message)
-		if (!response.ok) {
-			throw new Error('Network response was not ok')
-		}
-		const arrayBuffer = await response.arrayBuffer()
-		return arrayBuffer
+		const stream = await tts(message)
+		return stream
 	}
 
 	const transcribeAudioMessage = async (audioBuffer: Buffer) => {

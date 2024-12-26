@@ -56,76 +56,141 @@
   let mediaRecorder: MediaRecorder | null = null
   let audioChunks: BlobPart[] = []
 
-  const silenceThreshold = 43
-  const minRMSValue = 1e-10
-  const bufferLength = 10
-  let rmsBuffer = Array(bufferLength).fill(0)
+  const recordingConfig = {
+    silenceThreshold: 43,
+    minRMSValue: 1e-10,
+    bufferLength: 10,
+    silenceTimeout: 499,
+    fftSize: 2048,
+    vadBufferSize: 10
+  }
 
   const screenShot = ref<string>('')
+
+  const vadBuffer = {
+    samples: [] as boolean[],
+    add(isSpeaking: boolean) {
+      this.samples.push(isSpeaking)
+      if (this.samples.length > recordingConfig.vadBufferSize) {
+        this.samples.shift()
+      }
+    },
+    isActive() {
+      const activeCount = this.samples.filter(x => x).length
+      return activeCount > recordingConfig.vadBufferSize * 0.3
+    }
+  }
 
   const startListening = () => {
     if(!isRecordingRequested.value) return
     statusMessage.value = 'Listening'
     updateVideo('STAND_BY')
     recognizedText.value = ''
+    
     navigator.mediaDevices.getUserMedia({ audio: true })
       .then(stream => {
         const audioContext = new (window.AudioContext)()
         const source = audioContext.createMediaStreamSource(stream)
         const analyser = audioContext.createAnalyser()
-        analyser.fftSize = 2048
+        analyser.fftSize = recordingConfig.fftSize
         const bufferLength = analyser.frequencyBinCount
         const dataArray = new Uint8Array(bufferLength)
         source.connect(analyser)
 
         mediaRecorder = new MediaRecorder(stream)
         mediaRecorder.start()
+        
         mediaRecorder.ondataavailable = event => {
           audioChunks.push(event.data)
         }
+
         mediaRecorder.onstop = async () => {
-          console.log('MediaRecorder stopped...')
-          statusMessage.value = 'Stop listening'
-          if(!isRecordingRequested.value) return
-          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
-          const arrayBuffer = await audioBlob.arrayBuffer()
-          const transcription = await conversationStore.transcribeAudioMessage(arrayBuffer as Buffer)
-          recognizedText.value = transcription
-          storeMessage.value = true
-          processRequest(transcription)
+          try {
+            console.log('MediaRecorder stopped...')
+            statusMessage.value = 'Stop listening'
+            if(!isRecordingRequested.value) return
+            
+            const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
+            const arrayBuffer = await audioBlob.arrayBuffer()
+            const transcription = await conversationStore.transcribeAudioMessage(arrayBuffer as Buffer)
+            recognizedText.value = transcription
+            storeMessage.value = true
+            processRequest(transcription)
+          } catch (error) {
+            statusMessage.value = 'Error processing audio'
+            console.error('Error processing audio:', error)
+            handleRecordingError()
+          }
         }
 
         let silenceCounter = 0
-        let isSilent = false
+        const rmsBuffer = Array(recordingConfig.bufferLength).fill(0)
 
         const detectSilence = () => {
           analyser.getByteTimeDomainData(dataArray)
+          
           let sumSquares = 0.0
           for (let i = 0; i < bufferLength; i++) {
             const normalized = (dataArray[i] / 128.0) - 1.0
             sumSquares += normalized * normalized
           }
           const rms = Math.sqrt(sumSquares / bufferLength)
+          
+          const gatedRMS = noiseGate(rms, recordingConfig.minRMSValue)
+          
           rmsBuffer.shift()
-          rmsBuffer.push(rms)
+          rmsBuffer.push(gatedRMS)
+          
           const avgRMS = rmsBuffer.reduce((sum, val) => sum + val, 0) / rmsBuffer.length
-          const db = 20 * Math.log10(Math.max(avgRMS, minRMSValue)) * -1
+          const db = 20 * Math.log10(Math.max(avgRMS, recordingConfig.minRMSValue)) * -1
 
-          isSilent = (db > silenceThreshold)
-          isSilent ? silenceCounter++ : silenceCounter = 0
+          const isSilent = (db > recordingConfig.silenceThreshold)
+          vadBuffer.add(!isSilent)
 
-          if (silenceCounter > 499) {
+          if (isSilent && !vadBuffer.isActive()) {
+            silenceCounter++
+          } else {
+            silenceCounter = 0
+          }
+
+          if (silenceCounter > recordingConfig.silenceTimeout) {
             stopListening()
             silenceCounter = 0
           } else {
             requestAnimationFrame(detectSilence)
           }
+
         }
 
-        detectSilence();
+        detectSilence()
       })
-      .catch(error => console.error('Error accessing media devices:', error))
+      .catch(error => handleRecordingError())
+      
     isRecording.value = true
+  }
+
+  const noiseGate = (rms: number, threshold: number) => {
+    return rms < threshold ? 0 : rms
+  }
+
+  const getVolume = (dataArray: Uint8Array, bufferLength: number) => {
+    return dataArray.reduce((a, b) => a + b) / bufferLength / 128.0
+  }
+
+  const handleRecordingError = async () => {
+    statusMessage.value = 'Recording error, retrying...'
+    isRecording.value = false
+    audioChunks = []
+    
+    if (mediaRecorder) {
+      const tracks = mediaRecorder.stream.getTracks()
+      tracks.forEach(track => track.stop())
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    if (isRecordingRequested.value) {
+      startListening()
+    }
   }
 
   const stopListening = () => {

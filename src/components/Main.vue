@@ -173,10 +173,6 @@
     return rms < threshold ? 0 : rms
   }
 
-  const getVolume = (dataArray: Uint8Array, bufferLength: number) => {
-    return dataArray.reduce((a, b) => a + b) / bufferLength / 128.0
-  }
-
   const handleRecordingError = async () => {
     statusMessage.value = 'Recording error, retrying...'
     isRecording.value = false

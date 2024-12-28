@@ -4,16 +4,31 @@
         <div class="avatar" :class="{'open': openChat}">
           <div
             class="avatar-ring"
-            :class="{ 'ring-success': isPlaying, 'w-[200px] h-[200px]':isMinimized, 'w-[480px] h-[480px]': !isMinimized }"
+            :class="{
+              'ring-success': isPlaying,
+              'w-[200px] h-[200px]':isMinimized,
+              'w-[480px] h-[480px]': !isMinimized && isElectron,
+              'w-[430px] h-[430px]': !isElectron
+            }"
             :style="{backgroundImage:`url('${bg}'`}">
             <audio ref="audioPlayer" class="hidden"></audio>
             <video class="max-w-screen-md rounded-full ring"
-              :class="{'h-[200px]':isMinimized, 'h-[480px]': !isMinimized }"
-              ref="aiVideo" :src="videoSource" loop muted :autoplay="isPlaying"></video>
+              :class="{
+                'h-[200px]':isMinimized,
+                'h-[480px]': !isMinimized && isElectron,
+                'h-[430px]': !isElectron
+              }"
+              ref="aiVideo"
+              :src="videoSource"
+              loop
+              muted
+              :autoplay="isPlaying"
+            ></video>
             <Actions
               @takeScreenShot="takeScreenShot"
               @togglePlaying="togglePlaying"
               @toggleRecording="toggleRecording"
+              :isElectron="isElectron"
             />
           </div>
         </div>
@@ -34,6 +49,7 @@
 
   const generalStore = useGeneralStore()
   const conversationStore = useConversationStore()
+  const isElectron = typeof window !== 'undefined' && window?.electron
 
   const {
     recognizedText,
@@ -86,8 +102,13 @@
     statusMessage.value = 'Listening'
     updateVideo('STAND_BY')
     recognizedText.value = ''
+
+    const mediaDevices =
+      navigator.mediaDevices || 
+      ((navigator as any).webkitGetUserMedia || 
+      (navigator as any).mozGetUserMedia)
     
-    navigator.mediaDevices.getUserMedia({ audio: true })
+    mediaDevices.getUserMedia({ audio: true })
       .then(stream => {
         const audioContext = new (window.AudioContext)()
         const source = audioContext.createMediaStreamSource(stream)

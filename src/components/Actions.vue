@@ -9,7 +9,7 @@
       {{ statusMessage }}
     </div>
   </div>
-  <div class="absolute w-full px-2 flex justify-between z-80" :class="{'top-[80px]':isMinimized, 'top-[220px]':!isMinimized}">
+  <div class="absolute w-full px-2 flex justify-between z-80" :class="{'top-[80px]':isMinimized, 'top-[220px]':!isMinimized}" v-if="props.isElectron">
     <button
       class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side tooltip tooltip-right"
       data-tip="Screenshot"
@@ -25,7 +25,7 @@
         <img :src="isMinimized ? maxiIcon : miniIcon" class="indicator indicator-side" :class="{'mini':isMinimized}"/>
     </button>
   </div>
-  <div class="absolute w-full flex justify-center z-80 top-2">
+  <div class="absolute w-full flex justify-center z-80 top-2" v-if="props.isElectron">
     <button
       class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side close tooltip tooltip-bottom"
       data-tip="Close the App"
@@ -37,7 +37,7 @@
 </template>
 
 <script setup lang="ts">
-  import { nextTick, defineEmits } from 'vue'
+  import { nextTick, defineEmits, defineProps } from 'vue'
   import { useGeneralStore } from '../stores/generalStore.ts'
   import { storeToRefs } from 'pinia'
   import {
@@ -55,6 +55,13 @@
 
 
   const generalStore = useGeneralStore()
+
+  const props = defineProps({
+    isElectron: {
+      type: Boolean,
+      default: false
+    }
+  })
 
   const emit = defineEmits([
     'takeScreenShot',

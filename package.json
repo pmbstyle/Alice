@@ -22,6 +22,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build && electron-builder",
+    "build:web": "vite build",
     "preview": "vite preview"
   },
   "devDependencies": {

@@ -27,7 +27,7 @@ This project was created and maintained for personal use and shared with the com
 
 ## Getting Started
 
-1. Clone the repository: `git clone https://github.com/pmbstyle/alice-app.git`
+1. Clone the repository: `git clone https://github.com/pmbstyle/Alice.git`
 2. Install dependencies: `npm install`
 3. Set up environment variables with your OpenAI & Groq and Pinecone API keys.
 4. Run the development server: `npm run dev`

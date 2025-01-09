@@ -18,12 +18,12 @@ This project was created and maintained for personal use and shared with the com
 
 ## Technologies Used
 
-- Vue.js (JS framework)
-- Pinia (State Management)
+- [Vue.js](https://vuejs.org/) (JS framework)
+- [Pinia](https://pinia.vuejs.org/) (State Management)
 - [OpenAI API](https://platform.openai.com/docs/api-reference/introduction) (GPT-4o-mini, TTS, Vision)
 - [Groq API](https://console.groq.com/) (Whisper)
 - [Pinecone](https://www.pinecone.io/) (Vector Database)
-- Electron (Desktop Application framework)
+- [Electron](https://www.electronjs.org/) (Desktop Application framework)
 
 ## Getting Started
 

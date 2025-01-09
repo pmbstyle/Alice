@@ -9,12 +9,12 @@ This project was created and maintained for personal use and shared with the com
 
 ## Features
 
-- Voice recognition: Users can speak to the AI assistant, and their speech is transcribed into text using Groq's Whisper API.
-- Text-to-speech: The AI assistant can respond with synthesized speech using OpenAI's TTS API.
-- Image recognition: Users can take screenshots, and the AI assistant can recognize the contents of the image using OpenAI's Vision API.
-- Conversation history: The application stores and retrieves relevant conversation history to provide context-aware responses.
-- Pinecone vector database: Conversation messages are embedded and stored in a Pinecone vector database to retrieve relevant memories efficiently.
-- Animated assistant appearance: Using prerendered AI-generated videos
+- **Voice recognition:** Users can speak to the AI assistant, and their speech is transcribed into text using Groq's Whisper API.
+- **Text-to-speech:** The AI assistant can respond with synthesized speech using OpenAI's TTS API.
+- **Image recognition:** Users can take screenshots, and the AI assistant can recognize the contents of the image using OpenAI's Vision API.
+- **Conversation history:** The application stores and retrieves relevant conversation history to provide context-aware responses.
+- **Pinecone vector database:** Conversation messages are embedded and stored in a Pinecone vector database to retrieve relevant memories efficiently.
+- **Animated assistant appearance:** Using prerendered AI-generated videos
 
 ## Technologies Used
 

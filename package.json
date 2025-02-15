@@ -23,7 +23,8 @@
     "dev": "vite",
     "build": "vite build && electron-builder",
     "build:web": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "format": "prettier --write ."
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",

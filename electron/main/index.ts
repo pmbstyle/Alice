@@ -1,4 +1,12 @@
-import { app, BrowserWindow, screen, shell, ipcMain, session, desktopCapturer } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  screen,
+  shell,
+  ipcMain,
+  session,
+  desktopCapturer,
+} from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -41,8 +49,8 @@ async function createWindow() {
     resizable: true,
     alwaysOnTop: true,
     webPreferences: {
-      preload
-    }
+      preload,
+    },
   })
 
   if (VITE_DEV_SERVER_URL) {
@@ -73,7 +81,7 @@ async function createWindow() {
   ipcMain.on('mini', (event, arg) => {
     if (win) {
       let display = screen.getPrimaryDisplay()
-      if(arg.minimize) {
+      if (arg.minimize) {
         let x = display.bounds.width - 230
         let y = display.bounds.height - 260
         win.setPosition(x, y)
@@ -87,12 +95,12 @@ async function createWindow() {
     }
   })
   ipcMain.handle('screenshot', async (event, arg) => {
-    const source = await desktopCapturer.getSources({ 
+    const source = await desktopCapturer.getSources({
       types: ['screen'],
-      thumbnailSize : {
+      thumbnailSize: {
         width: 1200,
-        height: 1200
-      }
+        height: 1200,
+      },
     })
     return source[0].thumbnail.toDataURL()
   })
@@ -128,8 +136,8 @@ async function createOverlayWindow() {
     alwaysOnTop: true,
     fullscreen: true,
     webPreferences: {
-      preload
-    }
+      preload,
+    },
   })
   const arg = 'overlay'
   if (VITE_DEV_SERVER_URL) {
@@ -150,18 +158,20 @@ async function createOverlayWindow() {
 }
 
 app.on('ready', () => {
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    if (permission === 'media') {
-      callback(true)
-    } else {
-      callback(false)
+  session.defaultSession.setPermissionRequestHandler(
+    (webContents, permission, callback) => {
+      if (permission === 'media') {
+        callback(true)
+      } else {
+        callback(false)
+      }
     }
-  })
+  )
 })
 
 app.whenReady().then(() => {
-  createWindow();
-  createOverlayWindow();
+  createWindow()
+  createOverlayWindow()
 })
 
 app.on('window-all-closed', () => {

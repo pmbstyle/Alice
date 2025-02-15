@@ -23,9 +23,7 @@ export const useGeneralStore = defineStore('general', () => {
       }[]
       id?: string
     }[]
-  >(
-    []
-  )
+  >([])
 
   const statusMessage = ref<string>('Ready to chat')
   const audioContext = ref<AudioContext | null>(null)

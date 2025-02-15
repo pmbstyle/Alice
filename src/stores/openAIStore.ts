@@ -38,10 +38,7 @@ export const useConversationStore = defineStore('conversation', () => {
     messages.value = await listMessages(threadId, last)
   }
 
-  const sendMessageToThread = async (
-    message: any,
-    store: boolean = true
-  ) => {
+  const sendMessageToThread = async (message: any, store: boolean = true) => {
     await sendMessage(thread.value, message, assistant.value, store)
     getMessages(thread.value)
   }
@@ -57,7 +54,6 @@ export const useConversationStore = defineStore('conversation', () => {
     let messageId: string | null = null
 
     for await (const chunk of run) {
-
       if (
         chunk.event === 'thread.message.created' &&
         chunk.data.assistant_id === assistant.value

@@ -49,8 +49,7 @@ export const useConversationStore = defineStore('conversation', () => {
     isProcessingRequest.value = true
     const run = await runAssistant(thread.value, assistant.value, memories)
 
-    let accumulatedText = ''
-    let audioPromise: Promise<Response> | null = null
+    let currentSentence = ''
     let messageId: string | null = null
 
     for await (const chunk of run) {
@@ -73,7 +72,7 @@ export const useConversationStore = defineStore('conversation', () => {
         chunk.data.delta?.content[0].type === 'text'
       ) {
         const textChunk = chunk.data.delta?.content[0].text.value
-        accumulatedText += textChunk
+        currentSentence += textChunk
 
         if (messageId) {
           const existingMessageIndex = chatHistory.value.findIndex(
@@ -84,17 +83,18 @@ export const useConversationStore = defineStore('conversation', () => {
               textChunk
           }
         }
+
+        if (textChunk.match(/[.!?]\s*$/)) {
+          const audioResponse = await ttsStream(currentSentence)
+          generalStore.playAudio(audioResponse)
+          currentSentence = ''
+        }
       }
     }
-    if (accumulatedText.length > 0) {
-      audioPromise = ttsStream(accumulatedText).then(audioResponse => {
-        generalStore.playAudio(audioResponse)
-        return audioResponse
-      })
-    }
 
-    if (audioPromise) {
-      await audioPromise
+    if (currentSentence.trim().length > 0) {
+      const audioResponse = await ttsStream(currentSentence)
+      generalStore.playAudio(audioResponse)
     }
 
     generalStore.storeMessage = false

@@ -69,6 +69,7 @@ const chatInputHandle = async () => {
     debounceTimeout.value = window.setTimeout(async () => {
       storeMessage.value = true
       await emit('processRequest', chatInput.value)
+      chatInput.value = ''
     }, debounceDelay)
   }
 }

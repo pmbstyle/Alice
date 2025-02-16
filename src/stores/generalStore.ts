@@ -28,6 +28,7 @@ export const useGeneralStore = defineStore('general', () => {
   const statusMessage = ref<string>('Ready to chat')
   const audioContext = ref<AudioContext | null>(null)
   const audioSource = ref<AudioBufferSourceNode | null>(null)
+  const audioQueue = ref<Response[]>([])
   const chatInput = ref<string>('')
 
   const openChat = ref<boolean>(false)
@@ -65,5 +66,6 @@ export const useGeneralStore = defineStore('general', () => {
     storeMessage,
     takingScreenShot,
     updateVideo,
+    audioQueue,
   }
 })

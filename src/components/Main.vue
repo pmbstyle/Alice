@@ -263,19 +263,40 @@ const togglePlaying = () => {
 }
 
 generalStore.playAudio = async (audioResponse: Response) => {
-  if (audioPlayer.value) {
+  if (!audioPlayer.value) return
+
+  generalStore.audioQueue.push(audioResponse)
+
+  if (!isPlaying.value) {
+    playNextAudio()
+  }
+}
+
+const playNextAudio = async () => {
+  if (generalStore.audioQueue.length === 0) {
+    isPlaying.value = false
+    statusMessage.value = 'Stand by'
+    updateVideo.value('STAND_BY')
+    if (isRecordingRequested.value) {
+      startListening()
+    }
+    return
+  }
+
+  isPlaying.value = true
+  const audioResponse = generalStore.audioQueue.shift()
+
+  if (audioPlayer.value && audioResponse) {
     const mediaSource = new MediaSource()
     audioPlayer.value.src = URL.createObjectURL(mediaSource)
 
-    audioPlayer.value.addEventListener('ended', () => {
-      statusMessage.value = 'Stand by'
-      isPlaying.value = false
-      isRecording.value = true
-      updateVideo.value('STAND_BY')
-      if (isRecordingRequested.value) {
-        startListening()
-      }
-    })
+    audioPlayer.value.addEventListener(
+      'ended',
+      () => {
+        playNextAudio()
+      },
+      { once: true }
+    )
 
     mediaSource.addEventListener('sourceopen', () => {
       const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')

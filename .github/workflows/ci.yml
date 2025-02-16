@@ -16,7 +16,6 @@ jobs:
       markdown_change: ${{ steps.filter_markdown.outputs.change }}
       markdown_files: ${{ steps.filter_markdown.outputs.change_files }}
     steps:
-
       - name: Check Not Allowed File Changes
         uses: dorny/paths-filter@v2
         id: filter_not_allowed
@@ -64,7 +63,6 @@ jobs:
           filters: |
             change:
               - added|modified: '*.md'
-
 
   job2:
     name: Lint Markdown

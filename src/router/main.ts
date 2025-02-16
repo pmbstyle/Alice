@@ -4,13 +4,13 @@ const routes = [
   {
     path: '/',
     name: 'Main',
-    component: () => import('../App.vue')
-  }
+    component: () => import('../App.vue'),
+  },
 ]
 
 const router = createRouter({
-    history: createWebHistory(),
-    routes
+  history: createWebHistory(),
+  routes,
 })
 
 export default router

@@ -23,7 +23,8 @@
     "dev": "vite",
     "build": "vite build && electron-builder",
     "build:web": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "format": "prettier --write ."
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
@@ -49,6 +50,7 @@
     "fs": "^0.0.1-security",
     "groq-sdk": "^0.9.1",
     "path": "^0.12.7",
+    "prettier": "^3.5.1",
     "vue-router": "^4.4.0"
   }
 }

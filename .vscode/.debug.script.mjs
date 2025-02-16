@@ -8,7 +8,9 @@ const pkg = createRequire(import.meta.url)('../package.json')
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // write .debug.env
-const envContent = Object.entries(pkg.debug.env).map(([key, val]) => `${key}=${val}`)
+const envContent = Object.entries(pkg.debug.env).map(
+  ([key, val]) => `${key}=${val}`
+)
 fs.writeFileSync(path.join(__dirname, '.debug.env'), envContent.join('\n'))
 
 // bootstrap
@@ -19,5 +21,5 @@ spawn(
   {
     stdio: 'inherit',
     env: Object.assign(process.env, { VSCODE_DEBUG: 'true' }),
-  },
+  }
 )

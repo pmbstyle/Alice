@@ -2,7 +2,6 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 
 export const useGeneralStore = defineStore('general', () => {
-
   const messages = ref<any>([])
   const provider = ref<string>('')
 
@@ -14,19 +13,31 @@ export const useGeneralStore = defineStore('general', () => {
   const videoSource = ref<string>('')
   const isPlaying = ref<boolean>(false)
   const isInProgress = ref<boolean>(false)
-  const chatHistory = ref<{ role: string, content: string }[]>(messages as any)
+  const isProcessingRequest = ref<boolean>(false)
+  const chatHistory = ref<
+    {
+      role: string
+      content: {
+        type: 'text'
+        text: { value: string; annotations: any[] }[]
+      }[]
+      id?: string
+    }[]
+  >([])
 
   const statusMessage = ref<string>('Ready to chat')
   const audioContext = ref<AudioContext | null>(null)
   const audioSource = ref<AudioBufferSourceNode | null>(null)
+  const audioQueue = ref<Response[]>([])
   const chatInput = ref<string>('')
-  
+
   const openChat = ref<boolean>(false)
   const isMinimized = ref<boolean>(false)
 
   const storeMessage = ref<boolean>(false)
 
   const takingScreenShot = ref<boolean>(false)
+  const updateVideo = ref<(type: string) => void>(() => {})
 
   const setProvider = (provider: string) => {
     provider = provider || 'openai'
@@ -44,6 +55,7 @@ export const useGeneralStore = defineStore('general', () => {
     videoSource,
     isPlaying,
     isInProgress,
+    isProcessingRequest,
     chatHistory,
     statusMessage,
     audioContext,
@@ -52,6 +64,8 @@ export const useGeneralStore = defineStore('general', () => {
     openChat,
     isMinimized,
     storeMessage,
-    takingScreenShot
+    takingScreenShot,
+    updateVideo,
+    audioQueue,
   }
 })

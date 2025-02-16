@@ -1,12 +1,12 @@
 import { ipcRenderer, contextBridge } from 'electron'
 
 contextBridge.exposeInMainWorld('electron', {
-  resize: (dimensions) => ipcRenderer.send('resize', dimensions),
-  mini: (minimize) => ipcRenderer.send('mini', minimize),
+  resize: dimensions => ipcRenderer.send('resize', dimensions),
+  mini: minimize => ipcRenderer.send('mini', minimize),
   screenshot: () => ipcRenderer.send('screenshot'),
   showOverlay: () => ipcRenderer.send('show-overlay'),
   getScreenshot: () => ipcRenderer.send('get-screenshot'),
-  closeApp: () => ipcRenderer.send('close-app')
+  closeApp: () => ipcRenderer.send('close-app'),
 })
 
 // --------- Expose some API to the Renderer process ---------
@@ -29,16 +29,20 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
   once(...args: Parameters<typeof ipcRenderer.once>) {
     const [channel, listener] = args
-    return ipcRenderer.once(channel, (event, ...args) => listener(event, ...args))
-  }
+    return ipcRenderer.once(channel, (event, ...args) =>
+      listener(event, ...args)
+    )
+  },
 
   // You can expose other APTs you need here.
   // ...
 })
 
 // --------- Preload scripts loading ---------
-function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {
-  return new Promise((resolve) => {
+function domReady(
+  condition: DocumentReadyState[] = ['complete', 'interactive']
+) {
+  return new Promise(resolve => {
     if (condition.includes(document.readyState)) {
       resolve(true)
     } else {
@@ -129,7 +133,7 @@ const { appendLoading, removeLoading } = useLoading()
 //domReady().then(appendLoading)
 domReady()
 
-window.onmessage = (ev) => {
+window.onmessage = ev => {
   ev.data.payload === 'removeLoading' && removeLoading()
 }
 

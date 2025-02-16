@@ -31,5 +31,5 @@ export {
   eyeActiveIcon,
   cameraIcon,
   uploadIcon,
-  closeIcon
+  closeIcon,
 }

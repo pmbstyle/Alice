@@ -16,7 +16,7 @@ const setVideo = (type: string) => {
       return videoStandBy
     case 'PROCESSING':
       return videoProcessing
-      //return videoStandBy
+    //return videoStandBy
     case 'EMOTION_BORED':
       return videoEmotionBored
     case 'EMOTION_WOW':
@@ -32,6 +32,4 @@ const setVideo = (type: string) => {
   }
 }
 
-export {
-  setVideo
-}
+export { setVideo }

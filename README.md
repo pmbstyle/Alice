@@ -2,7 +2,7 @@
 
 Say 'Hi' to Alice 👋
 
-Alice App is a Vue.js application (OpenAI/Groq/Pinecone wrapper) that provides an interactive AI assistant with voice recognition, text-to-speech, and image recognition capabilities. It utilizes OpenAI's GPT-4o language model and various APIs for natural language processing, speech recognition, and computer vision tasks.
+Alice App is a Vue.js/Electron.js application (OpenAI/Groq/Pinecone wrapper) that provides an interactive AI assistant with voice recognition, text-to-speech, and image recognition capabilities. It utilizes OpenAI's GPT-4o language model and various APIs for natural language processing, speech recognition, and computer vision tasks.
 This project was created and maintained for personal use and shared with the community.
 
 ![alt text](https://github.com/pmbstyle/Alice/blob/main/screenshot.png?raw=true)

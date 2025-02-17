@@ -108,7 +108,6 @@ const vadBuffer = {
 const startListening = () => {
   if (!isRecordingRequested.value || isTTSProcessing.value) return
   statusMessage.value = 'Listening'
-  updateVideo.value('STAND_BY')
   recognizedText.value = ''
 
   const mediaDevices =
@@ -277,7 +276,6 @@ const playNextAudio = async () => {
   if (generalStore.audioQueue.length === 0) {
     isPlaying.value = false
     statusMessage.value = 'Stand by'
-    updateVideo.value('STAND_BY')
     if (isRecordingRequested.value) {
       startListening()
     }
@@ -352,7 +350,6 @@ const playNextAudio = async () => {
 
     await audioPlayer.value.play()
     statusMessage.value = 'Speaking...'
-    updateVideo.value('SPEAKING')
   }
 }
 
@@ -373,7 +370,6 @@ const processRequest = async (text: string) => {
   )
   chatInput.value = ''
   await conversationStore.chat(prompt.history)
-  updateVideo.value('STAND_BY')
 }
 
 const takeScreenShot = async () => {

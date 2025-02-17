@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 
 export const useGeneralStore = defineStore('general', () => {
@@ -43,6 +43,17 @@ export const useGeneralStore = defineStore('general', () => {
   const setProvider = (provider: string) => {
     provider = provider || 'openai'
   }
+
+  watch(statusMessage, (newStatus) => {
+    switch (newStatus) {
+      case 'Speaking...':
+        updateVideo.value('SPEAKING')
+        break
+      default:
+        updateVideo.value('STAND_BY')
+        break
+    }
+  })
 
   return {
     provider,

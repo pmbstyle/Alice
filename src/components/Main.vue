@@ -73,6 +73,7 @@ const {
   storeMessage,
   takingScreenShot,
   updateVideo,
+  isTTSProcessing,
 } = storeToRefs(generalStore)
 generalStore.setProvider('openai')
 
@@ -105,7 +106,7 @@ const vadBuffer = {
 }
 
 const startListening = () => {
-  if (!isRecordingRequested.value) return
+  if (!isRecordingRequested.value || isTTSProcessing.value) return
   statusMessage.value = 'Listening'
   updateVideo.value('STAND_BY')
   recognizedText.value = ''
@@ -281,6 +282,10 @@ const playNextAudio = async () => {
       startListening()
     }
     return
+  }
+
+  if (isRecording.value) {
+    stopListening()
   }
 
   isPlaying.value = true

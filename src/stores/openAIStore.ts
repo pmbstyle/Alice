@@ -20,6 +20,7 @@ export const useConversationStore = defineStore('conversation', () => {
     statusMessage,
     updateVideo,
     isProcessingRequest,
+    isTTSProcessing,
   } = storeToRefs(useGeneralStore())
   const generalStore = useGeneralStore()
 
@@ -47,6 +48,7 @@ export const useConversationStore = defineStore('conversation', () => {
     statusMessage.value = 'Thinking...'
     updateVideo.value('PROCESSING')
     isProcessingRequest.value = true
+    isTTSProcessing.value = true
     const run = await runAssistant(thread.value, assistant.value, memories)
 
     let currentSentence = ''
@@ -94,11 +96,12 @@ export const useConversationStore = defineStore('conversation', () => {
 
     if (currentSentence.trim().length > 0) {
       const audioResponse = await ttsStream(currentSentence)
-      generalStore.playAudio(audioResponse)
+      generalStore.playAudio(audioResponse, true)
     }
 
     generalStore.storeMessage = false
     isProcessingRequest.value = false
+    isTTSProcessing.value = false 
   }
 
   const transcribeAudioMessage = async (audioBuffer: Buffer) => {

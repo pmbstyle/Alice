@@ -14,6 +14,7 @@ export const useGeneralStore = defineStore('general', () => {
   const isPlaying = ref<boolean>(false)
   const isInProgress = ref<boolean>(false)
   const isProcessingRequest = ref<boolean>(false)
+  const isTTSProcessing = ref<boolean>(false)
   const chatHistory = ref<
     {
       role: string
@@ -67,5 +68,6 @@ export const useGeneralStore = defineStore('general', () => {
     takingScreenShot,
     updateVideo,
     audioQueue,
+    isTTSProcessing,
   }
 })

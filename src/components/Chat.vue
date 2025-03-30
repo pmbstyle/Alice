@@ -48,13 +48,10 @@ import { storeToRefs } from 'pinia'
 const generalStore = useGeneralStore()
 
 const emit = defineEmits(['processRequest'])
-const { isInProgress, chatHistory, chatInput, openChat, storeMessage } =
+const { isInProgress, chatHistory, chatInput, openChat } =
   storeToRefs(generalStore)
 const chatHistoryDisplay = computed(() => {
   let history = [...chatHistory.value]
-  history = history.filter(
-    item => !item.content[0].text.value.includes('[start screenshot]')
-  )
   return history.reverse()
 })
 
@@ -67,7 +64,6 @@ const chatInputHandle = async () => {
       clearTimeout(debounceTimeout.value)
     }
     debounceTimeout.value = window.setTimeout(async () => {
-      storeMessage.value = true
       await emit('processRequest', chatInput.value)
       chatInput.value = ''
     }, debounceDelay)

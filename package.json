@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^2.2.2",
+    "eventemitter3": "^5.0.1",
     "fs": "^0.0.1-security",
     "groq-sdk": "^0.9.1",
     "path": "^0.12.7",

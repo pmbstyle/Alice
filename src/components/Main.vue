@@ -49,11 +49,11 @@ import { bg } from '../utils/assetsImport.ts'
 import { setVideo } from '../utils/videoProcess.ts'
 import { ref, onMounted, nextTick } from 'vue'
 import { useGeneralStore } from '../stores/generalStore.ts'
-import { useConversationStore } from '../stores/openAIStore.ts'
+import { useGeminiStore } from '../stores/geminiStore.ts'
 import { storeToRefs } from 'pinia'
 
 const generalStore = useGeneralStore()
-const conversationStore = useConversationStore()
+const geminiStore = useGeminiStore()
 const isElectron = typeof window !== 'undefined' && window?.electron
 
 const {
@@ -65,311 +65,181 @@ const {
   videoSource,
   isPlaying,
   statusMessage,
-  audioContext,
-  audioSource,
   chatInput,
   openChat,
   isMinimized,
   storeMessage,
   takingScreenShot,
   updateVideo,
-  isTTSProcessing,
 } = storeToRefs(generalStore)
-generalStore.setProvider('openai')
+generalStore.setProvider('gemini')
 
 let mediaRecorder: MediaRecorder | null = null
 let audioChunks: BlobPart[] = []
-
-const recordingConfig = {
-  silenceThreshold: 43,
-  minRMSValue: 1e-10,
-  bufferLength: 10,
-  silenceTimeout: 499,
-  fftSize: 2048,
-  vadBufferSize: 10,
-}
-
 const screenShot = ref<string>('')
 
-const vadBuffer = {
-  samples: [] as boolean[],
-  add(isSpeaking: boolean) {
-    this.samples.push(isSpeaking)
-    if (this.samples.length > recordingConfig.vadBufferSize) {
-      this.samples.shift()
+// Audio processing variables
+const audioBufferSize = 4096;
+const audioSampleRate = 16000; // 16kHz is common for speech recognition
+let audioContext: AudioContext | null = null;
+let audioProcessor: ScriptProcessorNode | null = null;
+let audioSource: MediaStreamAudioSourceNode | null = null;
+let audioStream: MediaStream | null = null;
+
+// Start recording audio and streaming to Gemini
+const startListening = async () => {
+  if (!isRecordingRequested.value) return;
+  
+  try {
+    // First connect to Gemini
+    const connected = await geminiStore.connect();
+    if (!connected) {
+      statusMessage.value = 'Failed to connect to Gemini';
+      isRecordingRequested.value = false;
+      return;
     }
-  },
-  isActive() {
-    const activeCount = this.samples.filter(x => x).length
-    return activeCount > recordingConfig.vadBufferSize * 0.3
-  },
+    
+    // Start the audio stream session
+    await geminiStore.startAudioStream();
+    
+    statusMessage.value = 'Listening';
+    recognizedText.value = '';
+
+    // Get microphone access
+    audioStream = await navigator.mediaDevices.getUserMedia({ 
+      audio: { 
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+        sampleRate: audioSampleRate
+      } 
+    });
+    
+    // Set up audio processing
+    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+      sampleRate: audioSampleRate
+    });
+    
+    audioSource = audioContext.createMediaStreamSource(audioStream);
+    audioProcessor = audioContext.createScriptProcessor(audioBufferSize, 1, 1);
+    
+    // Connect the audio nodes
+    audioSource.connect(audioProcessor);
+    audioProcessor.connect(audioContext.destination);
+    
+    // Process and send audio data
+    audioProcessor.onaudioprocess = (e) => {
+      if (!isRecordingRequested.value) {
+        stopListening();
+        return;
+      }
+      
+      const inputBuffer = e.inputBuffer;
+      const inputData = inputBuffer.getChannelData(0);
+      
+      // Check if there's actual audio (not just silence)
+      const rms = calculateRMS(inputData);
+      
+      // Only send if not silence and not too quiet
+      if (rms > 0.01) {
+        geminiStore.streamAudio(inputData);
+      }
+    };
+    
+    isRecording.value = true;
+    updateVideo.value('PROCESSING');
+    
+  } catch (error) {
+    console.error('Error starting audio recording:', error);
+    statusMessage.value = 'Error accessing microphone';
+    handleRecordingError();
+  }
 }
 
-const startListening = () => {
-  if (!isRecordingRequested.value || isTTSProcessing.value) return
-  statusMessage.value = 'Listening'
-  recognizedText.value = ''
-
-  const mediaDevices =
-    navigator.mediaDevices ||
-    (navigator as any).webkitGetUserMedia ||
-    (navigator as any).mozGetUserMedia
-
-  mediaDevices
-    .getUserMedia({ audio: true })
-    .then(stream => {
-      const audioContext = new window.AudioContext()
-      const source = audioContext.createMediaStreamSource(stream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = recordingConfig.fftSize
-      const bufferLength = analyser.frequencyBinCount
-      const dataArray = new Uint8Array(bufferLength)
-      source.connect(analyser)
-
-      mediaRecorder = new MediaRecorder(stream)
-      mediaRecorder.start()
-
-      mediaRecorder.ondataavailable = event => {
-        audioChunks.push(event.data)
-      }
-
-      mediaRecorder.onstop = async () => {
-        try {
-          statusMessage.value = 'Stop listening'
-          if (!isRecordingRequested.value) return
-
-          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
-          const arrayBuffer = await audioBlob.arrayBuffer()
-          const transcription = await conversationStore.transcribeAudioMessage(
-            arrayBuffer as Buffer
-          )
-          recognizedText.value = transcription
-
-          if (transcription.trim()) {
-            storeMessage.value = true
-            processRequest(transcription)
-          } else {
-            statusMessage.value = 'No speech detected'
-            toggleRecording()
-          }
-        } catch (error) {
-          statusMessage.value = 'Error processing audio'
-          console.error('Error processing audio:', error)
-          handleRecordingError()
-        }
-      }
-
-      let silenceCounter = 0
-      const rmsBuffer = Array(recordingConfig.bufferLength).fill(0)
-
-      const detectSilence = () => {
-        analyser.getByteTimeDomainData(dataArray)
-
-        let sumSquares = 0.0
-        for (let i = 0; i < bufferLength; i++) {
-          const normalized = dataArray[i] / 128.0 - 1.0
-          sumSquares += normalized * normalized
-        }
-        const rms = Math.sqrt(sumSquares / bufferLength)
-
-        const gatedRMS = noiseGate(rms, recordingConfig.minRMSValue)
-
-        rmsBuffer.shift()
-        rmsBuffer.push(gatedRMS)
-
-        const avgRMS =
-          rmsBuffer.reduce((sum, val) => sum + val, 0) / rmsBuffer.length
-        const db =
-          20 * Math.log10(Math.max(avgRMS, recordingConfig.minRMSValue)) * -1
-
-        const isSilent = db > recordingConfig.silenceThreshold
-        vadBuffer.add(!isSilent)
-
-        if (isSilent && !vadBuffer.isActive()) {
-          silenceCounter++
-        } else {
-          silenceCounter = 0
-        }
-
-        if (silenceCounter > recordingConfig.silenceTimeout) {
-          stopListening()
-          silenceCounter = 0
-        } else {
-          requestAnimationFrame(detectSilence)
-        }
-      }
-
-      detectSilence()
-    })
-    .catch(error => handleRecordingError())
-
-  isRecording.value = true
-}
-
-const noiseGate = (rms: number, threshold: number) => {
-  return rms < threshold ? 0 : rms
+const calculateRMS = (buffer: Float32Array) => {
+  let sum = 0
+  for (let i = 0; i < buffer.length; i++) {
+    sum += buffer[i] * buffer[i]
+  }
+  return Math.sqrt(sum / buffer.length)
 }
 
 const handleRecordingError = async () => {
-  statusMessage.value = 'Recording error, retrying...'
-  isRecording.value = false
-  audioChunks = []
+  statusMessage.value = 'Recording error';
+  isRecording.value = false;
+  isRecordingRequested.value = false;
+  
+  // Clean up audio resources
+  stopListening();
+  
+  await new Promise(resolve => setTimeout(resolve, 1000));
+}
 
-  if (mediaRecorder) {
-    const tracks = mediaRecorder.stream.getTracks()
-    tracks.forEach(track => track.stop())
+const stopListening = async () => {
+  // End the audio stream session
+  await geminiStore.endAudioStream();
+  
+  // Clean up audio resources
+  if (audioProcessor) {
+    audioProcessor.disconnect();
+    audioProcessor = null;
   }
+  
+  if (audioSource) {
+    audioSource.disconnect();
+    audioSource = null;
+  }
+  
+  if (audioContext && audioContext.state !== 'closed') {
+    // Don't close the context, just disconnect
+    // audioContext.close();
+    // audioContext = null;
+  }
+  
+  if (audioStream) {
+    audioStream.getTracks().forEach(track => track.stop());
+    audioStream = null;
+  }
+  
+  isRecording.value = false;
+  statusMessage.value = 'Stopped listening';
+  updateVideo.value('STAND_BY');
+}
 
-  await new Promise(resolve => setTimeout(resolve, 1000))
+const toggleRecording = async () => {
+  isRecordingRequested.value = !isRecordingRequested.value;
+  
   if (isRecordingRequested.value) {
-    startListening()
-  }
-}
-
-const stopListening = () => {
-  if (!mediaRecorder) return
-  mediaRecorder.stop()
-  audioChunks = []
-  isRecording.value = false
-}
-
-const toggleRecording = () => {
-  isRecordingRequested.value = !isRecordingRequested.value
-  if (!isRecordingRequested.value) {
-    stopListening()
+    await startListening();
   } else {
-    isRecording.value = true
-    startListening()
+    await stopListening();
   }
 }
 
 const togglePlaying = () => {
+  isPlaying.value = !isPlaying.value;
+  
   if (isPlaying.value) {
-    audioPlayer.value?.pause()
-    updateVideo.value('STAND_BY')
-    if (audioContext.value) {
-      audioContext.value.close()
-      audioContext.value = null
-    }
-    isPlaying.value = false
-    if (isRecordingRequested.value) {
-      isRecording.value = true
-      startListening()
+    updateVideo.value('SPEAKING');
+    // If we're recording, stop it while playing
+    if (isRecording.value) {
+      stopListening();
+      isRecordingRequested.value = false;
     }
   } else {
-    audioSource.value?.start()
-    isPlaying.value = true
-  }
-}
-
-generalStore.playAudio = async (audioResponse: Response) => {
-  if (!audioPlayer.value) return
-
-  generalStore.audioQueue.push(audioResponse)
-
-  if (!isPlaying.value) {
-    playNextAudio()
-  }
-}
-
-const playNextAudio = async () => {
-  if (generalStore.audioQueue.length === 0) {
-    isPlaying.value = false
-    statusMessage.value = 'Stand by'
-    if (isRecordingRequested.value) {
-      startListening()
-    }
-    return
-  }
-
-  if (isRecording.value) {
-    stopListening()
-  }
-
-  isPlaying.value = true
-  const audioResponse = generalStore.audioQueue.shift()
-
-  if (audioPlayer.value && audioResponse) {
-    const mediaSource = new MediaSource()
-    audioPlayer.value.src = URL.createObjectURL(mediaSource)
-
-    audioPlayer.value.addEventListener(
-      'ended',
-      () => {
-        playNextAudio()
-      },
-      { once: true }
-    )
-
-    mediaSource.addEventListener('sourceopen', () => {
-      const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')
-      const reader = audioResponse.body?.getReader()
-
-      if (!reader) {
-        console.error('Failed to get reader from audio response body.')
-        return
-      }
-
-      function pushChunk() {
-        reader
-          .read()
-          .then(({ done, value }) => {
-            if (done) {
-              mediaSource.endOfStream()
-              return
-            }
-            try {
-              if (!sourceBuffer.updating) {
-                sourceBuffer.appendBuffer(value)
-                sourceBuffer.addEventListener('updateend', pushChunk, {
-                  once: true,
-                })
-              } else {
-                sourceBuffer.addEventListener(
-                  'updateend',
-                  () => {
-                    sourceBuffer.appendBuffer(value)
-                    sourceBuffer.addEventListener('updateend', pushChunk, {
-                      once: true,
-                    })
-                  },
-                  { once: true }
-                )
-              }
-            } catch (error) {
-              console.error('Failed to append audio chunk:', error)
-            }
-          })
-          .catch(err => {
-            console.error('Error reading audio stream:', err)
-          })
-      }
-
-      pushChunk()
-    })
-
-    await audioPlayer.value.play()
-    statusMessage.value = 'Speaking...'
+    updateVideo.value('STAND_BY');
   }
 }
 
 const processRequest = async (text: string) => {
-  updateVideo.value('STAND_BY')
-  generalStore.chatHistory.unshift({
-    role: 'user',
-    content: [{ type: 'text', text: { value: text, annotations: [] } }],
-  })
-  scrollChat()
-  const prompt = await conversationStore.createOpenAIPrompt(
-    text,
-    storeMessage.value
-  )
-  await conversationStore.sendMessageToThread(
-    prompt.message,
-    storeMessage.value
-  )
-  chatInput.value = ''
-  await conversationStore.chat(prompt.history)
+  // If we're recording, stop it while processing a text request
+  if (isRecording.value) {
+    await stopListening();
+    isRecordingRequested.value = false;
+  }
+  
+  updateVideo.value('PROCESSING');
+  await geminiStore.sendMessage(text);
 }
 
 const takeScreenShot = async () => {
@@ -381,16 +251,8 @@ const takeScreenShot = async () => {
     const dataURI = await (window as any).ipcRenderer.invoke('get-screenshot')
     screenShot.value = dataURI
     statusMessage.value = 'Screenshot taken'
-    const description = await conversationStore.describeImage(screenShot.value)
-    let prompt = {
-      role: 'user',
-      content:
-        'Here is a description of the users screenshot: [start screenshot]' +
-        JSON.stringify(description) +
-        '[/end screenshot]',
-    }
-    await conversationStore.sendMessageToThread(prompt, false)
-    statusMessage.value = 'Screenshot stored'
+    await geminiStore.sendImage(screenShot.value)
+    statusMessage.value = 'Screenshot analyzed'
     takingScreenShot.value = false
   }
 }
@@ -406,7 +268,9 @@ const scrollChat = () => {
 }
 
 onMounted(async () => {
-  await conversationStore.createNewThread()
+  // Connect to Gemini on mount
+  await geminiStore.connect()
+
   updateVideo.value = async (type: string) => {
     const playVideo = async (videoType: string) => {
       videoSource.value = setVideo(videoType)
@@ -415,7 +279,26 @@ onMounted(async () => {
     }
     await playVideo(type)
   }
+
   updateVideo.value('STAND_BY')
+
+  // Set up audio player event listeners
+  if (audioPlayer.value) {
+    audioPlayer.value.addEventListener('play', () => {
+      isPlaying.value = true
+      updateVideo.value('SPEAKING')
+    })
+
+    audioPlayer.value.addEventListener('ended', () => {
+      isPlaying.value = false
+      updateVideo.value('STAND_BY')
+
+      // Resume recording if it was requested
+      if (isRecordingRequested.value && !isRecording.value) {
+        startListening()
+      }
+    })
+  }
 })
 </script>
 

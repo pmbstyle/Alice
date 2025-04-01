@@ -48,7 +48,7 @@
   "dependencies": {
     "@pinecone-database/pinecone": "^2.2.2",
     "fs": "^0.0.1-security",
-    "groq-sdk": "^0.9.1",
+    "groq-sdk": "^0.17.0",
     "path": "^0.12.7",
     "prettier": "^3.5.1",
     "vue-router": "^4.4.0"

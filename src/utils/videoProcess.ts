@@ -1,6 +1,6 @@
-import videoSpeaking from '../assets/videos/speaking.mp4'
-import videoStandBy from '../assets/videos/hd/standby.mp4'
-import videoProcessing from '../assets/videos/hd/processing.mp4'
+import videoSpeaking from '../assets/videos/qhd/speaking.mp4'
+import videoStandBy from '../assets/videos/qhd/standby.mp4'
+import videoProcessing from '../assets/videos/qhd/thinking.mp4'
 
 import videoEmotionBored from '../assets/videos/emotions/bored.mp4'
 import videoEmotionWow from '../assets/videos/emotions/wow.mp4'
@@ -16,7 +16,6 @@ const setVideo = (type: string) => {
       return videoStandBy
     case 'PROCESSING':
       return videoProcessing
-    //return videoStandBy
     case 'EMOTION_BORED':
       return videoEmotionBored
     case 'EMOTION_WOW':

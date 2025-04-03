@@ -13,7 +13,7 @@
             'w-[480px] h-[480px]': !isMinimized && isElectron,
             'w-[430px] h-[430px]': !isElectron,
           }"
-          :style="{ backgroundImage: `url('${bg}'` }"
+          :style="{ backgroundImage: `url('${bg}'`, backgroundPositionY: '-62px' }"
         >
           <audio ref="audioPlayer" class="hidden"></audio>
           <video
@@ -354,7 +354,7 @@ const playNextAudio = async () => {
 }
 
 const processRequest = async (text: string) => {
-  updateVideo.value('STAND_BY')
+  updateVideo.value('PROCESSING')
   generalStore.chatHistory.unshift({
     role: 'user',
     content: [{ type: 'text', text: { value: text, annotations: [] } }],

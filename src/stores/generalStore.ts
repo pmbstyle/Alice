@@ -49,6 +49,9 @@ export const useGeneralStore = defineStore('general', () => {
       case 'Speaking...':
         updateVideo.value('SPEAKING')
         break
+      case 'Thinking...':
+        updateVideo.value('PROCESSING')
+        break
       default:
         updateVideo.value('STAND_BY')
         break

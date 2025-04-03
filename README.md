@@ -26,8 +26,8 @@ This project was created and maintained for personal use and shared with the com
 - [Groq API](https://console.groq.com/) (Whisper)
 - [Pinecone](https://www.pinecone.io/) (Vector Database)
 - [Electron](https://www.electronjs.org/) (Desktop Application framework)
-- [ChatGPT 4o](https://chat.com) native image generation
-- [Kling 1.6 pro (fal.ai)](https://fal.ai/) image-to-video
+- [ChatGPT 4o](https://chat.com) (Native image generation)
+- [Kling 1.6 pro (fal.ai)](https://fal.ai/) (Image-to-video)
 
 ## Getting Started
 

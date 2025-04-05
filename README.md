@@ -17,6 +17,7 @@ This project was created and maintained for personal use and shared with the com
 - **Conversation history:** The application stores and retrieves relevant conversation history to provide context-aware responses.
 - **Pinecone vector database:** Conversation messages are embedded and stored in a Pinecone vector database to retrieve relevant memories efficiently.
 - **Animated assistant appearance:** Using prerendered AI-generated videos
+- **Function calling:** The AI assistant can use web search, get weather forecasts and current date/time
 
 ## Technologies Used
 

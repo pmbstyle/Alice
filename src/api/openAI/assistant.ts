@@ -80,6 +80,23 @@ export const runAssistant = async (
   return run
 }
 
+export const submitToolOutputs = async (threadId: string, runId: string, toolOutputs: any[], assistantId: string) => {
+  try {
+    return openai.beta.threads.runs.submitToolOutputs(
+      threadId,
+      runId,
+      { 
+        tool_outputs: toolOutputs,
+        stream: true,
+      },
+    )
+  } catch (error) {
+    console.error('Error submitting tool outputs:', error)
+    throw error
+  }
+}
+
+
 const embedText = async (text: any) => {
   text = JSON.stringify(text)
   try {

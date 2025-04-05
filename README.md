@@ -30,6 +30,15 @@ This project was created and maintained for personal use and shared with the com
 - [ChatGPT 4o](https://chat.com) (Native image generation)
 - [Kling 1.6 pro (fal.ai)](https://fal.ai/) (Image-to-video)
 
+## TODO
+- fix chained tool calling
+- add a settings menu
+- add an option to choose vector DB provider/source
+- add a real-time API option with the audio-to-audio interface and video(screen-sharing/camera) input
+- add the ability to output images and other media content
+- make Alice animations real-time with the lip sync
+- something else ... depends on where the technology will be at the moment
+
 ## Getting Started
 
 1. Clone the repository: `git clone https://github.com/pmbstyle/Alice.git`

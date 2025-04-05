@@ -6,7 +6,7 @@ Alice App is a Vue.js/Electron.js application (OpenAI/Groq/Pinecone wrapper) tha
 This project was created and maintained for personal use and shared with the community.
 
 <p align="center">
-  <img src="https://github.com/pmbstyle/Alice/blob/main/screenshot.png?raw=true" alt="Alice Screenshot">
+  <img src="https://github.com/pmbstyle/Alice/blob/main/src/animation.gif?raw=true" alt="Alice Animation">
 </p>
 
 ## Features

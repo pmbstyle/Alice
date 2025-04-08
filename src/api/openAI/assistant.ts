@@ -75,7 +75,7 @@ export const runAssistant = async (
     assistant_id: assistantId,
     stream: true,
     temperature: 0.5,
-    additional_instructions: 'Memories related to user question: ' + h,
+    additional_instructions: `Current datetime: ${new Date().toLocaleString()}. Memories related to user question: ${h}. Memories related to user question: ` + h,
   })
   return run
 }

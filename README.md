@@ -31,7 +31,6 @@ This project was created and maintained for personal use and shared with the com
 - [Kling 1.6 pro (fal.ai)](https://fal.ai/) (Image-to-video)
 
 ## TODO
-- fix chained tool calling
 - add a settings menu
 - add an option to choose vector DB provider/source
 - add a real-time API option with the audio-to-audio interface and video(screen-sharing/camera) input

@@ -13,7 +13,10 @@
             'w-[480px] h-[480px]': !isMinimized && isElectron,
             'w-[430px] h-[430px]': !isElectron,
           }"
-          :style="{ backgroundImage: `url('${bg}'`, backgroundPositionY: '-62px' }"
+          :style="{
+            backgroundImage: `url('${bg}'`,
+            backgroundPositionY: '-62px',
+          }"
         >
           <audio ref="audioPlayer" class="hidden"></audio>
           <video
@@ -90,6 +93,7 @@ const recordingConfig = {
 }
 
 const screenShot = ref<string>('')
+const screenshotReady = ref<boolean>(false)
 
 const vadBuffer = {
   samples: [] as boolean[],
@@ -356,19 +360,57 @@ const playNextAudio = async () => {
 
 const processRequest = async (text: string) => {
   updateVideo.value('PROCESSING')
+
+  let messageContent: any[] = [{ type: 'text', text: text }]
+
+  if (screenshotReady.value && screenShot.value) {
+    try {
+      const fileId = await conversationStore.uploadScreenshotToOpenAI(
+        screenShot.value
+      )
+
+      messageContent.push({
+        type: 'image_file',
+        image_file: {
+          file_id: fileId,
+        },
+      })
+
+      screenshotReady.value = false
+      screenShot.value = ''
+    } catch (error) {
+      console.error('Error uploading screenshot:', error)
+      statusMessage.value = 'Error uploading screenshot'
+    }
+  }
+
+  const userMessage = {
+    role: 'user',
+    content: messageContent,
+  }
+
   generalStore.chatHistory.unshift({
     role: 'user',
-    content: [{ type: 'text', text: { value: text, annotations: [] } }],
+    content: [
+      {
+        type: 'text',
+        text: { value: text, annotations: [] },
+      },
+    ],
   })
+
   scrollChat()
+
   const prompt = await conversationStore.createOpenAIPrompt(
-    text,
+    userMessage,
     storeMessage.value
   )
+
   await conversationStore.sendMessageToThread(
     prompt.message,
     storeMessage.value
   )
+
   chatInput.value = ''
   await conversationStore.chat(prompt.history)
 }
@@ -404,20 +446,11 @@ onMounted(async () => {
   updateVideo.value('STAND_BY')
 
   if (isElectron) {
-    (window as any).ipcRenderer.on('screenshot-captured', async () => {
-      const dataURI = await (window as any).ipcRenderer.invoke('get-screenshot')
+    window.ipcRenderer.on('screenshot-captured', async () => {
+      const dataURI = await window.ipcRenderer.invoke('get-screenshot')
       screenShot.value = dataURI
-      statusMessage.value = 'Screenshot taken'
-      const description = await conversationStore.describeImage(screenShot.value)
-      let prompt = {
-        role: 'user',
-        content:
-          'Here is a description of the users screenshot: [start screenshot]' +
-          JSON.stringify(description) +
-          '[/end screenshot]',
-      }
-      await conversationStore.sendMessageToThread(prompt, false)
-      statusMessage.value = 'Screenshot stored'
+      screenshotReady.value = true
+      statusMessage.value = 'Screenshot ready'
       takingScreenShot.value = false
     })
   }

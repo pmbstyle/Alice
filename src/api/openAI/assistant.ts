@@ -43,26 +43,27 @@ export const sendMessage = async (
   return response
 }
 
-export const visionMessage = async (image: any) => {
-  const response = await openai.chat.completions.create({
-    model: 'gpt-4o-mini',
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Describe what is in this screenshot' },
-          {
-            type: 'image_url',
-            image_url: {
-              url: image,
-              detail: 'high',
-            },
-          },
-        ],
-      },
-    ],
+export const uploadScreenshot = async (dataURI: string) => {
+  const base64Data = dataURI.split(',')[1]
+
+  const binaryData = atob(base64Data)
+
+  const arrayBuffer = new ArrayBuffer(binaryData.length)
+  const view = new Uint8Array(arrayBuffer)
+  for (let i = 0; i < binaryData.length; i++) {
+    view[i] = binaryData.charCodeAt(i)
+  }
+
+  const blob = new Blob([arrayBuffer], { type: 'image/png' })
+
+  const file = new File([blob], 'screenshot.png', { type: 'image/png' })
+
+  const response = await openai.files.create({
+    file,
+    purpose: 'vision',
   })
-  return response.choices[0].message.content
+
+  return response.id
 }
 
 export const runAssistant = async (
@@ -75,34 +76,57 @@ export const runAssistant = async (
     assistant_id: assistantId,
     stream: true,
     temperature: 0.5,
-    additional_instructions: `Current datetime: ${new Date().toLocaleString()}. Memories related to user question: ${h}. Memories related to user question: ` + h,
+    additional_instructions:
+      `Current datetime: ${new Date().toLocaleString()}. Memories related to user question: ${h}. Memories related to user question: ` +
+      h,
   })
   return run
 }
 
-export const submitToolOutputs = async (threadId: string, runId: string, toolOutputs: any[], assistantId: string) => {
+export const submitToolOutputs = async (
+  threadId: string,
+  runId: string,
+  toolOutputs: any[],
+  assistantId: string
+) => {
   try {
-    return openai.beta.threads.runs.submitToolOutputs(
-      threadId,
-      runId,
-      { 
-        tool_outputs: toolOutputs,
-        stream: true,
-      },
-    )
+    return openai.beta.threads.runs.submitToolOutputs(threadId, runId, {
+      tool_outputs: toolOutputs,
+      stream: true,
+    })
   } catch (error) {
     console.error('Error submitting tool outputs:', error)
     throw error
   }
 }
 
-
 const embedText = async (text: any) => {
-  text = JSON.stringify(text)
+  let textToEmbed = ''
+
+  if (typeof text === 'string') {
+    textToEmbed = text
+  } else if (Array.isArray(text.content)) {
+    const textParts = text.content
+      .filter(item => item.type === 'text')
+      .map(item =>
+        typeof item.text === 'string'
+          ? item.text
+          : item.text.value || JSON.stringify(item.text)
+      )
+
+    textToEmbed = textParts.join(' ')
+
+    if (text.content.some(item => item.type === 'image_url')) {
+      textToEmbed += ' [This message includes an image]'
+    }
+  } else {
+    textToEmbed = JSON.stringify(text)
+  }
+
   try {
     const response = await openai.embeddings.create({
       model: 'text-embedding-ada-002',
-      input: text,
+      input: textToEmbed,
       encoding_format: 'float',
     })
     return response.data[0].embedding

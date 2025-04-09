@@ -3,7 +3,7 @@ import { defineStore, storeToRefs } from 'pinia'
 import {
   getAssistantData,
   createThread,
-  visionMessage,
+  uploadScreenshot,
   listMessages,
   sendMessage,
   runAssistant,
@@ -142,7 +142,6 @@ export const useConversationStore = defineStore('conversation', () => {
                   tool_call_id: toolCall.id,
                   output: result,
                 })
-
               } catch (error) {
                 console.error(
                   `Error executing function ${functionName}:`,
@@ -233,26 +232,53 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   const createOpenAIPrompt = async (
-    newMessage: string,
+    newMessage: string | any,
     store: boolean = true
   ) => {
     let memoryMessages: any[] = []
-    if (store) {
-      const relevantMemories = await retrieveRelevantMemories(newMessage)
-      memoryMessages = relevantMemories.map(memory => ({
-        role: 'assistant',
-        content: memory,
-      }))
+    let userMessage: any
+
+    if (typeof newMessage === 'string') {
+      userMessage = { role: 'user', content: newMessage }
+
+      if (store) {
+        const relevantMemories = await retrieveRelevantMemories(newMessage)
+        memoryMessages = relevantMemories.map(memory => ({
+          role: 'assistant',
+          content: memory,
+        }))
+      }
+    } else {
+      userMessage = newMessage
+
+      if (store) {
+        const textContent = newMessage.content
+          .filter(item => item.type === 'text')
+          .map(item => item.text)
+          .join(' ')
+
+        const relevantMemories = await retrieveRelevantMemories(textContent)
+        memoryMessages = relevantMemories.map(memory => ({
+          role: 'assistant',
+          content: memory,
+        }))
+      }
     }
-    let userMessage = { role: 'user', content: newMessage }
+
     return {
       message: userMessage,
       history: memoryMessages,
     }
   }
-  const describeImage = async (image: string) => {
-    const response = await visionMessage(image)
-    return response
+
+  const uploadScreenshotToOpenAI = async (screenshot: string) => {
+    try {
+      const response = await uploadScreenshot(screenshot)
+      return response
+    } catch (error) {
+      console.error('Error uploading screenshot:', error)
+      return null
+    }
   }
 
   return {
@@ -264,6 +290,6 @@ export const useConversationStore = defineStore('conversation', () => {
     chat,
     transcribeAudioMessage,
     createOpenAIPrompt,
-    describeImage,
+    uploadScreenshotToOpenAI,
   }
 })

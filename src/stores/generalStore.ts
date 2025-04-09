@@ -39,6 +39,7 @@ export const useGeneralStore = defineStore('general', () => {
 
   const takingScreenShot = ref<boolean>(false)
   const updateVideo = ref<(type: string) => void>(() => {})
+  const playAudio = ref<(audio: string, isTTS: boolean) => void>(() => {})
 
   const setProvider = (provider: string) => {
     provider = provider || 'openai'

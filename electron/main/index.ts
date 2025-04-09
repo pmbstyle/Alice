@@ -115,6 +115,7 @@ async function createWindow() {
 
   ipcMain.handle('save-screenshot', (event, dataURL) => {
     screenshotDataURL = dataURL
+    win?.webContents.send('screenshot-captured')
   })
 
   ipcMain.handle('get-screenshot', () => {

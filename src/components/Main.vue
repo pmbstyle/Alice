@@ -247,6 +247,7 @@ const togglePlaying = () => {
   if (isPlaying.value) {
     audioPlayer.value?.pause()
     updateVideo.value('STAND_BY')
+    statusMessage.value = 'Stand by'
     if (audioContext.value) {
       audioContext.value.close()
       audioContext.value = null
@@ -377,21 +378,6 @@ const takeScreenShot = async () => {
     takingScreenShot.value = true
     statusMessage.value = 'Taking a screenshot'
     await (window as any).electron.showOverlay()
-  } else {
-    const dataURI = await (window as any).ipcRenderer.invoke('get-screenshot')
-    screenShot.value = dataURI
-    statusMessage.value = 'Screenshot taken'
-    const description = await conversationStore.describeImage(screenShot.value)
-    let prompt = {
-      role: 'user',
-      content:
-        'Here is a description of the users screenshot: [start screenshot]' +
-        JSON.stringify(description) +
-        '[/end screenshot]',
-    }
-    await conversationStore.sendMessageToThread(prompt, false)
-    statusMessage.value = 'Screenshot stored'
-    takingScreenShot.value = false
   }
 }
 
@@ -416,6 +402,25 @@ onMounted(async () => {
     await playVideo(type)
   }
   updateVideo.value('STAND_BY')
+
+  if (isElectron) {
+    (window as any).ipcRenderer.on('screenshot-captured', async () => {
+      const dataURI = await (window as any).ipcRenderer.invoke('get-screenshot')
+      screenShot.value = dataURI
+      statusMessage.value = 'Screenshot taken'
+      const description = await conversationStore.describeImage(screenShot.value)
+      let prompt = {
+        role: 'user',
+        content:
+          'Here is a description of the users screenshot: [start screenshot]' +
+          JSON.stringify(description) +
+          '[/end screenshot]',
+      }
+      await conversationStore.sendMessageToThread(prompt, false)
+      statusMessage.value = 'Screenshot stored'
+      takingScreenShot.value = false
+    })
+  }
 })
 </script>
 

@@ -30,12 +30,14 @@
       </div>
     </div>
     <div class="w-full pt-4 pr-4">
-      <input
-        v-model="chatInput"
-        @keyup.enter="chatInputHandle"
-        class="input w-full rounded-lg bg-gray-800 text-white"
-        placeholder="Type your message here..."
-      />
+      <div class="gradient-border-wrapper">
+        <input
+          v-model="chatInput"
+          @keyup.enter="chatInputHandle"
+          class="input w-full rounded-lg bg-gray-800 text-white p-3 relative z-10"
+          placeholder="Type your message here..."
+        />
+      </div>
     </div>
   </div>
 </template>
@@ -94,16 +96,51 @@ const chatInputHandle = async () => {
 }
 
 .messages-wrapper::-webkit-scrollbar-track {
-  background: #333; /* Darker background */
+  background: #333;
   border-radius: 4px;
 }
 
 .messages-wrapper::-webkit-scrollbar-thumb {
-  background: #555; /* Lighter thumb */
+  background: #555;
   border-radius: 4px;
 }
 
 .messages-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #777; /* Even lighter on hover */
+  background: #777;
 }
+.gradient-border-wrapper {
+  position: relative;
+  border-radius: 0.5rem;
+  padding: 1px;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.gradient-border-wrapper::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 0.5rem;
+  background: linear-gradient(
+    -45deg,
+    #00f5cc 0%,
+    #00bfff 20%,
+    #5865f2 45%,
+    #8a2be2 75%,
+    #ff0080 100%
+  );
+  background-size: 200% 200%;
+  background-position: 0 0;
+  opacity: 0;
+  transition:
+    background-position 1s ease,
+    opacity 0.4s ease;
+  z-index: -1;
+}
+
+.gradient-border-wrapper:focus-within::after {
+  background-position: 100% 100%;
+  opacity: 1;
+}
+
 </style>

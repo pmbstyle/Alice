@@ -3,17 +3,20 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 
 let startX, startY, selectionBox
 
 function onMouseDown(e) {
+  console.log('Mouse down detected', e.clientX, e.clientY)
   startX = e.clientX
   startY = e.clientY
   selectionBox = document.createElement('div')
   selectionBox.classList.add('selection-box')
   selectionBox.style.left = `${startX}px`
   selectionBox.style.top = `${startY}px`
+  selectionBox.style.width = '0px'
+  selectionBox.style.height = '0px'
   document.body.appendChild(selectionBox)
 }
 
@@ -29,60 +32,89 @@ function onMouseMove(e) {
 
 async function onMouseUp(e) {
   if (!selectionBox) return
+  console.log('Mouse up detected')
   const rect = selectionBox.getBoundingClientRect()
+
+  if (rect.width < 10 || rect.height < 10) {
+    document.body.removeChild(selectionBox)
+    selectionBox = null
+    return
+  }
+  
   document.body.removeChild(selectionBox)
+  selectionBox = null
 
-  const source = (await window.ipcRenderer.invoke('capture-screen'))[0]
-  const image = await navigator.mediaDevices.getUserMedia({
-    video: {
-      mandatory: {
-        chromeMediaSource: 'desktop',
-        chromeMediaSourceId: source.id,
-        minWidth: screen.width,
-        maxWidth: screen.width,
-        minHeight: screen.height,
-        maxHeight: screen.height,
+  try {
+    const source = (await window.ipcRenderer.invoke('capture-screen'))[0]
+    const image = await navigator.mediaDevices.getUserMedia({
+      video: {
+        mandatory: {
+          chromeMediaSource: 'desktop',
+          chromeMediaSourceId: source.id,
+          minWidth: screen.width,
+          maxWidth: screen.width,
+          minHeight: screen.height,
+          maxHeight: screen.height,
+        },
       },
-    },
-  })
+    })
 
-  const track = image.getVideoTracks()[0]
-  const capture = new ImageCapture(track)
-  const bitmap = await capture.grabFrame()
-  track.stop()
+    const track = image.getVideoTracks()[0]
+    const capture = new ImageCapture(track)
+    const bitmap = await capture.grabFrame()
+    track.stop()
 
-  const canvas = document.createElement('canvas')
-  canvas.width = rect.width
-  canvas.height = rect.height
-  const context = canvas.getContext('2d')
-  context.drawImage(
-    bitmap,
-    rect.x,
-    rect.y,
-    rect.width,
-    rect.height,
-    0,
-    0,
-    rect.width,
-    rect.height
-  )
-  const dataURL = await canvas.toDataURL()
-  window.ipcRenderer.invoke('save-screenshot', dataURL)
-  window.ipcRenderer.invoke('hide-overlay')
+    const canvas = document.createElement('canvas')
+    canvas.width = rect.width
+    canvas.height = rect.height
+    const context = canvas.getContext('2d')
+    context.drawImage(
+      bitmap,
+      rect.x,
+      rect.y,
+      rect.width,
+      rect.height,
+      0,
+      0,
+      rect.width,
+      rect.height
+    )
+    const dataURL = canvas.toDataURL()
+    window.ipcRenderer.invoke('save-screenshot', dataURL)
+    window.ipcRenderer.invoke('hide-overlay')
+  } catch (error) {
+    console.error('Error taking screenshot:', error)
+    window.ipcRenderer.invoke('hide-overlay')
+  }
+}
+
+function onKeyDown(e) {
+  if (e.key === 'Escape') {
+    if (selectionBox) {
+      document.body.removeChild(selectionBox)
+      selectionBox = null
+    }
+    window.ipcRenderer.invoke('hide-overlay')
+  }
 }
 
 onMounted(() => {
-  const overlay = document.getElementById('overlay')
-  overlay.addEventListener('mousedown', onMouseDown)
-  overlay.addEventListener('mousemove', onMouseMove)
-  overlay.addEventListener('mouseup', onMouseUp)
+  console.log('Overlay component mounted')
+  document.addEventListener('mousedown', onMouseDown)
+  document.addEventListener('mousemove', onMouseMove)
+  document.addEventListener('mouseup', onMouseUp)
+  document.addEventListener('keydown', onKeyDown)
 })
 
 onBeforeUnmount(() => {
-  const overlay = document.getElementById('overlay')
-  overlay.removeEventListener('mousedown', onMouseDown)
-  overlay.removeEventListener('mousemove', onMouseMove)
-  overlay.removeEventListener('mouseup', onMouseUp)
+  document.removeEventListener('mousedown', onMouseDown)
+  document.removeEventListener('mousemove', onMouseMove)
+  document.removeEventListener('mouseup', onMouseUp)
+  document.removeEventListener('keydown', onKeyDown)
+
+  if (selectionBox) {
+    document.body.removeChild(selectionBox)
+  }
 })
 </script>
 
@@ -101,10 +133,13 @@ html {
   width: 100vw;
   height: 100vh;
   cursor: crosshair;
+  z-index: 9999;
 }
 .selection-box {
   border: 2px dashed #fff;
+  background-color: rgba(255, 255, 255, 0.1);
   position: absolute;
   pointer-events: none;
+  z-index: 10000;
 }
 </style>

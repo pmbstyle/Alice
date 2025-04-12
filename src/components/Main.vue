@@ -419,7 +419,7 @@ const takeScreenShot = async () => {
   if (!takingScreenShot.value) {
     takingScreenShot.value = true
     statusMessage.value = 'Taking a screenshot'
-    await (window as any).electron.showOverlay()
+    await window.electron.showOverlay()
   }
 }
 
@@ -447,11 +447,17 @@ onMounted(async () => {
 
   if (isElectron) {
     window.ipcRenderer.on('screenshot-captured', async () => {
-      const dataURI = await window.ipcRenderer.invoke('get-screenshot')
-      screenShot.value = dataURI
-      screenshotReady.value = true
-      statusMessage.value = 'Screenshot ready'
-      takingScreenShot.value = false
+      try {
+        const dataURI = await window.ipcRenderer.invoke('get-screenshot')
+        screenShot.value = dataURI
+        screenshotReady.value = true
+        statusMessage.value = 'Screenshot ready'
+      } catch (error) {
+        console.error('Error retrieving screenshot:', error)
+        statusMessage.value = 'Error taking screenshot'
+      } finally {
+        takingScreenShot.value = false
+      }
     })
   }
 })

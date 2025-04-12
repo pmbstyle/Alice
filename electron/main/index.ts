@@ -125,6 +125,47 @@ async function createWindow() {
   ipcMain.on('close-app', () => {
     app.quit()
   })
+
+  ipcMain.handle('electron:open-path', async (event, args) => {
+    if (!args || typeof args.target !== 'string' || args.target.trim() === '') {
+      console.error('open_path: Invalid target received:', args)
+      return { success: false, message: 'Error: No valid target path, name, or URL provided.' }
+    }
+    
+    const targetPath = args.target.trim()
+    console.log(`Main process received request to open: ${targetPath}`)
+    
+    try {
+      // Check if it looks like a URL
+      if (targetPath.startsWith('http://') || 
+          targetPath.startsWith('https://') || 
+          targetPath.startsWith('mailto:')) {
+        console.log(`Opening external URL: ${targetPath}`)
+        await shell.openExternal(targetPath)
+        return { success: true, message: `Successfully initiated opening URL: ${targetPath}` }
+      } else {
+        // Assume it's a file, folder, or application name
+        console.log(`Opening path/application: ${targetPath}`)
+        const errorMessage = await shell.openPath(targetPath) // Returns empty string on success
+        
+        if (errorMessage) {
+          console.error(`Failed to open path "${targetPath}": ${errorMessage}`)
+          return { 
+            success: false, 
+            message: `Error: Could not open "${targetPath}". Reason: ${errorMessage}` 
+          }
+        } else {
+          return { success: true, message: `Successfully opened path: ${targetPath}` }
+        }
+      }
+    } catch (error) {
+      console.error(`Unexpected error opening target "${targetPath}":`, error)
+      return { 
+        success: false, 
+        message: `Error: An unexpected issue occurred while trying to open "${targetPath}". ${error.message || ''}` 
+      }
+    }
+  })
 }
 
 async function createOverlayWindow() {

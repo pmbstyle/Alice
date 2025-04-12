@@ -209,18 +209,57 @@ async function get_current_datetime(
   }
 }
 
+interface OpenPathArgs {
+  target: string
+}
+
+/**
+ * Opens a file, folder, application, or URL using the system's default handler.
+ */
+async function open_path(args: OpenPathArgs): Promise<FunctionResult> {
+  console.log(`Invoking open_path with target: ${args.target}`)
+  
+  try {
+    // Check for window.ipcRenderer.invoke instead of window.electron.ipcRenderer.invoke
+    if (typeof window === 'undefined' || !window.ipcRenderer?.invoke) {
+      return { 
+        success: false, 
+        error: 'Electron IPC bridge not available. This function only works in the desktop app.' 
+      }
+    }
+    
+    // Use window.ipcRenderer.invoke instead of window.electron.ipcRenderer.invoke
+    const result = await window.ipcRenderer.invoke('electron:open-path', args)
+    console.log('Main process response for open_path:', result)
+    
+    if (result.success) {
+      return { success: true, data: { message: result.message } }
+    } else {
+      return { success: false, error: result.message }
+    }
+  } catch (error) {
+    console.error('Error invoking electron:open-path:', error)
+    return { 
+      success: false, 
+      error: `Failed to execute open_path: ${error.message || 'Unknown error'}` 
+    }
+  }
+}
+
 const functionRegistry: {
   [key: string]: (args: any) => Promise<FunctionResult>
 } = {
   perform_web_search: perform_web_search,
   get_weather_forecast: get_weather_forecast,
   get_current_datetime: get_current_datetime,
+  open_path: open_path,
 }
 
 const functionSchemas = {
   perform_web_search: { required: ['query'] },
   get_weather_forecast: { required: ['location'] },
   get_current_datetime: { required: ['format'] },
+  open_path: { required: ['target'] },
 }
 
 /**

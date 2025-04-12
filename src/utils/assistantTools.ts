@@ -57,5 +57,25 @@ export const assistantTools = [
         required: ['format']
       }
     }
+  },
+
+  {
+    type: 'function',
+    function: {
+      name: 'open_path',
+      description:
+        "Opens a specified file, folder, or application on the user's computer using the default operating system handler, or opens a URL in the default web browser. Use for launching apps, documents, folders, or websites mentioned by the user.",
+      parameters: {
+        type: 'object',
+        properties: {
+          target: {
+            type: 'string',
+            description:
+              'The target to open. Can be an absolute file path (e.g., "/Users/me/file.txt"), a folder path (e.g., "C:\\Users\\me\\Documents"), an application name understood by the OS (e.g., "Calculator", "Safari"), or a full URL (e.g., "https://www.google.com").',
+          },
+        },
+        required: ['target'],
+      },
+    },
   }
 ]

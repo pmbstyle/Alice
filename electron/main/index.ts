@@ -106,16 +106,21 @@ async function createWindow() {
   })
 
   ipcMain.on('show-overlay', () => {
+    if (!overlayWindow) {
+      createOverlayWindow()
+    }
     overlayWindow?.show()
   })
 
   ipcMain.handle('hide-overlay', () => {
     overlayWindow?.hide()
+    return true
   })
 
   ipcMain.handle('save-screenshot', (event, dataURL) => {
     screenshotDataURL = dataURL
     win?.webContents.send('screenshot-captured')
+    return true
   })
 
   ipcMain.handle('get-screenshot', () => {
@@ -136,6 +141,7 @@ async function createOverlayWindow() {
     frame: false,
     alwaysOnTop: true,
     fullscreen: true,
+    skipTaskbar: true,
     webPreferences: {
       preload,
     },

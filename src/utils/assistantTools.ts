@@ -43,20 +43,22 @@ export const assistantTools = [
     type: 'function',
     function: {
       name: 'get_current_datetime',
-      description: 'Call this function whenever discussing current events, recent developments, or when time-sensitive information is needed. ALWAYS use this function when referring to events after 2022, current year, or "now". This function returns the current date, time, and other temporal information needed to provide accurate, up-to-date responses.',
+      description:
+        'Call this function whenever discussing current events, recent developments, or when time-sensitive information is needed. ALWAYS use this function when referring to events after 2022, current year, or "now". This function returns the current date, time, and other temporal information needed to provide accurate, up-to-date responses.',
       parameters: {
         type: 'object',
         properties: {
           format: {
             type: 'string',
             enum: ['full', 'date_only', 'time_only', 'year_only'],
-            description: 'The format of the datetime information to return. Default is "full" if not specified.'
-          }
+            description:
+              'The format of the datetime information to return. Default is "full" if not specified.',
+          },
         },
         additionalProperties: false,
-        required: ['format']
-      }
-    }
+        required: ['format'],
+      },
+    },
   },
 
   {
@@ -77,5 +79,30 @@ export const assistantTools = [
         required: ['target'],
       },
     },
-  }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'manage_clipboard',
+      description:
+        'Manages the system clipboard. Can read the current text content from the clipboard or write new text content to it. Useful for transferring text between Alice and other applications.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['read', 'write'],
+            description:
+              'Specifies the operation to perform: "read" to get text from the clipboard, "write" to put text onto the clipboard.',
+          },
+          content: {
+            type: 'string',
+            description:
+              'The text content to write to the clipboard. Required only when the action is "write". Ignored for "read".',
+          },
+        },
+        required: ['action'],
+      },
+    },
+  },
 ]

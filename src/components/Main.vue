@@ -15,7 +15,7 @@
           }"
           :style="{
             backgroundImage: `url('${bg}'`,
-            backgroundPositionY: '-62px',
+            backgroundPositionY: !isMinimized ? '-62px' : '-25px',
           }"
         >
           <audio ref="audioPlayer" class="hidden"></audio>
@@ -252,10 +252,14 @@ const togglePlaying = () => {
     audioPlayer.value?.pause()
     updateVideo.value('STAND_BY')
     statusMessage.value = 'Stand by'
+
     if (audioContext.value) {
       audioContext.value.close()
       audioContext.value = null
     }
+
+    generalStore.audioQueue = []
+
     isPlaying.value = false
     if (isRecordingRequested.value) {
       isRecording.value = true

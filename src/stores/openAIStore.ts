@@ -135,7 +135,8 @@ export const useConversationStore = defineStore('conversation', () => {
               const functionArgs = toolCall.function.arguments
 
               try {
-                statusMessage.value = `${functionName}`
+                const formattedFunctionName = functionName.replace(/_/g, ' ')
+                statusMessage.value = `${formattedFunctionName}`
                 const result = await executeFunction(functionName, functionArgs)
 
                 toolOutputs.push({

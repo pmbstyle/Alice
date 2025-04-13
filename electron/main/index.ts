@@ -6,6 +6,7 @@ import {
   ipcMain,
   session,
   desktopCapturer,
+  clipboard,
 } from 'electron'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
@@ -116,7 +117,6 @@ async function createWindow() {
     overlayWindow?.hide()
     return true
   })
-
   ipcMain.handle('save-screenshot', (event, dataURL) => {
     screenshotDataURL = dataURL
     win?.webContents.send('screenshot-captured')
@@ -130,8 +130,118 @@ async function createWindow() {
   ipcMain.on('close-app', () => {
     app.quit()
   })
-}
 
+  ipcMain.handle('electron:open-path', async (event, args) => {
+    if (!args || typeof args.target !== 'string' || args.target.trim() === '') {
+      console.error('open_path: Invalid target received:', args)
+      return {
+        success: false,
+        message: 'Error: No valid target path, name, or URL provided.',
+      }
+    }
+
+    const targetPath = args.target.trim()
+    console.log(`Main process received request to open: ${targetPath}`)
+
+    try {
+      if (
+        targetPath.startsWith('http://') ||
+        targetPath.startsWith('https://') ||
+        targetPath.startsWith('mailto:')
+      ) {
+        console.log(`Opening external URL: ${targetPath}`)
+        await shell.openExternal(targetPath)
+        return {
+          success: true,
+          message: `Successfully initiated opening URL: ${targetPath}`,
+        }
+      } else {
+        console.log(`Opening path/application: ${targetPath}`)
+        const errorMessage = await shell.openPath(targetPath)
+
+        if (errorMessage) {
+          console.error(`Failed to open path "${targetPath}": ${errorMessage}`)
+          return {
+            success: false,
+            message: `Error: Could not open "${targetPath}". Reason: ${errorMessage}`,
+          }
+        } else {
+          return {
+            success: true,
+            message: `Successfully opened path: ${targetPath}`,
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`Unexpected error opening target "${targetPath}":`, error)
+      return {
+        success: false,
+        message: `Error: An unexpected issue occurred while trying to open "${targetPath}". ${error.message || ''}`,
+      }
+    }
+  })
+
+  ipcMain.handle('electron:manage-clipboard', async (event, args) => {
+    if (!args || (args.action !== 'read' && args.action !== 'write')) {
+      console.error('manage_clipboard: Invalid action received:', args?.action)
+      return {
+        success: false,
+        message: 'Error: Invalid action specified. Must be "read" or "write".',
+      }
+    }
+
+    try {
+      if (args.action === 'read') {
+        const clipboardText = clipboard.readText()
+        console.log('Clipboard read:', clipboardText)
+        return {
+          success: true,
+          message: 'Successfully read text from clipboard.',
+          data: clipboardText,
+        }
+      } else {
+        // action === 'write'
+        if (typeof args.content !== 'string') {
+          if (args.content === undefined || args.content === null) {
+            console.error(
+              'manage_clipboard: Content is missing for write action.'
+            )
+            return {
+              success: false,
+              message:
+                'Error: Text content must be provided for the "write" action.',
+            }
+          }
+
+          console.error(
+            'manage_clipboard: Content must be a string for write action.'
+          )
+          return {
+            success: false,
+            message:
+              'Error: Text content must be a string for the "write" action.',
+          }
+        }
+
+        clipboard.writeText(args.content)
+        console.log('Clipboard write successful.')
+        return {
+          success: true,
+          message: 'Successfully wrote text to clipboard.',
+        }
+      }
+    } catch (error) {
+      console.error(
+        `Unexpected error during clipboard action "${args.action}":`,
+        error
+      )
+      return {
+        success: false,
+        message: `Error: An unexpected issue occurred during the clipboard operation. ${error.message || ''}`,
+      }
+    }
+  })
+}
 async function createOverlayWindow() {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
   overlayWindow = new BrowserWindow({

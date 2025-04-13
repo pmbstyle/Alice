@@ -2,9 +2,15 @@ import axios from 'axios'
 
 const TAVILY_API_KEY = import.meta.env.VITE_TAVILY_API_KEY
 const OPENWEATHERMAP_API_KEY = import.meta.env.VITE_OPENWEATHERMAP_API_KEY
+const CRAWL4AI_API_KEY = import.meta.env.VITE_CRAWL4AI_API_KEY
+const CRAWL4AI_API_URL = import.meta.env.VITE_CRAWL4AI_API_URL
 
 interface WebSearchArgs {
   query: string
+}
+
+interface Crawl4AiArgs {
+  url: string
 }
 
 interface WeatherArgs {
@@ -63,6 +69,119 @@ async function perform_web_search(
     return {
       success: false,
       error: `Failed to perform web search: ${error.response?.data?.error || error.message}`,
+    }
+  }
+}
+
+/**
+ * Gets context from a website using the custom scraper API.
+ */
+async function get_website_context(
+  args: Crawl4AiArgs
+): Promise<FunctionResult> {
+  if (!CRAWL4AI_API_KEY || !CRAWL4AI_API_URL) {
+    return {
+      success: false,
+      error: 'Crawl4AI API key or URL is not configured.',
+    }
+  }
+
+  if (!args.url) {
+    return { success: false, error: 'URL is missing.' }
+  }
+
+  console.log(`Fetching data from: ${args.url}`)
+  try {
+    const response = await axios.post(
+      `${CRAWL4AI_API_URL}/crawl`,
+      {
+        urls: args.url,
+        priority: 10,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${CRAWL4AI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    )
+
+    if (!response.data || !response.data.task_id) {
+      return {
+        success: false,
+        error: 'Invalid response from crawler API - no task ID returned',
+      }
+    }
+
+    const taskId = response.data.task_id
+    console.log(`Crawl job submitted, task ID: ${taskId}`)
+
+    let taskCompleted = false
+    let taskResult = null
+    let pollCount = 0
+    const maxPolls = 30
+    const pollInterval = 2000
+
+    while (!taskCompleted && pollCount < maxPolls) {
+      pollCount++
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+
+      const statusResponse = await axios.get(
+        `${CRAWL4AI_API_URL}/task/${taskId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${CRAWL4AI_API_KEY}`,
+          },
+          timeout: 5000,
+        }
+      )
+
+      console.log(`Poll #${pollCount} - Status: ${statusResponse.data.status}`)
+
+      if (statusResponse.data.status === 'completed') {
+        taskCompleted = true
+        taskResult = statusResponse.data
+      } else if (statusResponse.data.status === 'failed') {
+        return {
+          success: false,
+          error: `Crawl job failed: ${statusResponse.data.error || 'Unknown error'}`,
+        }
+      }
+    }
+
+    if (!taskCompleted) {
+      return {
+        success: false,
+        error: `Crawl job timed out after ${maxPolls} polling attempts`,
+      }
+    }
+
+    if (!taskResult.result || !taskResult.result.markdown) {
+      return {
+        success: false,
+        error: 'Crawl completed but no markdown content was returned',
+      }
+    }
+
+    const markdown = taskResult.result.markdown
+    console.log(
+      `Successfully extracted ${markdown.length} chars of markdown content`
+    )
+
+    return {
+      success: true,
+      data: markdown,
+    }
+  } catch (error: any) {
+    console.error(
+      'Error fetching website context:',
+      error.response?.data || error.message
+    )
+    return {
+      success: false,
+      error: `Failed to fetch website context: ${error.response?.data?.error || error.message}`,
     }
   }
 }
@@ -139,41 +258,41 @@ async function get_weather_forecast(
 /**
  * Gets the current date and time information.
  */
-async function get_current_datetime(
-  args: { format?: 'full' | 'date_only' | 'time_only' | 'year_only' }
-): Promise<FunctionResult> {
+async function get_current_datetime(args: {
+  format?: 'full' | 'date_only' | 'time_only' | 'year_only'
+}): Promise<FunctionResult> {
   try {
-    const now = new Date();
-    const format = args.format || 'full';
-    
+    const now = new Date()
+    const format = args.format || 'full'
+
     let result: any = {
       unix_timestamp: Math.floor(now.getTime() / 1000),
       utc_iso_string: now.toISOString(),
-    };
-    
+    }
+
     switch (format) {
       case 'date_only':
         result.formatted = now.toLocaleDateString('en-US', {
           weekday: 'long',
           year: 'numeric',
           month: 'long',
-          day: 'numeric'
-        });
-        break;
-        
+          day: 'numeric',
+        })
+        break
+
       case 'time_only':
         result.formatted = now.toLocaleTimeString('en-US', {
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
-          timeZoneName: 'short'
-        });
-        break;
-        
+          timeZoneName: 'short',
+        })
+        break
+
       case 'year_only':
-        result.formatted = now.getFullYear().toString();
-        break;
-        
+        result.formatted = now.getFullYear().toString()
+        break
+
       default:
         result.formatted = now.toLocaleString('en-US', {
           weekday: 'long',
@@ -183,29 +302,65 @@ async function get_current_datetime(
           hour: '2-digit',
           minute: '2-digit',
           second: '2-digit',
-          timeZoneName: 'short'
-        });
+          timeZoneName: 'short',
+        })
         result.date = {
           year: now.getFullYear(),
           month: now.getMonth() + 1,
           day: now.getDate(),
-          weekday: now.toLocaleDateString('en-US', { weekday: 'long' })
-        };
+          weekday: now.toLocaleDateString('en-US', { weekday: 'long' }),
+        }
         result.time = {
           hour: now.getHours(),
           minute: now.getMinutes(),
-          second: now.getSeconds()
-        };
+          second: now.getSeconds(),
+        }
     }
 
-    console.log('Current datetime fetch successful.');
-    return { success: true, data: result };
+    console.log('Current datetime fetch successful.')
+    return { success: true, data: result }
   } catch (error: any) {
-    console.error('Error getting current datetime:', error.message);
+    console.error('Error getting current datetime:', error.message)
     return {
       success: false,
-      error: `Failed to get current datetime: ${error.message}`
-    };
+      error: `Failed to get current datetime: ${error.message}`,
+    }
+  }
+}
+
+interface OpenPathArgs {
+  target: string
+}
+
+/**
+ * Opens a file, folder, application, or URL using the system's default handler.
+ */
+async function open_path(args: OpenPathArgs): Promise<FunctionResult> {
+  console.log(`Invoking open_path with target: ${args.target}`)
+
+  try {
+    if (typeof window === 'undefined' || !window.ipcRenderer?.invoke) {
+      return {
+        success: false,
+        error:
+          'Electron IPC bridge not available. This function only works in the desktop app.',
+      }
+    }
+
+    const result = await window.ipcRenderer.invoke('electron:open-path', args)
+    console.log('Main process response for open_path:', result)
+
+    if (result.success) {
+      return { success: true, data: { message: result.message } }
+    } else {
+      return { success: false, error: result.message }
+    }
+  } catch (error) {
+    console.error('Error invoking electron:open-path:', error)
+    return {
+      success: false,
+      error: `Failed to execute open_path: ${error.message || 'Unknown error'}`,
+    }
   }
 }
 
@@ -215,12 +370,18 @@ const functionRegistry: {
   perform_web_search: perform_web_search,
   get_weather_forecast: get_weather_forecast,
   get_current_datetime: get_current_datetime,
+  open_path: open_path,
+  manage_clipboard: manage_clipboard,
+  get_website_context: get_website_context,
 }
 
 const functionSchemas = {
   perform_web_search: { required: ['query'] },
   get_weather_forecast: { required: ['location'] },
   get_current_datetime: { required: ['format'] },
+  open_path: { required: ['target'] },
+  manage_clipboard: { required: ['action'] },
+  get_website_context: { required: ['url'] },
 }
 
 /**
@@ -249,7 +410,9 @@ export async function executeFunction(
           !(requiredParam in args) ||
           args[requiredParam] === null ||
           args[requiredParam] === undefined ||
-          args[requiredParam] === ''
+          (typeof args[requiredParam] === 'string' &&
+            args[requiredParam].trim() === '' &&
+            !(name === 'manage_clipboard' && args.action === 'write'))
         ) {
           console.warn(
             `Pre-computation validation failed: Missing required parameter "${requiredParam}" for function "${name}".`
@@ -259,10 +422,20 @@ export async function executeFunction(
       }
     }
 
-    // Call the actual function implementation
     const result: FunctionResult = await func(args)
 
     console.log(`Function "${name}" executed. Result:`, result)
+
+    if (
+      name === 'manage_clipboard' &&
+      args.action === 'read' &&
+      result.success &&
+      result.data !== undefined
+    ) {
+      return typeof result.data === 'string'
+        ? result.data
+        : JSON.stringify(result.data)
+    }
 
     if (result.success) {
       return JSON.stringify(
@@ -277,5 +450,73 @@ export async function executeFunction(
       error
     )
     return `Error processing function ${name}: ${error.message || 'Unknown error'}`
+  }
+}
+
+/**
+ * Manages the system clipboard by reading or writing text content.
+ */
+async function manage_clipboard(args: {
+  action: 'read' | 'write'
+  content?: string
+}): Promise<FunctionResult> {
+  console.log(`Invoking clipboard action: ${args.action}`)
+
+  try {
+    if (typeof window === 'undefined' || !window.ipcRenderer?.invoke) {
+      return {
+        success: false,
+        error:
+          'Electron IPC bridge not available. This function only works in the desktop app.',
+      }
+    }
+
+    if (args.action !== 'read' && args.action !== 'write') {
+      return {
+        success: false,
+        error: 'Invalid clipboard action. Must be "read" or "write".',
+      }
+    }
+
+    if (
+      args.action === 'write' &&
+      (args.content === undefined || args.content === null)
+    ) {
+      return {
+        success: false,
+        error: 'Content is required for clipboard write operations.',
+      }
+    }
+
+    const result = await window.ipcRenderer.invoke(
+      'electron:manage-clipboard',
+      args
+    )
+    console.log('Main process response for clipboard operation:', result)
+
+    if (result.success) {
+      if (args.action === 'read' && result.data !== undefined) {
+        return {
+          success: true,
+          data: result.data,
+        }
+      }
+
+      return {
+        success: true,
+        data: { message: result.message },
+      }
+    } else {
+      return {
+        success: false,
+        error: result.message,
+      }
+    }
+  } catch (error) {
+    console.error('Error during clipboard operation:', error)
+    return {
+      success: false,
+      error: `Failed to perform clipboard operation: ${error.message || 'Unknown error'}`,
+    }
   }
 }

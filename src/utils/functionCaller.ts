@@ -2,9 +2,15 @@ import axios from 'axios'
 
 const TAVILY_API_KEY = import.meta.env.VITE_TAVILY_API_KEY
 const OPENWEATHERMAP_API_KEY = import.meta.env.VITE_OPENWEATHERMAP_API_KEY
+const CRAWL4AI_API_KEY = import.meta.env.VITE_CRAWL4AI_API_KEY
+const CRAWL4AI_API_URL = import.meta.env.VITE_CRAWL4AI_API_URL
 
 interface WebSearchArgs {
   query: string
+}
+
+interface Crawl4AiArgs {
+  url: string
 }
 
 interface WeatherArgs {
@@ -63,6 +69,119 @@ async function perform_web_search(
     return {
       success: false,
       error: `Failed to perform web search: ${error.response?.data?.error || error.message}`,
+    }
+  }
+}
+
+/**
+ * Gets context from a website using the custom scraper API.
+ */
+async function get_website_context(
+  args: Crawl4AiArgs
+): Promise<FunctionResult> {
+  if (!CRAWL4AI_API_KEY || !CRAWL4AI_API_URL) {
+    return {
+      success: false,
+      error: 'Crawl4AI API key or URL is not configured.',
+    }
+  }
+
+  if (!args.url) {
+    return { success: false, error: 'URL is missing.' }
+  }
+
+  console.log(`Fetching data from: ${args.url}`)
+  try {
+    const response = await axios.post(
+      `${CRAWL4AI_API_URL}/crawl`,
+      {
+        urls: args.url,
+        priority: 10,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${CRAWL4AI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    )
+
+    if (!response.data || !response.data.task_id) {
+      return {
+        success: false,
+        error: 'Invalid response from crawler API - no task ID returned',
+      }
+    }
+
+    const taskId = response.data.task_id
+    console.log(`Crawl job submitted, task ID: ${taskId}`)
+
+    let taskCompleted = false
+    let taskResult = null
+    let pollCount = 0
+    const maxPolls = 30
+    const pollInterval = 2000
+
+    while (!taskCompleted && pollCount < maxPolls) {
+      pollCount++
+
+      await new Promise(resolve => setTimeout(resolve, pollInterval))
+
+      const statusResponse = await axios.get(
+        `${CRAWL4AI_API_URL}/task/${taskId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${CRAWL4AI_API_KEY}`,
+          },
+          timeout: 5000,
+        }
+      )
+
+      console.log(`Poll #${pollCount} - Status: ${statusResponse.data.status}`)
+
+      if (statusResponse.data.status === 'completed') {
+        taskCompleted = true
+        taskResult = statusResponse.data
+      } else if (statusResponse.data.status === 'failed') {
+        return {
+          success: false,
+          error: `Crawl job failed: ${statusResponse.data.error || 'Unknown error'}`,
+        }
+      }
+    }
+
+    if (!taskCompleted) {
+      return {
+        success: false,
+        error: `Crawl job timed out after ${maxPolls} polling attempts`,
+      }
+    }
+
+    if (!taskResult.result || !taskResult.result.markdown) {
+      return {
+        success: false,
+        error: 'Crawl completed but no markdown content was returned',
+      }
+    }
+
+    const markdown = taskResult.result.markdown
+    console.log(
+      `Successfully extracted ${markdown.length} chars of markdown content`
+    )
+
+    return {
+      success: true,
+      data: markdown,
+    }
+  } catch (error: any) {
+    console.error(
+      'Error fetching website context:',
+      error.response?.data || error.message
+    )
+    return {
+      success: false,
+      error: `Failed to fetch website context: ${error.response?.data?.error || error.message}`,
     }
   }
 }
@@ -253,6 +372,7 @@ const functionRegistry: {
   get_current_datetime: get_current_datetime,
   open_path: open_path,
   manage_clipboard: manage_clipboard,
+  get_website_context: get_website_context,
 }
 
 const functionSchemas = {
@@ -261,6 +381,7 @@ const functionSchemas = {
   get_current_datetime: { required: ['format'] },
   open_path: { required: ['target'] },
   manage_clipboard: { required: ['action'] },
+  get_website_context: { required: ['url'] },
 }
 
 /**

@@ -105,4 +105,22 @@ export const assistantTools = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_website_context',
+      description:
+        'Fetches the content of a website. Useful for retrieving information from websites mentioned by the user.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'The URL of the website to fetch.',
+          },
+        },
+        required: ['url'],
+      },
+    },
+  },
 ]

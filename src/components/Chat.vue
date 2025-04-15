@@ -53,10 +53,21 @@ const emit = defineEmits(['processRequest'])
 const { isInProgress, chatHistory, chatInput, openChat, storeMessage } =
   storeToRefs(generalStore)
 const chatHistoryDisplay = computed(() => {
-  let history = [...chatHistory.value]
-  history = history.filter(
-    item => !item.content[0].text.value.includes('[start screenshot]')
-  )
+  let history = [...chatHistory.value] as Content[]
+
+  history = history.filter(item => {
+    if (!item.parts || item.parts.length === 0) {
+      return false
+    }
+    const firstPart = item.parts[0]
+    return (
+      firstPart &&
+      firstPart.text !== undefined &&
+      firstPart.text !== null &&
+      firstPart.text !== '[User Speaking...]'
+    )
+  })
+
   return history.reverse()
 })
 
@@ -142,5 +153,4 @@ const chatInputHandle = async () => {
   background-position: 100% 100%;
   opacity: 1;
 }
-
 </style>

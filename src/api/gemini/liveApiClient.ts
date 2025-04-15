@@ -1,4 +1,5 @@
 import { assistantTools } from '../../utils/assistantTools'
+import { assistantConfig } from '../../config/assistantConfig'
 
 interface GeminiTool {
   functionDeclarations?: GeminiFunctionDeclaration[]
@@ -291,24 +292,51 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
 
     const setupPayload: { setup: BidiGenerateContentSetup } = {
       setup: {
-        model: 'models/gemini-2.0-flash-exp',
+        model: assistantConfig.model,
         generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048,
+          temperature: assistantConfig.temperature,
+          maxOutputTokens: assistantConfig.maxOutputTokens,
           responseModalities: ['AUDIO'],
           speechConfig: {
             voiceConfig: { 
                 prebuiltVoiceConfig: { 
-                    voiceName: 'Aoede'
+                    voiceName: assistantConfig.voiceName
                 }
             }
           },
+        },
+        systemInstruction: {
+          parts: [{
+              text: assistantConfig.systemInstruction,
+          }]
         },
         tools: translatedTools,
         realtimeInputConfig: {
           automaticActivityDetection: {},
           activityHandling: 'START_OF_ACTIVITY_INTERRUPTS',
         },
+        safetySettings: [
+          {
+              "category": "HARM_CATEGORY_HARASSMENT",
+              "threshold": assistantConfig.safetySettings.harassment || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+          },
+          {
+              "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+              "threshold": assistantConfig.safetySettings.dangerousContent || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+          },
+          {
+              "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              "threshold": assistantConfig.safetySettings.sexualityExplicit || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+          },
+          {
+              "category": "HARM_CATEGORY_HATE_SPEECH",
+              "threshold": assistantConfig.safetySettings.hateSpeech || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+          },
+          {
+              "category": "HARM_CATEGORY_CIVIC_INTEGRITY",
+              "threshold": assistantConfig.safetySettings.civicIntegrity || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+          }
+        ],
       },
     }
     if (!this.ws) throw new Error('WebSocket not ready for setup message.')

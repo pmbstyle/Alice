@@ -136,7 +136,7 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
 
     this.wsUrl = `${baseUrl}?key=${this.apiKey}&alt=json`
 
-    console.log('Gemini Client Initialized. Connecting to URL:', this.wsUrl)
+    console.log('Gemini Client Initialized.')
   }
 
   getStatus(): WebSocketStatus {
@@ -296,6 +296,13 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
           temperature: 0.7,
           maxOutputTokens: 2048,
           responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: { 
+                prebuiltVoiceConfig: { 
+                    voiceName: 'Aoede'
+                }
+            }
+          },
         },
         tools: translatedTools,
         realtimeInputConfig: {

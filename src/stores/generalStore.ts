@@ -238,29 +238,8 @@ export const useGeneralStore = defineStore('general', () => {
     }
   }
 
-  const ttsAudioPlayer = ref<HTMLAudioElement | null>(null)
-  const cleanupTts = (audioUrl: string | null) => {
-    isPlaying.value = false
-    isTTSProcessing.value = false
-    justStartedSpeaking = false
-    if (audioUrl) URL.revokeObjectURL(audioUrl)
-    if (!isProcessingRequest.value && audioQueue.value.length === 0)
-      statusMessage.value = 'Ready'
-    const conversationStore = useConversationStore()
-    conversationStore.checkAndSendBufferedTurn()
-  }
-  const onTtsEnded = () => {
-    const currentSrc = ttsAudioPlayer.value?.src
-    cleanupTts(currentSrc || null)
-  }
-  const onTtsError = (e: Event) => {
-    console.error('HTML Audio Player Error (TTS):', e)
-    const currentSrc = ttsAudioPlayer.value?.src
-    cleanupTts(currentSrc || null)
-    statusMessage.value = 'TTS Playback Error'
-  }
-
   watch(statusMessage, (newStatus, oldStatus) => {
+    console.log('[Status Message]', newStatus)
     if (isPlaying.value) {
       if (newStatus === 'Speaking...') updateVideo.value('SPEAKING')
       return
@@ -277,7 +256,11 @@ export const useGeneralStore = defineStore('general', () => {
       case 'Processing...':
         updateVideo.value('PROCESSING')
         break
+      case 'Speaking...':
+        updateVideo.value('SPEAKING')
+        break
       default:
+        console.log('[DEFAULT MESSAGE]', newStatus)
         updateVideo.value('STAND_BY')
         break
     }

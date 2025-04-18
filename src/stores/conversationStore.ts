@@ -217,6 +217,7 @@ export const useConversationStore = defineStore('conversation', () => {
 
         if (serverContentPayload?.turnComplete) {
           console.log('[Store] Model turn complete signaled.')
+          generalStore.updateVideo('STAND_BY')
           isModelTurnComplete.value = true
           checkAndSendBufferedTurn()
         }

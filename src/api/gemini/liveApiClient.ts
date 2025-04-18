@@ -220,7 +220,6 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
 
         this.ws.onmessage = event => {
           if (event.data instanceof Blob) {
-            console.log('[API Client] Received Blob data from WebSocket.')
             this.handleWebSocketMessage(event.data)
           } else {
             console.error(
@@ -466,7 +465,6 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
       }
 
       const hasToolCall = 'toolCall' in message
-      console.log(`[API Client] Checking for 'toolCall' field: ${hasToolCall}`)
 
       if (hasToolCall) {
         serverMsg = {
@@ -475,7 +473,6 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
           usageMetadata: message.usageMetadata,
         }
       } else if ('setupComplete' in message) {
-        console.log('[API Client] --> Identified as setupComplete.')
         serverMsg = {
           messageType: 'setupComplete',
           payload: message.setupComplete,
@@ -496,27 +493,10 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
           this.status = 'OPEN'
         }
       } else if ('serverContent' in message) {
-        console.log(`[API Client] --> Identified as serverContent.`)
         serverMsg = {
           messageType: 'serverContent',
           payload: message.serverContent,
           usageMetadata: message.usageMetadata,
-        }
-
-        if (message.serverContent?.interrupted)
-          console.log('[API Client] serverContent: interrupted=true')
-        if (message.serverContent?.turnComplete)
-          console.log('[API Client] serverContent: turnComplete=true')
-        if (message.serverContent?.modelTurn?.parts?.length > 0) {
-          const hasAudio = message.serverContent.modelTurn.parts.some(
-            (p: any) => p.inlineData?.mimeType?.startsWith('audio/')
-          )
-          const hasText = message.serverContent.modelTurn.parts.some(
-            (p: any) => typeof p.text === 'string' && p.text.trim() !== ''
-          )
-          console.log(
-            `[API Client] serverContent: modelTurn contains parts (Audio: ${hasAudio}, Text: ${hasText})`
-          )
         }
       } else if ('goAway' in message) {
         console.log(`[API Client] --> Identified as goAway.`)
@@ -546,9 +526,6 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
       }
 
       if (this.messageCallback) {
-        console.log(
-          `[API Client] Dispatching identified messageType: ${serverMsg.messageType}`
-        )
         this.messageCallback(serverMsg)
       } else {
         console.warn(

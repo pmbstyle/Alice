@@ -265,10 +265,8 @@ const stopListening = (manualStop = false) => {
       conversationStore.completeUserTurn()
     } else {
       console.log('Manual stop: Discarding current user audio input.')
-      if (!isPlaying.value && !isProcessingRequest.value) {
-        statusMessage.value = 'Ready'
-        updateVideo.value('STAND_BY')
-      }
+      statusMessage.value = 'Ready'
+      updateVideo.value('STAND_BY')
     }
   } else {
     isRecordingRequested.value = false
@@ -304,7 +302,7 @@ const toggleRecording = () => {
     }
   } else {
     isRecordingRequested.value = false
-    statusMessage.value = 'Processing...'
+    statusMessage.value = 'Ready'
     if (isPlaying.value) {
       console.log('User stopped recording, stopping playback.')
       generalStore.forceStopAudioPlayback()

@@ -9,12 +9,12 @@
         :class="{ mini: isMinimized }"
         @click="toggleRecording"
       />
-      <img
+      <!-- <img
         :src="chatIcon"
         class="indicator"
         :class="{ hidden: isMinimized }"
         @click="toggleChat()"
-      />
+      /> -->
     </div>
     <div class="text-center dragable" :class="{ 'text-xs': isMinimized }">
       {{ statusMessage }}

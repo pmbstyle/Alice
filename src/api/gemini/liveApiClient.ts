@@ -27,6 +27,7 @@ interface BidiGenerateContentSetup {
   tools?: GeminiTool[]
   realtimeInputConfig?: any
   systemInstruction?: Content
+  safetySettings?: any[]
 }
 
 interface ContentPart {
@@ -62,6 +63,7 @@ interface BidiGenerateContentRealtimeInput {
   audio?: RealtimeInputAudio
   inlineData?: RealtimeInputInlineData
   text?: string
+  audioStreamEnd?: boolean
 }
 
 interface FunctionResponsePayload {
@@ -87,8 +89,9 @@ interface UsageMetadata {
   totalTokenCount?: number
 }
 
-interface ServerMessage extends ServerMessagePayloads {
+interface ServerMessage {
   messageType: keyof ServerMessagePayloads | 'unknown'
+  payload: any
   usageMetadata?: UsageMetadata
 }
 
@@ -109,6 +112,8 @@ export interface GeminiLiveApiClient {
   sendFunctionResults(results: FunctionResponsePayload[]): Promise<void>
   onMessage(callback: (message: ServerMessage) => void): void
   getStatus(): WebSocketStatus
+  sendClientContent(turns: Content[], turnComplete: boolean): Promise<void>
+  sendAudioStreamEndSignal(): Promise<void>
 }
 
 class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
@@ -136,7 +141,6 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
     }
 
     this.wsUrl = `${baseUrl}?key=${this.apiKey}&alt=json`
-
     console.log('Gemini Client Initialized.')
   }
 
@@ -269,19 +273,23 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
     }
     try {
       const jsonString = JSON.stringify(payload)
-      console.log(
-        `Client: Preparing to send ${Object.keys(payload)[0]}... Status: ${this.status}, WS ReadyState: ${this.ws?.readyState}`
-      )
       if (this.ws && this.ws.readyState === WebSocket.OPEN) {
         this.ws.send(jsonString)
-        console.log(`Client: ws.send() called for ${Object.keys(payload)[0]}.`)
       } else {
         console.error(
           `Client: ws.send() SKIPPED. ReadyState: ${this.ws?.readyState}`
         )
+        throw new Error(
+          `WebSocket not ready to send (state: ${this.ws?.readyState}).`
+        )
       }
     } catch (error) {
-      console.error('Client: Failed to send WebSocket message:', error)
+      console.error(
+        'Client: Failed to send WebSocket message:',
+        error,
+        'Payload:',
+        payload
+      )
       this.status = 'ERROR'
       throw error
     }
@@ -298,48 +306,53 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
           maxOutputTokens: assistantConfig.maxOutputTokens,
           responseModalities: ['AUDIO'],
           speechConfig: {
-            voiceConfig: { 
-                prebuiltVoiceConfig: { 
-                    voiceName: assistantConfig.voiceName
-                }
-            }
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: assistantConfig.voiceName,
+              },
+            },
           },
         },
         systemInstruction: {
-          parts: [{
+          role: 'user',
+          parts: [
+            {
               text: assistantConfig.systemInstruction,
-          }]
+            },
+          ],
         },
         tools: translatedTools,
         realtimeInputConfig: {
           automaticActivityDetection: {},
           activityHandling: 'START_OF_ACTIVITY_INTERRUPTS',
         },
-        safetySettings: [
-          {
-              "category": "HARM_CATEGORY_HARASSMENT",
-              "threshold": assistantConfig.safetySettings.harassment || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
-          },
-          {
-              "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
-              "threshold": assistantConfig.safetySettings.dangerousContent || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
-          },
-          {
-              "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-              "threshold": assistantConfig.safetySettings.sexualityExplicit || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
-          },
-          {
-              "category": "HARM_CATEGORY_HATE_SPEECH",
-              "threshold": assistantConfig.safetySettings.hateSpeech || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
-          },
-          {
-              "category": "HARM_CATEGORY_CIVIC_INTEGRITY",
-              "threshold": assistantConfig.safetySettings.civicIntegrity || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
-          }
-        ],
+        // This is not needed for now
+        // safetySettings: [
+        //   {
+        //       "category": "HARM_CATEGORY_HARASSMENT",
+        //       "threshold": assistantConfig.safetySettings.harassment || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+        //   },
+        //   {
+        //       "category": "HARM_CATEGORY_DANGEROUS_CONTENT",
+        //       "threshold": assistantConfig.safetySettings.dangerousContent || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+        //   },
+        //   {
+        //       "category": "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        //       "threshold": assistantConfig.safetySettings.sexualityExplicit || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+        //   },
+        //   {
+        //       "category": "HARM_CATEGORY_HATE_SPEECH",
+        //       "threshold": assistantConfig.safetySettings.hateSpeech || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+        //   },
+        //   {
+        //       "category": "HARM_CATEGORY_CIVIC_INTEGRITY",
+        //       "threshold": assistantConfig.safetySettings.civicIntegrity || "HARM_BLOCK_THRESHOLD_UNSPECIFIED"
+        //   }
+        // ],
       },
     }
-    if (!this.ws) throw new Error('WebSocket not ready for setup message.')
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN)
+      throw new Error('WebSocket not ready for setup message.')
     this.ws.send(JSON.stringify(setupPayload))
   }
 
@@ -469,11 +482,7 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         turnComplete: turnComplete,
       },
     }
-    console.log(
-      `Client: Sending clientContent (Turn Complete: ${turnComplete}, History Len: ${turns.length})`
-    )
     await this.sendJson(payload)
-    console.log('Client: sendJson for clientContent finished.')
   }
 
   async sendAudioStreamEndSignal(): Promise<void> {
@@ -481,7 +490,7 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
     if (this.status === 'OPEN' && this.ws) {
       console.log('Client: Sending audioStreamEnd=true')
       try {
-        this.ws.send(JSON.stringify(payload))
+        await this.sendJson(payload)
       } catch (error) {
         console.error('Client: Failed to send audioStreamEnd signal:', error)
       }
@@ -503,17 +512,12 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
   }
 
   async sendAudioChunk(base64AudioChunk: string): Promise<void> {
-    console.log('Client: sendAudioChunk called.')
     const payload: { realtimeInput: BidiGenerateContentRealtimeInput } = {
       realtimeInput: {
         audio: { data: base64AudioChunk },
       },
     }
-    console.log(
-      'Client: Attempting to send audio chunk payload via sendJson...'
-    )
     await this.sendJson(payload)
-    console.log('Client: sendJson for audio chunk finished.')
   }
 
   async sendImage(base64ImageData: string, mimeType: string): Promise<void> {
@@ -525,10 +529,7 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         },
       },
     }
-    console.log(
-      'Sending Image Input (first 50 chars B64):',
-      base64ImageData.substring(0, 50)
-    )
+    console.log('Client: Sending Image Input')
     await this.sendJson(payload)
   }
 
@@ -538,7 +539,16 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
       parts: [{ text: text }],
     }
 
-    const turnsPayload = [...history, currentTurnContent]
+    const uniqueHistory = history.filter(
+      turn =>
+        !(
+          turn.role === 'user' &&
+          turn.parts.length === 1 &&
+          turn.parts[0].text === text
+        )
+    )
+
+    const turnsPayload = [...uniqueHistory, currentTurnContent]
 
     const payload: { clientContent: BidiGenerateContentClientContent } = {
       clientContent: {
@@ -547,8 +557,7 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
       },
     }
     console.log(
-      'Sending Text Turn (History length: ' + history.length + '):',
-      JSON.stringify(payload)
+      `Client: Sending Text Turn (History length: ${uniqueHistory.length})`
     )
     await this.sendJson(payload)
   }
@@ -559,16 +568,22 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         functionResponses: results,
       },
     }
-    console.log('Sending Function Results:', JSON.stringify(payload))
+    console.log(
+      'Client: Sending Function Results:',
+      JSON.stringify(payload, null, 2)
+    )
     await this.sendJson(payload)
   }
 
   private translateTools(toolsToTranslate: any[]): GeminiTool[] {
-    console.log('Translating tools...')
+    if (!Array.isArray(toolsToTranslate)) {
+      console.warn('translateTools received non-array input:', toolsToTranslate)
+      return []
+    }
 
     const geminiTools: GeminiTool[] = toolsToTranslate
       .map(tool => {
-        if (tool.type === 'function' && tool.function) {
+        if (tool && tool.type === 'function' && tool.function) {
           const func = tool.function
           const properties: { [key: string]: any } = {}
           let requiredParams: string[] = []
@@ -582,12 +597,27 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
             for (const [key, value] of Object.entries(
               func.parameters.properties as any
             )) {
-              properties[key] = {
-                type: this.mapTypeToGemini(value.type),
-                description: value.description || '',
-                ...(value.enum && { enum: value.enum }),
+              if (value && typeof value === 'object') {
+                properties[key] = {
+                  type: this.mapTypeToGemini((value as { type?: string }).type),
+                  description:
+                    (value as { description?: string }).description || '',
+                  ...((value as { enum?: string[] }).enum && {
+                    enum: (value as { enum: string[] }).enum,
+                  }),
+                }
+              } else {
+                console.warn(
+                  `Skipping invalid property definition for key "${key}" in tool "${func.name}":`,
+                  value
+                )
               }
             }
+          } else if (func.parameters) {
+            console.warn(
+              `Unsupported parameters structure for tool "${func.name}":`,
+              func.parameters
+            )
           }
 
           const declaration: GeminiFunctionDeclaration = {
@@ -598,7 +628,9 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
                 ? {
                     type: 'OBJECT',
                     properties: properties,
-                    required: requiredParams,
+                    ...(requiredParams.length > 0 && {
+                      required: requiredParams,
+                    }),
                   }
                 : undefined,
           }
@@ -607,17 +639,21 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
             functionDeclarations: [declaration],
           }
         }
-        console.warn(
-          'Skipping translation for unsupported tool type:',
-          tool.type
-        )
+        if (tool && tool.type) {
+          console.warn(
+            'Skipping translation for unsupported tool type:',
+            tool.type
+          )
+        } else if (tool) {
+          console.warn('Skipping translation for invalid tool object:', tool)
+        }
         return null
       })
       .filter((t): t is GeminiTool => t !== null)
 
     return geminiTools
   }
-  e
+
   private mapTypeToGemini(type: string | undefined): string {
     if (!type) return 'STRING'
 

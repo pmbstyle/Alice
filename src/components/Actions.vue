@@ -10,12 +10,6 @@
         @click="toggleRecording"
       />
       <img
-        :src="isPlaying ? speakerIconInactive : speakerIcon"
-        class="indicator"
-        :class="{ mini: isMinimized }"
-        @click="togglePlaying"
-      />
-      <img
         :src="chatIcon"
         class="indicator"
         :class="{ hidden: isMinimized }"
@@ -78,8 +72,6 @@ import { storeToRefs } from 'pinia'
 import {
   micIcon,
   micIconActive,
-  speakerIcon,
-  speakerIconInactive,
   chatIcon,
   miniIcon,
   maxiIcon,
@@ -97,12 +89,11 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['takeScreenShot', 'togglePlaying', 'toggleRecording'])
+const emit = defineEmits(['takeScreenShot', 'toggleRecording'])
 const {
   isMinimized,
   takingScreenShot,
   isRecordingRequested,
-  isPlaying,
   statusMessage,
   openChat,
 } = storeToRefs(generalStore)
@@ -114,36 +105,36 @@ const closeWindow = () => {
 const toggleChat = async () => {
   openChat.value = !openChat.value
   await nextTick()
-  if (openChat.value) {
-    ;(window as any).electron.resize({ width: 1200, height: 500 })
-  } else {
-    ;(window as any).electron.resize({ width: 500, height: 500 })
+  if (props.isElectron) {
+    if (openChat.value) {
+      ;(window as any).electron.resize({ width: 1200, height: 500 })
+    } else {
+      ;(window as any).electron.resize({ width: 500, height: 500 })
+    }
   }
 }
 
 const toggleMinimize = async () => {
   isMinimized.value = !isMinimized.value
   await nextTick()
-  if (isMinimized.value) {
-    if (openChat.value) {
-      toggleChat()
-      setTimeout(() => {
+   if (props.isElectron) {
+    if (isMinimized.value) {
+      if (openChat.value) {
+        await toggleChat()
+        setTimeout(() => {
+          ;(window as any).electron.mini({ minimize: true })
+        }, 300) // Adjust delay if needed
+      } else {
         ;(window as any).electron.mini({ minimize: true })
-      }, 1000)
+      }
     } else {
-      ;(window as any).electron.mini({ minimize: true })
+      ;(window as any).electron.mini({ minimize: false })
     }
-  } else {
-    ;(window as any).electron.mini({ minimize: false })
   }
 }
 
 const takeScreenShot = async () => {
   await emit('takeScreenShot')
-}
-
-const togglePlaying = async () => {
-  await emit('togglePlaying')
 }
 
 const toggleRecording = async () => {

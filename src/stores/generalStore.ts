@@ -1,4 +1,4 @@
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { Content } from '../api/gemini/liveApiClient'
 import { useConversationStore } from './conversationStore'
@@ -239,54 +239,6 @@ export const useGeneralStore = defineStore('general', () => {
   }
 
   const ttsAudioPlayer = ref<HTMLAudioElement | null>(null)
-  const playAudioTTS = async (text: string, isTTS: boolean = true) => {
-    if (!isTTS || !text.trim()) return
-    if (!ttsAudioPlayer.value) {
-      const player = new Audio()
-      player.addEventListener('ended', onTtsEnded)
-      player.addEventListener('error', onTtsError)
-      document.body.appendChild(player)
-      player.style.display = 'none'
-      ttsAudioPlayer.value = player
-    }
-    const audioPlayerElement = ttsAudioPlayer.value
-    const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY
-    if (!OPENAI_API_KEY) {
-      console.error('OpenAI API Key for TTS is missing!')
-      statusMessage.value = 'TTS Config Error'
-      return
-    }
-    const audioFormat = 'mp3'
-    forceStopAudioPlayback()
-    justStartedSpeaking = true
-    isTTSProcessing.value = true
-    isPlaying.value = true
-    statusMessage.value = 'Generating speech...'
-    updateVideo.value('PROCESSING')
-    let audioUrl: string | null = null
-    try {
-      const ttsResponse = await fetch(
-        'https://api.openai.com/v1/audio/speech',
-        {
-          /* ... options ... */
-        }
-      )
-      if (!ttsResponse.ok || !ttsResponse.body)
-        throw new Error('TTS API failed')
-      const audioBlob = await ttsResponse.blob()
-      audioUrl = URL.createObjectURL(audioBlob)
-      audioPlayerElement.src = audioUrl
-      await audioPlayerElement.play()
-      if (isPlaying.value && justStartedSpeaking) {
-        statusMessage.value = 'Speaking...'
-        justStartedSpeaking = false
-      }
-    } catch (error) {
-      console.error('Error generating or playing TTS:', error)
-      statusMessage.value = 'TTS Error'
-      cleanupTts(audioUrl)
-    }
-  }
   const cleanupTts = (audioUrl: string | null) => {
     isPlaying.value = false
     isTTSProcessing.value = false
@@ -323,7 +275,6 @@ export const useGeneralStore = defineStore('general', () => {
       case 'Connecting...':
       case 'Initializing session...':
       case 'Processing...':
-      case 'Listening...':
         updateVideo.value('PROCESSING')
         break
       default:
@@ -375,7 +326,6 @@ export const useGeneralStore = defineStore('general', () => {
     audioQueue,
     isTTSProcessing,
     playAudioRaw,
-    playAudioTTS,
     playNextAudioRaw,
     forceStopAudioPlayback,
     ensureAudioContext,

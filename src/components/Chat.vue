@@ -1,41 +1,60 @@
+// FILE: src/components/Chat.vue
+
 <template>
   <div
     class="chat-wrapper h-[480px] ml-[380px] bg-gray-900 bg-opacity-90 flex flex-col absolute z-10 rounded-r-lg"
     :class="{ open: openChat }"
   >
-    <div id="chatHistory" class="messages-wrapper pb-14 w-full">
+    <div
+      id="chatHistory"
+      class="messages-wrapper pb-14 w-full flex-grow overflow-y-auto"
+    >
       <template v-if="chatHistoryDisplay.length">
         <div
-          class="chat mb-2"
+          class="chat mb-2 px-4"
           v-for="(message, index) in chatHistoryDisplay"
-          :key="index"
+          :key="`${message.role}-${index}`"
           :class="{
-            'chat-start': message.role === 'assistant',
+            'chat-start': message.role === 'model',
             'chat-end': message.role === 'user',
           }"
         >
-          <div
-            class="chat-bubble mb-2"
-            :class="{ 'chat-bubble-primary': message.role === 'assistant' }"
-            v-html="messageMarkdown(message.content[0].text.value)"
-          ></div>
+          <template v-for="(part, partIndex) in message.parts" :key="partIndex">
+            <div
+              v.if="getPartContent(part)"
+              class="chat-bubble mb-2 break-words max-w-full"
+              :class="{
+                'chat-bubble-primary': message.role === 'model',
+                'bg-gray-700': message.role === 'user' && part.functionResponse,
+                'opacity-80 italic': part.functionResponse,
+              }"
+              v-html="getPartContent(part)"
+            ></div>
+          </template>
         </div>
       </template>
-      <div class="mt-4" v-if="isInProgress">
+      <div class="mt-4 text-center" v-if="isInProgress">
         <span
           class="loading loading-ball loading-xs"
           v-for="n in 3"
           :key="n"
         ></span>
       </div>
+      <div
+        v-if="!chatHistoryDisplay.length && !isInProgress"
+        class="text-center text-gray-500 pt-10"
+      >
+        Chat history is empty.
+      </div>
     </div>
-    <div class="w-full pt-4 pr-4">
+    <div class="w-full pt-4 px-4">
       <div class="gradient-border-wrapper">
         <input
           v-model="chatInput"
           @keyup.enter="chatInputHandle"
           class="input w-full rounded-lg bg-gray-800 text-white p-3 relative z-10"
           placeholder="Type your message here..."
+          :disabled="isInProgress || isRecording"
         />
       </div>
     </div>
@@ -43,82 +62,159 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineEmits, ref } from 'vue'
+import { computed, ref, nextTick, watch, onMounted } from 'vue'
 import { useGeneralStore } from '../stores/generalStore.ts'
 import { messageMarkdown } from '../utils/markdown.ts'
 import { storeToRefs } from 'pinia'
+import { Content, ContentPart } from '../api/gemini/liveApiClient'
+
 const generalStore = useGeneralStore()
 
 const emit = defineEmits(['processRequest'])
-const { isInProgress, chatHistory, chatInput, openChat, storeMessage } =
-  storeToRefs(generalStore)
-const chatHistoryDisplay = computed(() => {
-  let history = [...chatHistory.value] as Content[]
+const {
+  isInProgress,
+  chatHistory,
+  chatInput,
+  openChat,
+  storeMessage,
+  isRecording,
+} = storeToRefs(generalStore)
 
-  history = history.filter(item => {
-    if (!item.parts || item.parts.length === 0) {
-      return false
-    }
-    const firstPart = item.parts[0]
+const chatHistoryDisplay = computed(() => {
+  const filteredHistory = chatHistory.value.filter(item => {
     return (
-      firstPart &&
-      firstPart.text !== undefined &&
-      firstPart.text !== null &&
-      firstPart.text !== '[User Speaking...]'
+      item.parts &&
+      item.parts.length > 0 &&
+      item.parts[0]?.text !== '[User Speaking...]'
     )
   })
-
-  return history.reverse()
+  return filteredHistory
 })
+
+const getPartContent = (part: ContentPart): string | null => {
+  if (part.text) {
+    return messageMarkdown(part.text)
+  } else if (part.functionResponse) {
+    const responseData =
+      part.functionResponse.response?.output ??
+      part.functionResponse.response?.error ??
+      '[No Response Data]'
+    const responseString =
+      typeof responseData === 'string'
+        ? responseData
+        : JSON.stringify(responseData)
+    const shortResponse =
+      responseString.length > 100
+        ? responseString.substring(0, 97) + '...'
+        : responseString
+    return messageMarkdown(
+      `*Function Result (${part.functionResponse.name}):* \`${shortResponse}\``
+    )
+  } else if (part.inlineData) {
+    return messageMarkdown(`*[Inline Data: ${part.inlineData.mimeType}]*`)
+  } else if (part.functionCall) {
+    return messageMarkdown(
+      `*Function Call Requested: ${part.functionCall.name}*`
+    )
+  }
+  return null
+}
 
 let debounceTimeout = ref<number | null>(null)
 const debounceDelay = 300
 
 const chatInputHandle = async () => {
-  if (chatInput.value.length > 0) {
+  const trimmedInput = chatInput.value.trim()
+  if (trimmedInput.length > 0 && !isInProgress.value && !isRecording.value) {
     if (debounceTimeout.value) {
       clearTimeout(debounceTimeout.value)
     }
     debounceTimeout.value = window.setTimeout(async () => {
       storeMessage.value = true
-      await emit('processRequest', chatInput.value)
+      await emit('processRequest', trimmedInput)
       chatInput.value = ''
     }, debounceDelay)
+  } else if (trimmedInput.length === 0) {
+    chatInput.value = ''
   }
 }
+
+const scrollToBottom = () => {
+  nextTick(() => {
+    const chatHistoryElement = document.getElementById('chatHistory')
+    if (chatHistoryElement) {
+      chatHistoryElement.scrollTop = chatHistoryElement.scrollHeight
+    }
+  })
+}
+
+watch(
+  () => chatHistory.value.length,
+  () => {
+    scrollToBottom()
+  }
+)
+
+onMounted(() => {
+  scrollToBottom()
+})
 </script>
 
 <style scoped lang="postcss">
 .chat-wrapper {
   @apply max-w-0 overflow-hidden opacity-0 flex flex-col border-4 border-transparent;
-  transition: width 0.1s ease-in-out;
-  transition: opacity 0.3s ease-in-out;
-  transition: border 0.3s ease-in-out;
-  .messages-wrapper {
-    flex: 1;
-    overflow-y: scroll;
-  }
+  transition:
+    width 0.1s ease-in-out,
+    opacity 0.3s ease-in-out,
+    border 0.3s ease-in-out;
+
   &.open {
-    @apply w-full max-w-[960px] py-4 pl-[300px] opacity-100 border-blue-500/50 shadow-md;
+    @apply w-full max-w-[calc(100vw-120px)] py-4 pl-4 pr-4 opacity-100 border-blue-500/50 shadow-md;
   }
 }
-.messages-wrapper::-webkit-scrollbar {
-  width: 8px;
+.messages-wrapper {
+  @apply flex-grow overflow-y-auto flex flex-col-reverse;
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: #2d3748;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: #4a5568;
+    border-radius: 4px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: #718096;
+  }
 }
 
-.messages-wrapper::-webkit-scrollbar-track {
-  background: #333;
-  border-radius: 4px;
+.chat {
+  @apply w-full flex;
+  &.chat-start {
+    @apply justify-start;
+    .chat-bubble {
+      @apply mr-auto;
+    }
+  }
+  &.chat-end {
+    @apply justify-end;
+    .chat-bubble {
+      @apply ml-auto;
+    }
+  }
 }
 
-.messages-wrapper::-webkit-scrollbar-thumb {
-  background: #555;
-  border-radius: 4px;
+.chat-bubble {
+  @apply max-w-[85%] md:max-w-[75%] break-words px-4 py-2 rounded-lg;
+  @apply bg-gray-600 text-white;
+
+  &.chat-bubble-primary {
+    @apply bg-blue-600 text-white;
+  }
 }
 
-.messages-wrapper::-webkit-scrollbar-thumb:hover {
-  background: #777;
-}
 .gradient-border-wrapper {
   position: relative;
   border-radius: 0.5rem;

@@ -1,126 +1,112 @@
 export const assistantTools = [
   {
-    type: 'function',
-    function: {
-      name: 'perform_web_search',
-      description:
-        'Searches the web for information on a given query. Use this for current events, general knowledge questions, or topics not covered by other tools.',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: {
-            type: 'string',
-            description:
-              'The specific search query or question to look up on the web.',
+    functionDeclarations: [
+      {
+        name: 'perform_web_search',
+        description:
+          'Searches the web for information on a given query. Use this for current events, general knowledge questions, or topics not covered by other tools.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            query: {
+              type: 'STRING',
+              description:
+                'The specific search query or question to look up on the web.',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'get_weather_forecast',
+        description:
+          'Fetches the current weather forecast for a specified Canadian location. REQUIRED: User must provide a location (e.g., city, province). Ask for location if missing. Only provide Canadian results.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            location: {
+              type: 'STRING',
+              description:
+                'REQUIRED. The Canadian city or location (e.g., "Welland", "Toronto, ON").',
+            },
+            unit: {
+              type: 'STRING',
+              description: 'Temperature unit preference',
+              enum: ['metric', 'imperial']
+            }
+          },
+          required: ['location'],
+        },
+      },
+      {
+        name: 'get_current_datetime',
+        description:
+          'Gets the current date and time. Use when discussing current events or time-sensitive information.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            format: {
+              type: 'STRING',
+              enum: ['full', 'date_only', 'time_only', 'year_only'],
+              description:
+                'Desired format (default: full).',
+            },
           },
         },
-        required: ['query'],
       },
-    },
-  },
-
-  {
-    type: 'function',
-    function: {
-      name: 'get_weather_forecast',
-      description:
-        'Fetches the current weather forecast. CRITICAL: This function REQUIRES a location parameter. Verify the user provided a city name. If a location is mentioned or known, you MUST include it in the "location" parameter within the arguments JSON when calling this function. If no location is specified by the user or known from context, DO NOT call this function; instead, ask the user "For which location would you like the weather forecast?".',
-      parameters: {
-        type: 'object',
-        properties: {
-          location: {
-            type: 'string',
-            description:
-              'REQUIRED. The city name (e.g., "London", "Paris, FR", "Tokyo"). Must be included in the arguments object.',
+      {
+        name: 'open_path',
+        description:
+          "Opens a specified file, folder, application, or URL on the user's computer (requires desktop app environment). Use platform-neutral paths or application names where possible.",
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            target: {
+              type: 'STRING',
+              description:
+                'The file/folder path, application name (e.g., "Calculator"), or full URL (e.g., "https://google.com") to open.',
+            },
           },
+          required: ['target'],
         },
-        required: ['location'],
       },
-    },
-  },
-
-  {
-    type: 'function',
-    function: {
-      name: 'get_current_datetime',
-      description:
-        'Call this function whenever discussing current events, recent developments, or when time-sensitive information is needed. ALWAYS use this function when referring to events after 2022, current year, or "now". This function returns the current date, time, and other temporal information needed to provide accurate, up-to-date responses.',
-      parameters: {
-        type: 'object',
-        properties: {
-          format: {
-            type: 'string',
-            enum: ['full', 'date_only', 'time_only', 'year_only'],
-            description:
-              'The format of the datetime information to return. Default is "full" if not specified.',
+      {
+        name: 'manage_clipboard',
+        description:
+          'Reads text from or writes text to the system clipboard (requires desktop app environment).',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            action: {
+              type: 'STRING',
+              enum: ['read', 'write'],
+              description:
+                'Operation: "read" (get text) or "write" (set text).',
+            },
+            content: {
+              type: 'STRING',
+              description:
+                'Text to write (required for "write" action, can be empty string). Ignored for "read".',
+            },
           },
+          required: ['action'],
         },
-        additionalProperties: false,
-        required: ['format'],
       },
-    },
-  },
-
-  {
-    type: 'function',
-    function: {
-      name: 'open_path',
-      description:
-        "Opens a specified file, folder, or application on the user's computer using the default operating system handler, or opens a URL in the default web browser. Use for launching apps, documents, folders, or websites mentioned by the user.",
-      parameters: {
-        type: 'object',
-        properties: {
-          target: {
-            type: 'string',
-            description:
-              'The target to open. Can be an absolute file path (e.g., "/Users/me/file.txt"), a folder path (e.g., "C:\\Users\\me\\Documents"), an application name understood by the OS (e.g., "Calculator", "Safari"), or a full URL (e.g., "https://www.google.com").',
+      {
+        name: 'get_website_context',
+        description:
+          'Fetches the main textual content of a given website URL and provides a summary.',
+        parameters: {
+          type: 'OBJECT',
+          properties: {
+            url: {
+              type: 'STRING',
+              description: 'The valid HTTP/HTTPS URL of the website to fetch.',
+            },
           },
+          required: ['url'],
         },
-        required: ['target'],
       },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'manage_clipboard',
-      description:
-        'Manages the system clipboard. Can read the current text content from the clipboard or write new text content to it. Useful for transferring text between Alice and other applications.',
-      parameters: {
-        type: 'object',
-        properties: {
-          action: {
-            type: 'string',
-            enum: ['read', 'write'],
-            description:
-              'Specifies the operation to perform: "read" to get text from the clipboard, "write" to put text onto the clipboard.',
-          },
-          content: {
-            type: 'string',
-            description:
-              'The text content to write to the clipboard. Required only when the action is "write". Ignored for "read".',
-          },
-        },
-        required: ['action'],
-      },
-    },
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_website_context',
-      description:
-        'Fetches the content of a website. Useful for retrieving information from websites mentioned by the user.',
-      parameters: {
-        type: 'object',
-        properties: {
-          url: {
-            type: 'string',
-            description: 'The URL of the website to fetch.',
-          },
-        },
-        required: ['url'],
-      },
-    },
-  },
+    ]
+  }
 ]

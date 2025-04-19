@@ -10,21 +10,12 @@ import {
   FunctionResponsePayload,
   BidiGenerateContentToolCall,
   LiveFunctionCall,
+  WebSocketStatus,
+  ServerContentPayload,
 } from '../types/geminiTypes'
+import { Logger } from '../utils/logger'
 
-type WebSocketStatus =
-  | 'IDLE'
-  | 'CONNECTING'
-  | 'OPEN'
-  | 'CLOSING'
-  | 'CLOSED'
-  | 'ERROR'
-
-interface ServerContentPayload {
-  interrupted?: boolean
-  turnComplete?: boolean
-  modelTurn?: { parts: any[] }
-}
+const logger = new Logger('ConversationStore')
 
 export const useConversationStore = defineStore('conversation', () => {
   const generalStore = useGeneralStore()
@@ -40,367 +31,455 @@ export const useConversationStore = defineStore('conversation', () => {
   const liveApiClient = ref<GeminiLiveApiClient | null>(null)
   const webSocketStatus = ref<WebSocketStatus>('IDLE')
   const isSessionInitialized = ref<boolean>(false)
-  const isModelTurnComplete = ref<boolean>(true)
-  let bufferedUserTurn = ref<(() => Promise<void>) | null>(null)
 
-  const initializeSession = async () => {
+  const isModelTurnComplete = ref<boolean>(true)
+  const bufferedUserTurn = ref<(() => Promise<void>) | null>(null)
+
+  /**
+   * Initializes a new session with the Gemini Live API
+   */
+  const initializeSession = async (): Promise<void> => {
     if (
       isSessionInitialized.value ||
       webSocketStatus.value === 'CONNECTING' ||
       webSocketStatus.value === 'OPEN'
     ) {
-      console.log(
-        `[Store] Initialization skipped: Status=${webSocketStatus.value}, Initialized=${isSessionInitialized.value}`
+      logger.info(
+        `Initialization skipped: Status=${webSocketStatus.value}, Initialized=${isSessionInitialized.value}`
       )
       return
     }
+
     if (webSocketStatus.value === 'ERROR' && !liveApiClient.value) {
-      console.error(
-        '[Store] Cannot initialize session, API client failed previously.'
-      )
+      logger.error('Cannot initialize session, API client failed previously.')
       statusMessage.value = 'Initialization Failed (Client Error)'
       return
     }
+
     try {
       statusMessage.value = 'Initializing session...'
       isProcessingRequest.value = true
       generalStore.updateVideo('PROCESSING')
+
       const client = liveApiClient.value || getGeminiLiveApiClient()
       liveApiClient.value = client
+
       if (
         webSocketStatus.value === 'CLOSED' ||
         webSocketStatus.value === 'ERROR'
       ) {
         webSocketStatus.value = 'IDLE'
       }
+
       client.onMessage(handleIncomingMessage)
       webSocketStatus.value = 'CONNECTING'
       await client.connect()
+
       isSessionInitialized.value = true
-      console.log(
-        '[Store] Session initialization sequence complete, waiting for setupComplete message...'
+      logger.info(
+        'Session initialization sequence complete, waiting for setupComplete message...'
       )
     } catch (error: any) {
-      console.error('[Store] Failed to initialize Gemini session:', error)
-      webSocketStatus.value = 'ERROR'
-      isSessionInitialized.value = false
-      statusMessage.value = `Error: ${error.message || 'Connection failed'}`
-      liveApiClient.value?.disconnect()
-      liveApiClient.value = null
-      isProcessingRequest.value = false
-      generalStore.updateVideo('STAND_BY')
+      handleSessionInitError(error)
     }
   }
 
-  const handleIncomingMessage = async (message: ServerMessage) => {
+  /**
+   * Handles errors during session initialization
+   */
+  const handleSessionInitError = (error: any): void => {
+    logger.error('Failed to initialize Gemini session:', error)
+    webSocketStatus.value = 'ERROR'
+    isSessionInitialized.value = false
+    statusMessage.value = `Error: ${error.message || 'Connection failed'}`
+
+    if (liveApiClient.value) {
+      liveApiClient.value.disconnect()
+      liveApiClient.value = null
+    }
+
+    isProcessingRequest.value = false
+    generalStore.updateVideo('STAND_BY')
+  }
+
+  /**
+   * Main handler for incoming messages from the API
+   */
+  const handleIncomingMessage = async (
+    message: ServerMessage
+  ): Promise<void> => {
     switch (message.messageType) {
       case 'setupComplete':
-        if (webSocketStatus.value === 'CONNECTING') {
-          webSocketStatus.value = 'OPEN'
-          statusMessage.value = 'Ready'
-          isProcessingRequest.value = false
-          generalStore.updateVideo('STAND_BY')
-          console.log('[Store] WebSocket OPEN and ready after setupComplete.')
-        } else {
-          console.warn(
-            `[Store] Received 'setupComplete' but status was ${webSocketStatus.value}. Setting to OPEN.`
-          )
-          webSocketStatus.value = 'OPEN'
-          if (!isProcessingRequest.value && !isPlaying.value) {
-            statusMessage.value = 'Ready'
-            generalStore.updateVideo('STAND_BY')
-          }
-        }
+        handleSetupComplete()
         break
 
       case 'serverContent':
-        const serverContentPayload = message.payload as
-          | ServerContentPayload
-          | undefined
-
-        if (serverContentPayload?.interrupted) {
-          console.log('[Store] Model INTERRUPTED by user activity.')
-          generalStore.forceStopAudioPlayback()
-          isModelTurnComplete.value = true
-          isProcessingRequest.value = false
-          if (isRecording.value || isRecordingRequested.value) {
-            statusMessage.value = 'Listening...'
-          } else {
-            if (!isPlaying.value) {
-              statusMessage.value = 'Ready'
-              generalStore.updateVideo('STAND_BY')
-            }
-          }
-          bufferedUserTurn.value = null
-          return
-        }
-
-        let audioDataPart: any = null
-        let textPartValue: string | null = null
-
-        if (
-          serverContentPayload?.modelTurn?.parts &&
-          serverContentPayload.modelTurn.parts.length > 0
-        ) {
-          if (!isProcessingRequest.value && !isPlaying.value) {
-            console.warn(
-              '[Store] Receiving serverContent while supposedly idle. Updating state.'
-            )
-            isProcessingRequest.value = true
-          }
-          audioDataPart = serverContentPayload.modelTurn.parts.find((p: any) =>
-            p.inlineData?.mimeType?.startsWith('audio/')
-          )
-          if (!audioDataPart) {
-            const textPart = serverContentPayload.modelTurn.parts.find(
-              (p: any) =>
-                p.text !== undefined &&
-                p.text !== null &&
-                String(p.text).trim() !== ''
-            )
-            textPartValue = textPart?.text ? String(textPart.text) : null
-          }
-        }
-
-        if (audioDataPart) {
-          isModelTurnComplete.value = false
-          if (statusMessage.value !== 'Speaking...') {
-            statusMessage.value = 'Speaking...'
-            generalStore.updateVideo('SPEAKING')
-          }
-          const base64Audio = audioDataPart.inlineData.data
-          const mimeType = audioDataPart.inlineData.mimeType
-          try {
-            const audioBuffer = base64ToArrayBuffer(base64Audio)
-            if (audioBuffer.byteLength === 0) {
-              console.warn(
-                '[Store] Received empty audio buffer after base64 decoding.'
-              )
-            } else {
-              let sampleRate = 24000
-              const rateMatch = mimeType.match(/rate=(\d+)/)
-              if (rateMatch && rateMatch[1]) {
-                sampleRate = parseInt(rateMatch[1], 10)
-              } else {
-                console.warn(
-                  '[Store] No sample rate found in MIME type:',
-                  mimeType
-                )
-              }
-              const int16Array = new Int16Array(audioBuffer)
-              const float32Array = new Float32Array(int16Array.length)
-              for (let i = 0; i < int16Array.length; i++) {
-                float32Array[i] = int16Array[i] / 32768.0
-              }
-              generalStore.playAudioRaw(float32Array, sampleRate)
-            }
-          } catch (error) {
-            console.error(
-              '[Store] Error processing/decoding received audio data:',
-              error
-            )
-            isProcessingRequest.value = false
-            isModelTurnComplete.value = true
-            statusMessage.value = 'Audio Error'
-            generalStore.forceStopAudioPlayback()
-            generalStore.updateVideo('STAND_BY')
-          }
-        } else if (textPartValue) {
-          console.log('[Store] Received TEXT from model:', textPartValue)
-          chatHistory.value.unshift({
-            role: 'model',
-            parts: [{ text: textPartValue }],
-          })
-          scrollChat()
-          isProcessingRequest.value = true
-        }
-
-        if (serverContentPayload?.turnComplete) {
-          console.log('[Store] Model turn complete signaled.')
-          generalStore.updateVideo('STAND_BY')
-          isModelTurnComplete.value = true
-          checkAndSendBufferedTurn()
-        }
+        await handleServerContent(message.payload as ServerContentPayload)
         break
 
       case 'toolCall':
-        const toolCallPayload = message.payload as
-          | BidiGenerateContentToolCall
-          | undefined
-        if (toolCallPayload?.functionCalls?.length) {
-          console.log(
-            '[Store] Received TOOL_CALL request:',
-            JSON.stringify(toolCallPayload, null, 2)
-          )
-          statusMessage.value = 'Thinking...'
-          isProcessingRequest.value = true
-          generalStore.updateVideo('PROCESSING')
-          if (isPlaying.value) {
-            console.log(
-              '[Store] Tool call received, stopping current audio playback.'
-            )
-            generalStore.forceStopAudioPlayback()
-            await new Promise(resolve => setTimeout(resolve, 50))
-          }
-          isModelTurnComplete.value = true
-
-          const functionNames = toolCallPayload.functionCalls
-            .map((c: LiveFunctionCall) => c.name)
-            .join(', ')
-
-          chatHistory.value.unshift({
-            role: 'model',
-            parts: [{ text: `⚙️ Calling function(s): ${functionNames}...` }],
-          })
-          scrollChat()
-
-          const functionPromises = toolCallPayload.functionCalls.map(
-            async (
-              call: LiveFunctionCall
-            ): Promise<FunctionResponsePayload> => {
-              try {
-                console.log(
-                  `[Store] Executing function: ${call.name} with args:`,
-                  JSON.stringify(call.args, null, 2)
-                )
-                const result: FunctionResult = await executeFunction(
-                  call.name,
-                  call.args
-                )
-                console.log(
-                  `[Store] Function ${call.name} execution result:`,
-                  JSON.stringify(result, null, 2)
-                )
-                if (result.success) {
-                  const outputData =
-                    result.data === undefined ? null : result.data
-                  return {
-                    id: call.id,
-                    response: { output: outputData },
-                  }
-                } else {
-                  return {
-                    id: call.id,
-                    response: {
-                      error: {
-                        message: result.error || 'Function execution failed',
-                      },
-                    },
-                  }
-                }
-              } catch (execError: any) {
-                console.error(
-                  `[Store] Error executing function ${call.name} locally:`,
-                  execError
-                )
-                return {
-                  id: call.id,
-                  response: {
-                    error: {
-                      message: `Internal error executing function: ${execError.message || execError}`,
-                    },
-                  },
-                }
-              }
-            }
-          )
-
-          const results: FunctionResponsePayload[] =
-            await Promise.all(functionPromises)
-            console.log(
-              '[Store] All functions executed, preparing results:',
-              JSON.stringify(results, null, 2)
-            )
-
-            chatHistory.value.unshift({
-              role: 'user',
-              parts: results.map(r => {
-                const originalCall = toolCallPayload.functionCalls.find(
-                  fc => fc.id === r.id
-                )
-                const functionName = originalCall
-                  ? originalCall.name
-                  : 'unknown_function'
-                const responseContent =
-                  r.response.output !== undefined
-                    ? r.response.output
-                    : { error: r.response.error }
-                return {
-                  functionResponse: {
-                    name: functionName,
-                    response: responseContent,
-                  },
-                }
-              }),
-            })
-            scrollChat()
-
-            await sendFunctionResults(results)
-        } else {
-          console.warn(
-            '[Store] Received toolCall message but no functionCalls found or payload invalid.'
-          )
-          if (
-            isProcessingRequest.value &&
-            statusMessage.value === 'Thinking...'
-          ) {
-            isProcessingRequest.value = false
-            statusMessage.value = 'Ready'
-            generalStore.updateVideo('STAND_BY')
-          }
-        }
+        await handleToolCall(message.payload as BidiGenerateContentToolCall)
         break
 
       case 'goAway':
-        statusMessage.value = 'Server disconnecting soon.'
-        console.warn('[Store] Received GoAway message:', message.payload)
-        webSocketStatus.value = 'CLOSING'
-        isProcessingRequest.value = false
-        isModelTurnComplete.value = true
-        generalStore.forceStopAudioPlayback()
+        handleGoAway(message.payload)
         break
 
       case 'error':
-        const errorPayload = message.payload as any
-        const errorMsg =
-          errorPayload?.error || 'Unknown client/connection error'
-        console.error('[Store] WebSocket client error message:', errorMsg)
-        statusMessage.value = `Connection Error: ${errorMsg}`
-        webSocketStatus.value = 'ERROR'
-        isProcessingRequest.value = false
-        isModelTurnComplete.value = true
-        generalStore.forceStopAudioPlayback()
-        generalStore.updateVideo('STAND_BY')
+        handleErrorMessage(message.payload)
         break
 
       case 'sessionResumptionUpdate':
-        console.log(
-          '[Store] Received sessionResumptionUpdate:',
-          message.payload
-        )
+        logger.info('Received sessionResumptionUpdate:', message.payload)
         break
 
       default:
-        console.warn(
-          '[Store] Received unhandled message type:',
+        logger.warn(
+          'Received unhandled message type:',
           message.messageType,
           JSON.stringify(message.payload, null, 2)
         )
     }
   }
 
-  const checkAndSendBufferedTurn = () => {
+  /**
+   * Handles setup complete messages
+   */
+  const handleSetupComplete = (): void => {
+    if (webSocketStatus.value === 'CONNECTING') {
+      webSocketStatus.value = 'OPEN'
+      statusMessage.value = 'Ready'
+      isProcessingRequest.value = false
+      generalStore.updateVideo('STAND_BY')
+      logger.info('WebSocket OPEN and ready after setupComplete.')
+    } else {
+      logger.warn(
+        `Received 'setupComplete' but status was ${webSocketStatus.value}. Setting to OPEN.`
+      )
+      webSocketStatus.value = 'OPEN'
+      if (!isProcessingRequest.value && !isPlaying.value) {
+        statusMessage.value = 'Ready'
+        generalStore.updateVideo('STAND_BY')
+      }
+    }
+  }
+
+  /**
+   * Handles server content messages containing audio or text responses
+   */
+  const handleServerContent = async (
+    payload?: ServerContentPayload
+  ): Promise<void> => {
+    if (!payload) return
+
+    if (payload.interrupted) {
+      handleModelInterruption()
+      return
+    }
+
+    if (payload.modelTurn?.parts && payload.modelTurn.parts.length > 0) {
+      if (!isProcessingRequest.value && !isPlaying.value) {
+        logger.warn(
+          'Receiving serverContent while supposedly idle. Updating state.'
+        )
+        isProcessingRequest.value = true
+      }
+
+      const audioDataPart = payload.modelTurn.parts.find((p: any) =>
+        p.inlineData?.mimeType?.startsWith('audio/')
+      )
+
+      if (!audioDataPart) {
+        const textPart = payload.modelTurn.parts.find(
+          (p: any) =>
+            p.text !== undefined &&
+            p.text !== null &&
+            String(p.text).trim() !== ''
+        )
+        const textPartValue = textPart?.text ? String(textPart.text) : null
+
+        if (textPartValue) {
+          handleTextResponse(textPartValue)
+        }
+      } else {
+        await processAudioResponse(audioDataPart)
+      }
+    }
+
+    if (payload.turnComplete) {
+      logger.info('Model turn complete signaled.')
+      generalStore.updateVideo('STAND_BY')
+      isModelTurnComplete.value = true
+      checkAndSendBufferedTurn()
+    }
+  }
+
+  /**
+   * Handles interruption of model output by user
+   */
+  const handleModelInterruption = (): void => {
+    logger.info('Model INTERRUPTED by user activity.')
+    generalStore.forceStopAudioPlayback()
+    isModelTurnComplete.value = true
+    isProcessingRequest.value = false
+
+    if (isRecording.value || isRecordingRequested.value) {
+      statusMessage.value = 'Listening...'
+    } else if (!isPlaying.value) {
+      statusMessage.value = 'Ready'
+      generalStore.updateVideo('STAND_BY')
+    }
+
+    bufferedUserTurn.value = null
+  }
+
+  /**
+   * Processes text responses from the model
+   */
+  const handleTextResponse = (text: string): void => {
+    logger.info('Received TEXT from model:', text)
+    chatHistory.value.unshift({
+      role: 'model',
+      parts: [{ text }],
+    })
+    scrollChat()
+    isProcessingRequest.value = true
+  }
+
+  /**
+   * Processes audio responses from the model
+   */
+  const processAudioResponse = async (audioDataPart: any): Promise<void> => {
+    isModelTurnComplete.value = false
+    if (statusMessage.value !== 'Speaking...') {
+      statusMessage.value = 'Speaking...'
+      generalStore.updateVideo('SPEAKING')
+    }
+
+    const base64Audio = audioDataPart.inlineData.data
+    const mimeType = audioDataPart.inlineData.mimeType
+
+    try {
+      const audioBuffer = base64ToArrayBuffer(base64Audio)
+      if (audioBuffer.byteLength === 0) {
+        logger.warn('Received empty audio buffer after base64 decoding.')
+        return
+      }
+
+      let sampleRate = 24000
+      const rateMatch = mimeType.match(/rate=(\d+)/)
+      if (rateMatch && rateMatch[1]) {
+        sampleRate = parseInt(rateMatch[1], 10)
+      } else {
+        logger.warn('No sample rate found in MIME type:', mimeType)
+      }
+
+      const int16Array = new Int16Array(audioBuffer)
+      const float32Array = new Float32Array(int16Array.length)
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32768.0
+      }
+
+      generalStore.playAudioRaw(float32Array, sampleRate)
+    } catch (error) {
+      logger.error('Error processing/decoding received audio data:', error)
+      isProcessingRequest.value = false
+      isModelTurnComplete.value = true
+      statusMessage.value = 'Audio Error'
+      generalStore.forceStopAudioPlayback()
+      generalStore.updateVideo('STAND_BY')
+    }
+  }
+
+  /**
+   * Handles tool call messages to execute functions
+   */
+  const handleToolCall = async (
+    payload?: BidiGenerateContentToolCall
+  ): Promise<void> => {
+    if (!payload?.functionCalls?.length) {
+      logger.warn(
+        'Received toolCall message but no functionCalls found or payload invalid.'
+      )
+      if (isProcessingRequest.value && statusMessage.value === 'Thinking...') {
+        isProcessingRequest.value = false
+        statusMessage.value = 'Ready'
+        generalStore.updateVideo('STAND_BY')
+      }
+      return
+    }
+
+    logger.info('Received TOOL_CALL request:', JSON.stringify(payload, null, 2))
+    statusMessage.value = 'Thinking...'
+    isProcessingRequest.value = true
+    generalStore.updateVideo('PROCESSING')
+
+    if (isPlaying.value) {
+      logger.info('Tool call received, stopping current audio playback.')
+      generalStore.forceStopAudioPlayback()
+      await new Promise(resolve => setTimeout(resolve, 50))
+    }
+
+    isModelTurnComplete.value = true
+
+    const functionNames = payload.functionCalls
+      .map((c: LiveFunctionCall) => c.name)
+      .join(', ')
+
+    chatHistory.value.unshift({
+      role: 'model',
+      parts: [{ text: `⚙️ Calling function(s): ${functionNames}...` }],
+    })
+    scrollChat()
+
+    try {
+      const results = await executeFunctions(payload.functionCalls)
+      await sendFunctionResults(results)
+    } catch (error) {
+      logger.error('Error processing function calls:', error)
+      isProcessingRequest.value = false
+      isModelTurnComplete.value = true
+      statusMessage.value = 'Function Error'
+      generalStore.updateVideo('STAND_BY')
+    }
+  }
+
+  /**
+   * Executes functions and prepares results
+   */
+  const executeFunctions = async (
+    functionCalls: LiveFunctionCall[]
+  ): Promise<FunctionResponsePayload[]> => {
+    const functionPromises = functionCalls.map(
+      async (call: LiveFunctionCall): Promise<FunctionResponsePayload> => {
+        try {
+          logger.info(
+            `Executing function: ${call.name} with args:`,
+            JSON.stringify(call.args, null, 2)
+          )
+          const result: FunctionResult = await executeFunction(
+            call.name,
+            call.args
+          )
+          logger.info(
+            `Function ${call.name} execution result:`,
+            JSON.stringify(result, null, 2)
+          )
+
+          if (result.success) {
+            const outputData = result.data === undefined ? null : result.data
+            return {
+              id: call.id,
+              response: { output: outputData },
+            }
+          } else {
+            return {
+              id: call.id,
+              response: {
+                error: {
+                  message: result.error || 'Function execution failed',
+                },
+              },
+            }
+          }
+        } catch (execError: any) {
+          logger.error(
+            `Error executing function ${call.name} locally:`,
+            execError
+          )
+          return {
+            id: call.id,
+            response: {
+              error: {
+                message: `Internal error executing function: ${execError.message || execError}`,
+              },
+            },
+          }
+        }
+      }
+    )
+
+    const results = await Promise.all(functionPromises)
+    logger.info(
+      'All functions executed, preparing results:',
+      JSON.stringify(results, null, 2)
+    )
+
+    updateChatWithFunctionResults(functionCalls, results)
+
+    return results
+  }
+
+  /**
+   * Updates chat history with function results
+   */
+  const updateChatWithFunctionResults = (
+    functionCalls: LiveFunctionCall[],
+    results: FunctionResponsePayload[]
+  ): void => {
+    chatHistory.value.unshift({
+      role: 'user',
+      parts: results.map(r => {
+        const originalCall = functionCalls.find(fc => fc.id === r.id)
+        const functionName = originalCall
+          ? originalCall.name
+          : 'unknown_function'
+        const responseContent =
+          r.response.output !== undefined
+            ? r.response.output
+            : { error: r.response.error }
+        return {
+          functionResponse: {
+            name: functionName,
+            response: responseContent,
+          },
+        }
+      }),
+    })
+    scrollChat()
+  }
+
+  /**
+   * Handles Go Away message from server
+   */
+  const handleGoAway = (payload: any): void => {
+    statusMessage.value = 'Server disconnecting soon.'
+    logger.warn('Received GoAway message:', payload)
+    webSocketStatus.value = 'CLOSING'
+    isProcessingRequest.value = false
+    isModelTurnComplete.value = true
+    generalStore.forceStopAudioPlayback()
+  }
+
+  /**
+   * Handles error messages from the server
+   */
+  const handleErrorMessage = (payload: any): void => {
+    const errorMsg = payload?.error || 'Unknown client/connection error'
+    logger.error('WebSocket client error message:', errorMsg)
+    statusMessage.value = `Connection Error: ${errorMsg}`
+    webSocketStatus.value = 'ERROR'
+    isProcessingRequest.value = false
+    isModelTurnComplete.value = true
+    generalStore.forceStopAudioPlayback()
+    generalStore.updateVideo('STAND_BY')
+  }
+
+  /**
+   * Checks and sends buffered user turn if model is not busy
+   */
+  const checkAndSendBufferedTurn = (): void => {
     if (
       isModelTurnComplete.value &&
       !isPlaying.value &&
       bufferedUserTurn.value
     ) {
-      console.log('[Store] Model is idle, sending buffered user turn.')
+      logger.info('Model is idle, sending buffered user turn.')
       const sendTurn = bufferedUserTurn.value
       bufferedUserTurn.value = null
 
       sendTurn().catch(e => {
-        console.error('[Store] Error sending buffered turn:', e)
+        logger.error('Error sending buffered turn:', e)
         isProcessingRequest.value = false
         statusMessage.value = 'Error Sending Buffered Turn'
         generalStore.updateVideo('STAND_BY')
@@ -408,23 +487,45 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  const completeUserTurn = async () => {
+  /**
+   * Closes the current session and resets state
+   */
+  const closeSession = (): void => {
+    logger.info('Closing session...')
+    if (liveApiClient.value) {
+      liveApiClient.value.disconnect()
+    }
+
+    webSocketStatus.value = 'CLOSED'
+    isSessionInitialized.value = false
+    statusMessage.value = 'Session closed.'
+    liveApiClient.value = null
+    isProcessingRequest.value = false
+    isModelTurnComplete.value = true
+    bufferedUserTurn.value = null
+
+    generalStore.forceStopAudioPlayback()
+    generalStore.isRecording = false
+    generalStore.isRecordingRequested = false
+    generalStore.updateVideo('STAND_BY')
+  }
+
+  /**
+   * Completes user's audio turn, sending the end signal to the API
+   */
+  const completeUserTurn = async (): Promise<void> => {
     if (webSocketStatus.value !== 'OPEN' || !liveApiClient.value) {
       statusMessage.value = 'Error: Not connected.'
       isProcessingRequest.value = false
-      console.error(
-        '[Store] completeUserTurn called but WebSocket is not OPEN.'
-      )
+      logger.error('completeUserTurn called but WebSocket is not OPEN.')
       return
     }
 
-    console.log('[Store] Finalizing user audio turn...')
+    logger.info('Finalizing user audio turn...')
 
-    const sendLogic = async () => {
+    const sendLogic = async (): Promise<void> => {
       if (webSocketStatus.value !== 'OPEN' || !liveApiClient.value) {
-        console.error(
-          '[Store] Cannot send audioStreamEnd, WebSocket disconnected.'
-        )
+        logger.error('Cannot send audioStreamEnd, WebSocket disconnected.')
         isProcessingRequest.value = false
         bufferedUserTurn.value = null
         statusMessage.value = 'Error: Disconnected'
@@ -441,13 +542,13 @@ export const useConversationStore = defineStore('conversation', () => {
 
       try {
         await liveApiClient.value.sendAudioStreamEndSignal()
-        console.log('[Store] Sent audioStreamEnd signal.')
+        logger.info('Sent audioStreamEnd signal.')
         isModelTurnComplete.value = false
         isProcessingRequest.value = true
         statusMessage.value = 'Processing...'
         generalStore.updateVideo('PROCESSING')
       } catch (error: any) {
-        console.error('[Store] Failed to send audioStreamEnd signal:', error)
+        logger.error('Failed to send audioStreamEnd signal:', error)
         statusMessage.value = `Error: ${error.message || 'Send failed'}`
         isProcessingRequest.value = false
         bufferedUserTurn.value = null
@@ -457,50 +558,55 @@ export const useConversationStore = defineStore('conversation', () => {
     }
 
     if (!isModelTurnComplete.value || isPlaying.value) {
-      console.log(
-        '[Store] Model busy or playing, buffering audioStreamEnd signal.'
-      )
+      logger.info('Model busy or playing, buffering audioStreamEnd signal.')
       bufferedUserTurn.value = sendLogic
     } else {
-      console.log(
-        '[Store] Model idle, sending audioStreamEnd signal immediately.'
-      )
+      logger.info('Model idle, sending audioStreamEnd signal immediately.')
       bufferedUserTurn.value = null
       await sendLogic()
     }
   }
 
-  const sendAudioChunk = async (base64AudioChunk: string) => {
+  /**
+   * Sends an audio chunk to the API
+   */
+  const sendAudioChunk = async (base64AudioChunk: string): Promise<void> => {
     if (webSocketStatus.value !== 'OPEN' || !liveApiClient.value) {
       return
     }
+
     try {
       await liveApiClient.value.sendAudioChunk(base64AudioChunk)
     } catch (error: any) {
-      console.error('[Store] Failed to send audio chunk:', error)
+      logger.error('Failed to send audio chunk:', error)
     }
   }
 
-  const sendTextMessage = async (text: string) => {
+  /**
+   * Sends a text message to the API
+   */
+  const sendTextMessage = async (text: string): Promise<void> => {
     if (webSocketStatus.value !== 'OPEN' || !liveApiClient.value) {
       statusMessage.value = 'Error: Not connected.'
       isProcessingRequest.value = false
-      console.error('[Store] sendTextMessage called but WebSocket is not OPEN.')
+      logger.error('sendTextMessage called but WebSocket is not OPEN.')
       return
     }
+
     if (!text.trim()) {
-      console.warn('[Store] Attempted to send empty text message.')
+      logger.warn('Attempted to send empty text message.')
       return
     }
 
     if (isPlaying.value) {
-      console.log('[Store] User sent text, interrupting playback.')
+      logger.info('User sent text, interrupting playback.')
       generalStore.forceStopAudioPlayback()
       await new Promise(resolve => setTimeout(resolve, 50))
     }
+
     if (!isModelTurnComplete.value) {
-      console.warn(
-        '[Store] Sending text, marking previous model turn complete due to interruption.'
+      logger.warn(
+        'Sending text, marking previous model turn complete due to interruption.'
       )
       isModelTurnComplete.value = true
     }
@@ -508,26 +614,25 @@ export const useConversationStore = defineStore('conversation', () => {
     statusMessage.value = 'Sending message...'
     isProcessingRequest.value = true
     generalStore.updateVideo('PROCESSING')
-
     const userMessageContent: Content = {
       role: 'user',
-      parts: [{ text: text }],
+      parts: [{ text }],
     }
     chatHistory.value.unshift(userMessageContent)
     scrollChat()
 
-    console.log(
-      '[Store] Sending text message content:',
+    logger.info(
+      'Sending text message content:',
       JSON.stringify(userMessageContent, null, 2)
     )
 
     try {
       await liveApiClient.value.sendTextTurn(text)
-      console.log('[Store] Sent text message turn.')
+      logger.info('Sent text message turn.')
       isModelTurnComplete.value = false
       statusMessage.value = 'Processing...'
     } catch (error: any) {
-      console.error('[Store] Failed to send text message turn:', error)
+      logger.error('Failed to send text message turn:', error)
       statusMessage.value = `Error: ${error.message || 'Send failed'}`
       isProcessingRequest.value = false
       isModelTurnComplete.value = true
@@ -535,28 +640,33 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
+  /**
+   * Sends an image to the API for processing
+   */
   const sendImageInput = async (
     base64ImageData: string,
     mimeType: string,
     promptText?: string
-  ) => {
+  ): Promise<void> => {
     const generalStoreInstance = useGeneralStore()
+
     if (webSocketStatus.value !== 'OPEN' || !liveApiClient.value) {
       statusMessage.value = 'Error: Not connected.'
       generalStoreInstance.takingScreenShot = false
       isProcessingRequest.value = false
-      console.error('[Store] sendImageInput called but WebSocket is not OPEN.')
+      logger.error('sendImageInput called but WebSocket is not OPEN.')
       return
     }
 
     if (isPlaying.value) {
-      console.log('[Store] User sent image, interrupting playback.')
+      logger.info('User sent image, interrupting playback.')
       generalStoreInstance.forceStopAudioPlayback()
       await new Promise(resolve => setTimeout(resolve, 50))
     }
+
     if (!isModelTurnComplete.value) {
-      console.warn(
-        '[Store] Sending image, marking previous model turn complete due to interruption.'
+      logger.warn(
+        'Sending image, marking previous model turn complete due to interruption.'
       )
       isModelTurnComplete.value = true
     }
@@ -571,7 +681,7 @@ export const useConversationStore = defineStore('conversation', () => {
     const imageTurnForApi: Content = {
       role: 'user',
       parts: [
-        { inlineData: { mimeType: mimeType, data: base64ImageData } },
+        { inlineData: { mimeType, data: base64ImageData } },
         { text: effectivePrompt },
       ],
     }
@@ -582,19 +692,18 @@ export const useConversationStore = defineStore('conversation', () => {
     })
     scrollChat()
 
-    console.log(
-      '[Store] Sending image turn content:',
+    logger.info(
+      'Sending image turn content:',
       JSON.stringify(imageTurnForApi, null, 2)
     )
 
     try {
       await liveApiClient.value.sendClientContent([imageTurnForApi], true)
-
-      console.log('[Store] Sent image input turn.')
+      logger.info('Sent image input turn.')
       isModelTurnComplete.value = false
       statusMessage.value = 'Processing image...'
     } catch (error: any) {
-      console.error('[Store] Failed to send image input:', error)
+      logger.error('Failed to send image input:', error)
       statusMessage.value = `Image Error: ${error.message || 'Send failed'}`
       isProcessingRequest.value = false
       isModelTurnComplete.value = true
@@ -604,31 +713,34 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  const sendFunctionResults = async (results: FunctionResponsePayload[]) => {
+  /**
+   * Sends function results back to the API
+   */
+  const sendFunctionResults = async (
+    results: FunctionResponsePayload[]
+  ): Promise<void> => {
     if (webSocketStatus.value !== 'OPEN' || !liveApiClient.value) {
       statusMessage.value = 'Error: Not connected.'
-      console.error(
-        '[Store] sendFunctionResults called but WebSocket is not OPEN.'
-      )
+      logger.error('sendFunctionResults called but WebSocket is not OPEN.')
       isProcessingRequest.value = false
       isModelTurnComplete.value = true
       generalStore.updateVideo('STAND_BY')
       return
     }
 
-    console.log(
-      '[Store] Sending function results back to model:',
+    logger.info(
+      'Sending function results back to model:',
       JSON.stringify(results, null, 2)
     )
     statusMessage.value = 'Sending function results...'
 
     try {
       await liveApiClient.value.sendFunctionResults(results)
-      console.log('[Store] Function results sent successfully.')
+      logger.info('Function results sent successfully.')
       isModelTurnComplete.value = false
       statusMessage.value = 'Processing function results...'
     } catch (error: any) {
-      console.error('[Store] Failed to send function results:', error)
+      logger.error('Failed to send function results:', error)
       statusMessage.value = `Function Error: ${error.message || 'Send failed'}`
       isProcessingRequest.value = false
       isModelTurnComplete.value = true
@@ -636,36 +748,24 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  const closeSession = () => {
-    console.log('[Store] Closing session...')
-    if (liveApiClient.value) {
-      liveApiClient.value.disconnect()
-    }
-    webSocketStatus.value = 'CLOSED'
-    isSessionInitialized.value = false
-    statusMessage.value = 'Session closed.'
-    liveApiClient.value = null
-    isProcessingRequest.value = false
-    isModelTurnComplete.value = true
-    bufferedUserTurn.value = null
-    generalStore.forceStopAudioPlayback()
-    generalStore.isRecording = false
-    generalStore.isRecordingRequested = false
-    generalStore.updateVideo('STAND_BY')
-  }
-
-  const scrollChat = () => {
+  /**
+   * Scrolls the chat history to the bottom
+   */
+  const scrollChat = (): void => {
     nextTick(() => {
       const el = document.getElementById('chatHistory')
       if (el) {
         el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
       } else {
-        console.warn('[Store] Chat history element not found for scrolling.')
+        logger.warn('Chat history element not found for scrolling.')
       }
     })
   }
 
-  function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  /**
+   * Converts a base64 string to an ArrayBuffer
+   */
+  const base64ToArrayBuffer = (base64: string): ArrayBuffer => {
     try {
       const binaryString = atob(base64)
       const len = binaryString.length
@@ -675,11 +775,14 @@ export const useConversationStore = defineStore('conversation', () => {
       }
       return bytes.buffer
     } catch (e) {
-      console.error('[Store] Error decoding base64 string:', e)
+      logger.error('Error decoding base64 string:', e)
       return new ArrayBuffer(0)
     }
   }
 
+  /**
+   * Watches conversation state and updates UI accordingly
+   */
   watch(
     [
       isModelTurnComplete,
@@ -704,6 +807,7 @@ export const useConversationStore = defineStore('conversation', () => {
         !processing &&
         !recording &&
         !recordingRequested
+
       const wasBusy =
         !oldModelComplete ||
         oldPlaying ||
@@ -726,19 +830,20 @@ export const useConversationStore = defineStore('conversation', () => {
             !isProcessingRequest.value &&
             !isRecording.value &&
             !isRecordingRequested.value
+
           const stillNotError =
             !statusMessage.value.includes('Error') &&
             !statusMessage.value.includes('Failed')
 
           if (stillIdle && stillNotError) {
-            console.log(
-              '[Store Watcher] System confirmed idle after delay, setting status to Ready.'
+            logger.info(
+              'System confirmed idle after delay, setting status to Ready.'
             )
             statusMessage.value = 'Ready'
             generalStore.updateVideo('STAND_BY')
           } else {
-            console.log(
-              '[Store Watcher] State changed during Ready delay, skipping status update.'
+            logger.info(
+              'State changed during Ready delay, skipping status update.'
             )
           }
         }, 100)
@@ -748,9 +853,7 @@ export const useConversationStore = defineStore('conversation', () => {
         statusMessage.value !== 'Ready' &&
         !isErrorOrFinalState
       ) {
-        console.log(
-          '[Store Watcher] System started idle but status not Ready, forcing Ready.'
-        )
+        logger.info('System started idle but status not Ready, forcing Ready.')
         statusMessage.value = 'Ready'
         generalStore.updateVideo('STAND_BY')
       }
@@ -762,13 +865,13 @@ export const useConversationStore = defineStore('conversation', () => {
     webSocketStatus,
     isSessionInitialized,
     isModelTurnComplete,
-    completeUserTurn,
+    liveApiClient,
     initializeSession,
+    closeSession,
     sendTextMessage,
     sendAudioChunk,
     sendImageInput,
-    closeSession,
-    liveApiClient,
+    completeUserTurn,
     checkAndSendBufferedTurn,
   }
 })

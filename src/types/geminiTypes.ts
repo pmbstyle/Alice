@@ -119,6 +119,12 @@ export interface ConnectionOptions {
   retries?: number
 }
 
+export interface ServerContentPayload {
+  interrupted?: boolean
+  turnComplete?: boolean
+  modelTurn?: { parts: any[] }
+}
+
 export type WebSocketStatus =
   | 'IDLE'
   | 'CONNECTING'

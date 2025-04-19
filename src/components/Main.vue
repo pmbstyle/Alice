@@ -9,16 +9,16 @@
           class="avatar-ring"
           :class="{
             'ring-success': isPlaying,
+            'ring-error': webSocketStatus === 'ERROR',
             'w-[200px] h-[200px]': isMinimized,
             'w-[480px] h-[480px]': !isMinimized && isElectron,
             'w-[430px] h-[430px]': !isElectron,
           }"
           :style="{
-            backgroundImage: `url('${bg}'`,
+            backgroundImage: `url('${bg}')`,
             backgroundPositionY: !isMinimized ? '-62px' : '-25px',
           }"
         >
-          <audio ref="audioPlayer" class="hidden"></audio>
           <video
             class="max-w-screen-md rounded-full ring"
             :class="{
@@ -26,15 +26,15 @@
               'h-[480px]': !isMinimized && isElectron,
               'h-[430px]': !isElectron,
             }"
-            ref="aiVideo"
+            ref="aiVideoRef"
             :src="videoSource"
             loop
             muted
-            :autoplay="isPlaying"
+            autoplay
+            playsinline
           ></video>
           <Actions
             @takeScreenShot="takeScreenShot"
-            @togglePlaying="togglePlaying"
             @toggleRecording="toggleRecording"
             :isElectron="isElectron"
           />
@@ -50,419 +50,583 @@ import Actions from './Actions.vue'
 import Chat from './Chat.vue'
 import { bg } from '../utils/assetsImport.ts'
 import { setVideo } from '../utils/videoProcess.ts'
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { useGeneralStore } from '../stores/generalStore.ts'
-import { useConversationStore } from '../stores/openAIStore.ts'
+import { useConversationStore } from '../stores/conversationStore.ts'
 import { storeToRefs } from 'pinia'
+import { Content } from '../types/geminiTypes'
+import { Logger } from '../utils/logger'
+
+const logger = new Logger('MainComponent')
 
 const generalStore = useGeneralStore()
 const conversationStore = useConversationStore()
-const isElectron = typeof window !== 'undefined' && window?.electron
+const isElectron = typeof window !== 'undefined' && (window as any).electron
 
 const {
-  recognizedText,
   isRecordingRequested,
   isRecording,
-  audioPlayer,
-  aiVideo,
   videoSource,
   isPlaying,
   statusMessage,
-  audioContext,
-  audioSource,
-  chatInput,
   openChat,
   isMinimized,
   storeMessage,
   takingScreenShot,
   updateVideo,
-  isTTSProcessing,
+  isProcessingRequest,
+  chatHistory,
 } = storeToRefs(generalStore)
-generalStore.setProvider('openai')
 
-let mediaRecorder: MediaRecorder | null = null
-let audioChunks: BlobPart[] = []
+const { webSocketStatus } = storeToRefs(conversationStore)
 
-const recordingConfig = {
-  silenceThreshold: 43,
-  minRMSValue: 1e-10,
-  bufferLength: 10,
-  silenceTimeout: 499,
-  fftSize: 2048,
-  vadBufferSize: 10,
+const aiVideoRef = ref<HTMLVideoElement | null>(null)
+
+let audioContext: AudioContext | null = null
+let audioWorkletNode: AudioWorkletNode | null = null
+let mediaStreamSource: MediaStreamAudioSourceNode | null = null
+let audioStreamForRecorder: MediaStream | null = null
+
+/**
+ * Converts an ArrayBuffer to a base64 string
+ */
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = ''
+  const bytes = new Uint8Array(buffer)
+  const len = bytes.byteLength
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
 }
 
-const screenShot = ref<string>('')
-const screenshotReady = ref<boolean>(false)
+/**
+ * Handles WebSocket connection for audio recording
+ * @returns {Promise<boolean>} True if connection was successful
+ */
+async function ensureWebSocketConnection(): Promise<boolean> {
+  if (webSocketStatus.value === 'OPEN') {
+    return true
+  }
 
-const vadBuffer = {
-  samples: [] as boolean[],
-  add(isSpeaking: boolean) {
-    this.samples.push(isSpeaking)
-    if (this.samples.length > recordingConfig.vadBufferSize) {
-      this.samples.shift()
+  statusMessage.value = 'Connecting...'
+  logger.warn('Attempted startListening before WebSocket was OPEN.')
+
+  if (
+    webSocketStatus.value === 'CLOSED' ||
+    webSocketStatus.value === 'ERROR' ||
+    webSocketStatus.value === 'IDLE'
+  ) {
+    try {
+      await conversationStore.initializeSession()
+      await new Promise(resolve => setTimeout(resolve, 200))
+      if (webSocketStatus.value !== 'OPEN') {
+        statusMessage.value = 'Connection Failed.'
+        isRecordingRequested.value = false
+        return false
+      }
+      return true
+    } catch (error) {
+      statusMessage.value = 'Connection Error.'
+      isRecordingRequested.value = false
+      return false
     }
-  },
-  isActive() {
-    const activeCount = this.samples.filter(x => x).length
-    return activeCount > recordingConfig.vadBufferSize * 0.3
-  },
+  }
+
+  isRecordingRequested.value = false
+  return false
 }
 
-const startListening = () => {
-  if (!isRecordingRequested.value || isTTSProcessing.value) return
-  statusMessage.value = 'Listening'
-  recognizedText.value = ''
-
-  const mediaDevices =
-    navigator.mediaDevices ||
-    (navigator as any).webkitGetUserMedia ||
-    (navigator as any).mozGetUserMedia
-
-  mediaDevices
-    .getUserMedia({ audio: true })
-    .then(stream => {
-      const audioContext = new window.AudioContext()
-      const source = audioContext.createMediaStreamSource(stream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = recordingConfig.fftSize
-      const bufferLength = analyser.frequencyBinCount
-      const dataArray = new Uint8Array(bufferLength)
-      source.connect(analyser)
-
-      mediaRecorder = new MediaRecorder(stream)
-      mediaRecorder.start()
-
-      mediaRecorder.ondataavailable = event => {
-        audioChunks.push(event.data)
-      }
-
-      mediaRecorder.onstop = async () => {
-        try {
-          statusMessage.value = 'Stop listening'
-          if (!isRecordingRequested.value) return
-
-          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
-          const arrayBuffer = await audioBlob.arrayBuffer()
-          const transcription = await conversationStore.transcribeAudioMessage(
-            arrayBuffer as Buffer
-          )
-          recognizedText.value = transcription
-
-          if (transcription.trim()) {
-            storeMessage.value = true
-            processRequest(transcription)
-          } else {
-            statusMessage.value = 'No speech detected'
-            toggleRecording()
-          }
-        } catch (error) {
-          statusMessage.value = 'Error processing audio'
-          console.error('Error processing audio:', error)
-          handleRecordingError()
-        }
-      }
-
-      let silenceCounter = 0
-      const rmsBuffer = Array(recordingConfig.bufferLength).fill(0)
-
-      const detectSilence = () => {
-        analyser.getByteTimeDomainData(dataArray)
-
-        let sumSquares = 0.0
-        for (let i = 0; i < bufferLength; i++) {
-          const normalized = dataArray[i] / 128.0 - 1.0
-          sumSquares += normalized * normalized
-        }
-        const rms = Math.sqrt(sumSquares / bufferLength)
-
-        const gatedRMS = noiseGate(rms, recordingConfig.minRMSValue)
-
-        rmsBuffer.shift()
-        rmsBuffer.push(gatedRMS)
-
-        const avgRMS =
-          rmsBuffer.reduce((sum, val) => sum + val, 0) / rmsBuffer.length
-        const db =
-          20 * Math.log10(Math.max(avgRMS, recordingConfig.minRMSValue)) * -1
-
-        const isSilent = db > recordingConfig.silenceThreshold
-        vadBuffer.add(!isSilent)
-
-        if (isSilent && !vadBuffer.isActive()) {
-          silenceCounter++
-        } else {
-          silenceCounter = 0
-        }
-
-        if (silenceCounter > recordingConfig.silenceTimeout) {
-          stopListening()
-          silenceCounter = 0
-        } else {
-          requestAnimationFrame(detectSilence)
-        }
-      }
-
-      detectSilence()
-    })
-    .catch(error => handleRecordingError())
-
+/**
+ * Prepares the UI state for recording
+ */
+function prepareUIForRecording(): void {
+  statusMessage.value = 'Listening...'
   isRecording.value = true
-}
+  updateVideo.value('PROCESSING')
 
-const noiseGate = (rms: number, threshold: number) => {
-  return rms < threshold ? 0 : rms
-}
+  const historyWithoutPlaceholder = chatHistory.value.filter(
+    msg =>
+      !(msg.role === 'user' && msg.parts[0]?.text?.startsWith('[User Speaking'))
+  )
+  chatHistory.value = historyWithoutPlaceholder
 
-const handleRecordingError = async () => {
-  statusMessage.value = 'Recording error, retrying...'
-  isRecording.value = false
-  audioChunks = []
-
-  if (mediaRecorder) {
-    const tracks = mediaRecorder.stream.getTracks()
-    tracks.forEach(track => track.stop())
+  const placeholderMessage: Content = {
+    role: 'user',
+    parts: [{ text: '[User Speaking...]' }],
   }
-
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  if (isRecordingRequested.value) {
-    startListening()
-  }
+  chatHistory.value.unshift(placeholderMessage)
+  storeMessage.value = false
 }
 
-const stopListening = () => {
-  if (!mediaRecorder) return
-  mediaRecorder.stop()
-  audioChunks = []
-  isRecording.value = false
-}
-
-const toggleRecording = () => {
-  isRecordingRequested.value = !isRecordingRequested.value
-  if (!isRecordingRequested.value) {
-    stopListening()
-  } else {
-    isRecording.value = true
-    startListening()
-  }
-}
-
-const togglePlaying = () => {
-  if (isPlaying.value) {
-    audioPlayer.value?.pause()
-    updateVideo.value('STAND_BY')
-    statusMessage.value = 'Stand by'
-
-    if (audioContext.value) {
-      audioContext.value.close()
-      audioContext.value = null
+/**
+ * Sets up the audio processing worklet
+ */
+async function setupAudioWorklet(): Promise<boolean> {
+  try {
+    if (audioContext && audioContext.state !== 'closed') {
+      await audioContext
+        .close()
+        .catch(e => logger.warn('Error closing previous AudioContext:', e))
     }
 
-    generalStore.audioQueue = []
+    audioContext = new AudioContext({ sampleRate: 16000 })
 
-    isPlaying.value = false
-    if (isRecordingRequested.value) {
-      isRecording.value = true
-      startListening()
+    try {
+      await audioContext.audioWorklet.addModule(
+        '/js/worklets/audio-processor.js'
+      )
+    } catch (moduleError: any) {
+      if (!moduleError.message.includes('already added')) {
+        logger.error('Failed to load AudioWorklet module:', moduleError)
+        throw moduleError
+      }
     }
-  } else {
-    audioSource.value?.start()
-    isPlaying.value = true
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        sampleRate: 16000,
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      },
+    })
+    audioStreamForRecorder = stream
+
+    mediaStreamSource = audioContext.createMediaStreamSource(stream)
+    audioWorkletNode = new AudioWorkletNode(
+      audioContext,
+      'audio-recorder-worklet'
+    )
+
+    setupAudioWorkletMessageHandler()
+
+    mediaStreamSource.connect(audioWorkletNode)
+    return true
+  } catch (error) {
+    logger.error('Error setting up audio worklet:', error)
+    return false
   }
 }
 
-generalStore.playAudio = async (audioResponse: Response) => {
-  if (!audioPlayer.value) return
+/**
+ * Sets up the message handler for the audio worklet
+ */
+function setupAudioWorkletMessageHandler(): void {
+  if (!audioWorkletNode) return
 
-  generalStore.audioQueue.push(audioResponse)
+  audioWorkletNode.port.onmessage = async event => {
+    if (!isRecording.value) return
 
-  if (!isPlaying.value) {
-    playNextAudio()
+    if (event.data.event === 'chunk') {
+      const int16Buffer = event.data.data.int16arrayBuffer
+      try {
+        const base64Chunk = arrayBufferToBase64(int16Buffer)
+        if (webSocketStatus.value === 'OPEN') {
+          await conversationStore.sendAudioChunk(base64Chunk)
+        } else {
+          logger.warn('WebSocket closed while recording. Stopping.')
+          handleRecordingError('WebSocket closed')
+        }
+      } catch (error) {
+        logger.error('Error converting/sending worklet audio chunk:', error)
+        handleRecordingError('Audio send error')
+      }
+    } else if (event.data.event === 'error') {
+      logger.error('Error from AudioWorkletProcessor:', event.data.error)
+      handleRecordingError('Audio processing error')
+    }
   }
 }
 
-const playNextAudio = async () => {
-  if (generalStore.audioQueue.length === 0) {
-    isPlaying.value = false
-    statusMessage.value = 'Stand by'
-    if (isRecordingRequested.value) {
-      startListening()
-    }
+/**
+ * Starts the audio recording process
+ */
+const startListening = async () => {
+  if (!(await ensureWebSocketConnection())) {
     return
   }
 
-  if (isRecording.value) {
-    stopListening()
+  prepareUIForRecording()
+
+  try {
+    if (!(await setupAudioWorklet())) {
+      throw new Error('Failed to set up audio worklet')
+    }
+  } catch (error) {
+    logger.error('Error in startListening (getUserMedia or Worklet):', error)
+    handleRecordingError(
+      `Mic/Setup Error: ${error instanceof Error ? error.message : String(error)}`
+    )
+  }
+}
+
+/**
+ * Cleans up audio resources
+ */
+function cleanupAudioResources(): void {
+  if (mediaStreamSource && audioWorkletNode) {
+    try {
+      mediaStreamSource.disconnect(audioWorkletNode)
+    } catch (e) {
+      logger.warn('Error disconnecting mediaStreamSource:', e)
+    }
+  } else if (mediaStreamSource) {
+    try {
+      mediaStreamSource.disconnect()
+    } catch (e) {
+      logger.warn('Error disconnecting mediaStreamSource (no worklet):', e)
+    }
   }
 
-  isPlaying.value = true
-  const audioResponse = generalStore.audioQueue.shift()
+  if (audioWorkletNode && audioContext?.destination) {
+    try {
+      audioWorkletNode.port.close()
+    } catch (e) {
+      logger.warn('Error closing worklet port:', e)
+    }
+  }
 
-  if (audioPlayer.value && audioResponse) {
-    const mediaSource = new MediaSource()
-    audioPlayer.value.src = URL.createObjectURL(mediaSource)
+  mediaStreamSource = null
+  audioWorkletNode = null
 
-    audioPlayer.value.addEventListener(
-      'ended',
-      () => {
-        playNextAudio()
-      },
-      { once: true }
+  if (audioStreamForRecorder) {
+    audioStreamForRecorder.getTracks().forEach(track => {
+      track.stop()
+    })
+    audioStreamForRecorder = null
+  }
+
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext
+      .close()
+      .catch(e => logger.warn('Error closing AudioContext:', e))
+    audioContext = null
+  }
+}
+
+/**
+ * Handles completion of recording
+ * @param {boolean} manualStop Whether the recording was stopped manually
+ */
+function handleRecordingCompletion(
+  wasRecording: boolean,
+  manualStop: boolean
+): void {
+  if (wasRecording) {
+    chatHistory.value = chatHistory.value.filter(
+      msg =>
+        !(
+          msg.role === 'user' &&
+          msg.parts[0]?.text?.startsWith('[User Speaking')
+        )
     )
 
-    mediaSource.addEventListener('sourceopen', () => {
-      const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')
-      const reader = audioResponse.body?.getReader()
-
-      if (!reader) {
-        console.error('Failed to get reader from audio response body.')
-        return
+    if (!manualStop) {
+      storeMessage.value = true
+      conversationStore.completeUserTurn()
+    } else {
+      logger.info('Manual stop: Discarding current user audio input.')
+      statusMessage.value = 'Ready'
+      updateVideo.value('STAND_BY')
+    }
+  } else {
+    isRecordingRequested.value = false
+    if (statusMessage.value === 'Listening...') {
+      if (!isPlaying.value && !isProcessingRequest.value) {
+        statusMessage.value = 'Ready'
+        updateVideo.value('STAND_BY')
       }
-
-      function pushChunk() {
-        reader
-          .read()
-          .then(({ done, value }) => {
-            if (done) {
-              mediaSource.endOfStream()
-              return
-            }
-            try {
-              if (!sourceBuffer.updating) {
-                sourceBuffer.appendBuffer(value)
-                sourceBuffer.addEventListener('updateend', pushChunk, {
-                  once: true,
-                })
-              } else {
-                sourceBuffer.addEventListener(
-                  'updateend',
-                  () => {
-                    sourceBuffer.appendBuffer(value)
-                    sourceBuffer.addEventListener('updateend', pushChunk, {
-                      once: true,
-                    })
-                  },
-                  { once: true }
-                )
-              }
-            } catch (error) {
-              console.error('Failed to append audio chunk:', error)
-            }
-          })
-          .catch(err => {
-            console.error('Error reading audio stream:', err)
-          })
-      }
-
-      pushChunk()
-    })
-
-    await audioPlayer.value.play()
-    statusMessage.value = 'Speaking...'
+    }
   }
 }
 
+/**
+ * Stops the audio recording
+ * @param {boolean} manualStop Whether the recording was stopped manually
+ */
+const stopListening = (manualStop = false) => {
+  if (!isRecording.value && !audioStreamForRecorder && !audioContext) {
+    isRecording.value = false
+    isRecordingRequested.value = false
+    return
+  }
+
+  const wasRecording = isRecording.value
+  isRecording.value = false
+
+  cleanupAudioResources()
+
+  handleRecordingCompletion(wasRecording, manualStop)
+}
+
+/**
+ * Handles recording errors
+ * @param {string} contextMessage Error message
+ */
+const handleRecordingError = (contextMessage: string = 'Recording error.') => {
+  logger.error(`handleRecordingError called: ${contextMessage}`)
+  statusMessage.value = contextMessage
+  isRecordingRequested.value = false
+  stopListening(true)
+  if (!isPlaying.value) updateVideo.value('STAND_BY')
+}
+
+/**
+ * Toggles recording state on/off
+ */
+const toggleRecording = () => {
+  if (!isRecordingRequested.value) {
+    startRecording()
+  } else {
+    stopRecording()
+  }
+}
+
+/**
+ * Starts recording
+ */
+function startRecording(): void {
+  if (isPlaying.value) {
+    logger.info('User started recording, interrupting playback.')
+    generalStore.forceStopAudioPlayback()
+    setTimeout(() => {
+      isRecordingRequested.value = true
+      startListening()
+    }, 50)
+  } else {
+    isRecordingRequested.value = true
+    startListening()
+  }
+}
+
+/**
+ * Stops recording
+ */
+function stopRecording(): void {
+  isRecordingRequested.value = false
+  statusMessage.value = 'Ready'
+  if (isPlaying.value) {
+    logger.info('User stopped recording, stopping playback.')
+    generalStore.forceStopAudioPlayback()
+  }
+  stopListening(true)
+}
+
+/**
+ * Processes a text request
+ * @param {string} text Text to process
+ */
 const processRequest = async (text: string) => {
-  updateVideo.value('PROCESSING')
+  if (!text.trim()) return
 
-  let messageContent: any[] = [{ type: 'text', text: text }]
-
-  if (screenshotReady.value && screenShot.value) {
-    try {
-      const fileId = await conversationStore.uploadScreenshotToOpenAI(
-        screenShot.value
-      )
-
-      messageContent.push({
-        type: 'image_file',
-        image_file: {
-          file_id: fileId,
-        },
-      })
-
-      screenshotReady.value = false
-      screenShot.value = ''
-    } catch (error) {
-      console.error('Error uploading screenshot:', error)
-      statusMessage.value = 'Error uploading screenshot'
-    }
+  if (isRecording.value || isRecordingRequested.value) {
+    logger.info('User sent text while recording, stopping recording first.')
+    isRecordingRequested.value = false
+    stopListening(true)
+    await new Promise(resolve => setTimeout(resolve, 100))
   }
 
-  const userMessage = {
-    role: 'user',
-    content: messageContent,
+  if (isPlaying.value) {
+    logger.info('User sent text, stopping playback.')
+    generalStore.forceStopAudioPlayback()
   }
 
-  generalStore.chatHistory.unshift({
-    role: 'user',
-    content: [
-      {
-        type: 'text',
-        text: { value: text, annotations: [] },
-      },
-    ],
-  })
-
+  await conversationStore.sendTextMessage(text)
   scrollChat()
-
-  const prompt = await conversationStore.createOpenAIPrompt(
-    userMessage,
-    storeMessage.value
-  )
-
-  await conversationStore.sendMessageToThread(
-    prompt.message,
-    storeMessage.value
-  )
-
-  chatInput.value = ''
-  await conversationStore.chat(prompt.history)
 }
 
+/**
+ * Initiates screenshot process
+ */
 const takeScreenShot = async () => {
-  if (!takingScreenShot.value) {
-    takingScreenShot.value = true
-    statusMessage.value = 'Taking a screenshot'
-    await window.electron.showOverlay()
+  if (!isElectron) {
+    statusMessage.value = 'Screenshots not available.'
+    return
+  }
+
+  if (takingScreenShot.value) {
+    logger.warn('Screenshot process already in progress.')
+    return
+  }
+
+  if (isRecording.value || isRecordingRequested.value) {
+    logger.info('Stopping recording before taking screenshot.')
+    isRecordingRequested.value = false
+    stopListening(true)
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+
+  if (isPlaying.value) {
+    logger.info('Stopping playback before taking screenshot.')
+    generalStore.forceStopAudioPlayback()
+  }
+
+  takingScreenShot.value = true
+  statusMessage.value = 'Select screen area...'
+  try {
+    await window.ipcRenderer.invoke('show-overlay')
+  } catch (error) {
+    logger.error('Error showing overlay:', error)
+    statusMessage.value = 'Overlay Error'
+    takingScreenShot.value = false
   }
 }
 
-const scrollChat = () => {
-  const chatHistoryElement = document.getElementById('chatHistory')
-  if (chatHistoryElement) {
-    chatHistoryElement.scrollTo({
-      top: chatHistoryElement.scrollHeight,
-      behavior: 'smooth',
-    })
-  }
-}
-
-onMounted(async () => {
-  await conversationStore.createNewThread()
-  updateVideo.value = async (type: string) => {
-    const playVideo = async (videoType: string) => {
-      videoSource.value = setVideo(videoType)
-      await nextTick()
-      aiVideo.value?.play()
+/**
+ * Process captured screenshot
+ */
+async function processScreenshot(dataURI: string): Promise<void> {
+  try {
+    const base64Data = dataURI.split(',')[1]
+    if (base64Data) {
+      await conversationStore.sendImageInput(
+        base64Data,
+        'image/png',
+        'Describe this screenshot.'
+      )
+    } else {
+      throw new Error('Could not extract Base64 data from URI.')
     }
-    await playVideo(type)
+  } catch (error) {
+    logger.error('Error processing screenshot data:', error)
+    throw error
   }
-  updateVideo.value('STAND_BY')
+}
+
+/**
+ * Scrolls chat to the latest message
+ */
+const scrollChat = () => {
+  nextTick(() => {
+    const chatHistoryElement = document.getElementById('chatHistory')
+    if (chatHistoryElement) {
+      chatHistoryElement.scrollTo({
+        top: chatHistoryElement.scrollHeight,
+        behavior: 'smooth',
+      })
+    }
+  })
+}
+
+/**
+ * Component initialization
+ */
+onMounted(async () => {
+  generalStore.aiVideo = aiVideoRef.value
+
+  generalStore.updateVideo = async (type: string) => {
+    const newSrc = setVideo(type)
+    const videoElement = generalStore.aiVideo
+    if (videoElement && videoElement.currentSrc !== newSrc) {
+      generalStore.videoSource = newSrc
+      await nextTick()
+      try {
+        videoElement.load()
+        await videoElement.play()
+      } catch (error) {
+        logger.warn(`Video play failed for ${type}:`, error)
+        setTimeout(
+          () =>
+            videoElement
+              .play()
+              .catch(e => logger.warn('Retry play failed:', e)),
+          100
+        )
+      }
+    } else if (videoElement && videoElement.paused) {
+      try {
+        await videoElement.play()
+      } catch (e) {
+        /* Ignore */
+      }
+    }
+  }
+
+  try {
+    await conversationStore.initializeSession()
+    if (webSocketStatus.value === 'OPEN') {
+      statusMessage.value = 'Ready'
+      generalStore.updateVideo('STAND_BY')
+    } else if (webSocketStatus.value !== 'CONNECTING') {
+      statusMessage.value = 'Connection Error.'
+      generalStore.updateVideo('STAND_BY')
+    } else {
+      generalStore.updateVideo('PROCESSING')
+    }
+  } catch (error) {
+    logger.error('Failed to initialize Gemini session on mount:', error)
+    statusMessage.value = 'Initialization Failed.'
+    generalStore.updateVideo('STAND_BY')
+  }
 
   if (isElectron) {
     window.ipcRenderer.on('screenshot-captured', async () => {
+      if (!takingScreenShot.value) return
+
       try {
+        statusMessage.value = 'Processing screenshot...'
+        updateVideo.value('PROCESSING')
         const dataURI = await window.ipcRenderer.invoke('get-screenshot')
-        screenShot.value = dataURI
-        screenshotReady.value = true
-        statusMessage.value = 'Screenshot ready'
+
+        if (dataURI && typeof dataURI === 'string') {
+          await processScreenshot(dataURI)
+        } else {
+          throw new Error('Received invalid data URI for screenshot.')
+        }
       } catch (error) {
-        console.error('Error retrieving screenshot:', error)
-        statusMessage.value = 'Error taking screenshot'
+        logger.error('Error processing screenshot:', error)
+        statusMessage.value = 'Screenshot Error'
+        updateVideo.value('STAND_BY')
       } finally {
         takingScreenShot.value = false
+        window.ipcRenderer
+          .invoke('hide-overlay')
+          .catch(err => logger.error('Error hiding overlay:', err))
       }
     })
+  }
+
+  watch(webSocketStatus, (newStatus, oldStatus) => {
+    if (newStatus === 'ERROR' || newStatus === 'CLOSED') {
+      statusMessage.value =
+        newStatus === 'ERROR' ? 'Connection Error' : 'Disconnected'
+
+      if (isRecordingRequested.value || isRecording.value) {
+        handleRecordingError('Connection lost')
+      }
+
+      if (isPlaying.value) {
+        generalStore.forceStopAudioPlayback()
+      }
+
+      if (!isPlaying.value) updateVideo.value('STAND_BY')
+    } else if (newStatus === 'OPEN' && oldStatus === 'CONNECTING') {
+      statusMessage.value = 'Ready'
+      if (!isPlaying.value) updateVideo.value('STAND_BY')
+    } else if (newStatus === 'CONNECTING') {
+      statusMessage.value = 'Connecting...'
+      if (!isPlaying.value) updateVideo.value('PROCESSING')
+    }
+  })
+})
+
+/**
+ * Clean up on component unmount
+ */
+onUnmounted(() => {
+  stopListening(true)
+  if (isPlaying.value) generalStore.forceStopAudioPlayback()
+  conversationStore.closeSession()
+
+  if (isElectron) window.ipcRenderer.removeAllListeners('screenshot-captured')
+
+  if (audioContext && audioContext.state !== 'closed') {
+    audioContext
+      .close()
+      .catch(e => logger.warn('Error closing AudioContext on unmount:', e))
+    audioContext = null
   }
 })
 </script>
@@ -473,13 +637,15 @@ onMounted(async () => {
   &.mini {
     height: 200px;
   }
-  .avatar-ring {
-    @apply rounded-full ring ring-offset-base-100 ring-offset-2
-    relative overflow-hidden !flex justify-center items-center
-    z-20 bg-no-repeat bg-cover bg-center shadow-md;
+}
+.avatar-ring {
+  @apply rounded-full ring ring-offset-base-100 ring-offset-2 relative overflow-hidden !flex justify-center items-center z-20 bg-no-repeat bg-cover bg-center shadow-md;
+  transition: ring-color 0.3s ease-in-out;
+
+  &.ring-error {
+    @apply ring-red-500;
   }
 }
-
 .avatar {
   transition: all 0.1s ease-in-out;
   &.open {

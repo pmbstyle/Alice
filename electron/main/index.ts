@@ -106,11 +106,12 @@ async function createWindow() {
     return source[0].thumbnail.toDataURL()
   })
 
-  ipcMain.on('show-overlay', () => {
+  ipcMain.handle('show-overlay', () => {
     if (!overlayWindow) {
       createOverlayWindow()
     }
     overlayWindow?.show()
+    return true
   })
 
   ipcMain.handle('hide-overlay', () => {

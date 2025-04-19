@@ -33,6 +33,9 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
       listener(event, ...args)
     )
   },
+  removeAllListeners(channel: string) {
+    return ipcRenderer.removeAllListeners(channel)
+  },
 })
 
 // --------- Preload scripts loading ---------

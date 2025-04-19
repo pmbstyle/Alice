@@ -12,6 +12,7 @@ import {
   ConnectionOptions,
   WebSocketStatus,
   GeminiLiveApiClient,
+  RealtimeInputVideo,
 } from '../../types/geminiTypes'
 
 import { Logger } from '../../utils/logger'
@@ -495,6 +496,7 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         turnComplete: turnComplete,
       },
     }
+    logger.info(`Sending Client Content Turn`, payload)
     return this.sendJson(payload)
   }
 
@@ -549,6 +551,22 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
       },
     }
     logger.info(`Sending Image Input (${mimeType})`)
+    return this.sendJson(payload)
+  }
+
+  async sendRealtimeVideoFrame(
+    base64ImageData: string,
+    mimeType?: string
+  ): Promise<void> {
+    const payload: { realtimeInput: BidiGenerateContentRealtimeInput } = {
+      realtimeInput: {
+        video: {
+          mimeType: mimeType,
+          data: base64ImageData,
+        } as RealtimeInputVideo,
+      },
+    }
+    logger.info(`Sending Realtime Frame via video field ({mimeType, data})`)
     return this.sendJson(payload)
   }
 

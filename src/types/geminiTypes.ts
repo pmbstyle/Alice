@@ -60,10 +60,14 @@ export interface RealtimeInputInlineData {
 }
 
 export interface BidiGenerateContentRealtimeInput {
+  mediaChunks?: MediaChunk[]
   audio?: RealtimeInputAudio
   inlineData?: RealtimeInputInlineData
+  video?: RealtimeInputVideo
   text?: string
   audioStreamEnd?: boolean
+  activityStart?: any
+  activityEnd?: any
 }
 
 export interface FunctionResponsePayload {
@@ -125,6 +129,16 @@ export interface ServerContentPayload {
   modelTurn?: { parts: any[] }
 }
 
+export interface MediaChunk {
+  mimeType: string
+  data: string
+}
+
+export interface RealtimeInputVideo {
+  mimeType: string
+  data: string
+}
+
 export type WebSocketStatus =
   | 'IDLE'
   | 'CONNECTING'
@@ -146,4 +160,8 @@ export interface GeminiLiveApiClient {
   sendClientContent(turns: Content[], turnComplete: boolean): Promise<void>
   sendAudioStreamEndSignal(): Promise<void>
   resetReconnectAttempts(): void
+  sendRealtimeVideoFrame(
+    base64ImageData: string,
+    mimeType?: string
+  ): Promise<void>
 }

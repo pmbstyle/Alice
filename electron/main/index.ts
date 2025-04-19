@@ -114,6 +114,16 @@ async function createWindow() {
     return true
   })
 
+  ipcMain.handle('get-screen-sources', async () => {
+    try {
+        const sources = await desktopCapturer.getSources({ types: ['screen'] })
+        return sources;
+    } catch (e) {
+        console.error('Error getting screen sources:', e);
+        return [];
+    }
+  })
+
   ipcMain.handle('hide-overlay', () => {
     overlayWindow?.hide()
     return true

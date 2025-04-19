@@ -1,5 +1,3 @@
-// FILE: src/components/Chat.vue
-
 <template>
   <div
     class="chat-wrapper h-[480px] ml-[380px] bg-gray-900 bg-opacity-90 flex flex-col absolute z-10 rounded-r-lg"

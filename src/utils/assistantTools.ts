@@ -86,7 +86,7 @@ export const assistantTools = [
             content: {
               type: 'STRING',
               description:
-                'Text to write (required for "write" action, can be empty string). Ignored for "read".',
+                'Text to write (required for "write" action, can be empty string). Ignored for "read". If calling "read", use the "output" field in the response.',
             },
           },
           required: ['action'],

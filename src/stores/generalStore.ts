@@ -1,6 +1,6 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { Content } from '../api/gemini/liveApiClient'
+import { Content } from '../types/geminiTypes'
 import { useConversationStore } from './conversationStore'
 
 interface RawAudioQueueItem {

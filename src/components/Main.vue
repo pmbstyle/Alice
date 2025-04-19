@@ -54,7 +54,7 @@ import { ref, onMounted, nextTick, onUnmounted, watch } from 'vue'
 import { useGeneralStore } from '../stores/generalStore.ts'
 import { useConversationStore } from '../stores/conversationStore.ts'
 import { storeToRefs } from 'pinia'
-import { Content } from '../api/gemini/liveApiClient'
+import { Content } from '../types/geminiTypes'
 
 const generalStore = useGeneralStore()
 const conversationStore = useConversationStore()

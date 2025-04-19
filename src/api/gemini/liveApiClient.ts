@@ -1,142 +1,22 @@
 import { assistantTools } from '../../utils/assistantTools'
 import { assistantConfig } from '../../config/assistantConfig'
+import {
+  BidiGenerateContentSetup,
+  Content,
+  BidiGenerateContentRealtimeInput,
+  BidiGenerateContentClientContent,
+  FunctionResponsePayload,
+  BidiGenerateContentToolResponse,
+  ServerMessage,
+  BidiGenerateContentToolCall,
+  ConnectionOptions,
+  WebSocketStatus,
+  GeminiLiveApiClient,
+} from '../../types/geminiTypes'
 
-interface GeminiTool {
-  functionDeclarations?: GeminiFunctionDeclaration[]
-}
+import { Logger } from '../../utils/logger'
 
-interface GeminiFunctionDeclaration {
-  name: string
-  description: string
-  parameters?: {
-    type: 'OBJECT'
-    properties: {
-      [key: string]: {
-        type: string
-        description: string
-        enum?: string[]
-      }
-    }
-    required?: string[]
-  }
-}
-
-interface BidiGenerateContentSetup {
-  model: string
-  generationConfig?: any
-  tools?: GeminiTool[]
-  realtimeInputConfig?: any
-  systemInstruction?: Content
-  sessionResumption?: {}
-  contextWindowCompression?: {
-    slidingWindow?: {}
-  }
-}
-
-interface ContentPart {
-  text?: string
-  inlineData?: {
-    mimeType: string
-    data: string
-  }
-  functionCall?: any
-  functionResponse?: FunctionResponsePart
-}
-
-export interface Content {
-  role: 'user' | 'model'
-  parts: ContentPart[]
-}
-
-interface BidiGenerateContentClientContent {
-  turns: Content[]
-  turnComplete?: boolean
-}
-
-interface RealtimeInputAudio {
-  data: string
-}
-
-interface RealtimeInputInlineData {
-  mimeType: string
-  data: string
-}
-
-interface BidiGenerateContentRealtimeInput {
-  audio?: RealtimeInputAudio
-  inlineData?: RealtimeInputInlineData
-  text?: string
-  audioStreamEnd?: boolean
-}
-
-export interface FunctionResponsePayload {
-  id: string
-  response: {
-    output?: any
-    error?: any
-  }
-}
-
-interface FunctionResponsePart {
-  name: string
-  response: any
-}
-
-interface BidiGenerateContentToolResponse {
-  functionResponses: FunctionResponsePayload[]
-}
-
-interface ServerMessagePayloads {
-  setupComplete?: any
-  serverContent?: any
-  toolCall?: any
-  goAway?: any
-  error?: any
-  sessionResumptionUpdate?: any
-}
-
-interface UsageMetadata {
-  promptTokenCount?: number
-  responseTokenCount?: number
-  totalTokenCount?: number
-}
-
-interface ServerMessage {
-  messageType: keyof ServerMessagePayloads | 'unknown'
-  payload: any
-  usageMetadata?: UsageMetadata
-}
-
-export interface BidiGenerateContentToolCall {
-  functionCalls: LiveFunctionCall[]
-}
-
-export interface LiveFunctionCall {
-  id: string
-  name: string
-  args: { [key: string]: any }
-}
-
-type WebSocketStatus =
-  | 'IDLE'
-  | 'CONNECTING'
-  | 'OPEN'
-  | 'CLOSING'
-  | 'CLOSED'
-  | 'ERROR'
-
-export interface GeminiLiveApiClient {
-  connect(): Promise<void>
-  disconnect(): void
-  sendAudioChunk(base64AudioChunk: string): Promise<void>
-  sendImage(base64ImageData: string, mimeType: string): Promise<void>
-  sendTextTurn(text: string): Promise<void>
-  sendFunctionResults(results: FunctionResponsePayload[]): Promise<void>
-  onMessage(callback: (message: ServerMessage) => void): void
-  getStatus(): WebSocketStatus
-  sendClientContent(turns: Content[], turnComplete: boolean): Promise<void>
-  sendAudioStreamEndSignal(): Promise<void>
-}
+const logger = new Logger('API Client')
 
 class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
   private ws: WebSocket | null = null
@@ -147,23 +27,25 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
   private connectionPromise: Promise<void> | null = null
   private resolveConnectionPromise: (() => void) | null = null
   private rejectConnectionPromise: ((reason?: any) => void) | null = null
+  private reconnectAttempts: number = 0
+  private maxReconnectAttempts: number = 3
+  private reconnectDelay: number = 2000
 
   constructor() {
     this.apiKey = import.meta.env.VITE_GEMINI_API_KEY
     const baseUrl =
       import.meta.env.VITE_GEMINI_WS_URL ||
       'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent'
+    this.wsUrl = `${baseUrl}?key=${this.apiKey}`
 
     if (!this.apiKey || !baseUrl) {
-      console.error(
-        '[API Client] Gemini API Key or WebSocket URL base is missing in environment variables.'
+      logger.error(
+        'Gemini API Key or WebSocket URL base is missing in environment variables.'
       )
       this.status = 'ERROR'
       return
     }
-
-    this.wsUrl = `${baseUrl}?key=${this.apiKey}`
-    console.log('[API Client] Gemini Client Initialized.')
+    logger.info('Gemini Client Initialized.')
   }
 
   getStatus(): WebSocketStatus {
@@ -174,199 +56,259 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
     this.messageCallback = callback
   }
 
-  connect(): Promise<void> {
+  connect(options: ConnectionOptions = {}): Promise<void> {
+    const timeoutMs = options.timeoutMs || 10000
+
     if (this.status === 'ERROR' && (!this.apiKey || !this.wsUrl)) {
       return Promise.reject(
         new Error('Gemini API Key or WebSocket URL is missing. Cannot connect.')
       )
     }
+
     if (this.status === 'OPEN' || this.status === 'CONNECTING') {
-      console.log('[API Client] WebSocket already open or connecting.')
+      logger.info(`Already ${this.status.toLowerCase()}, reusing connection`)
       return this.connectionPromise || Promise.resolve()
     }
-    if (this.ws) {
-      console.warn(
-        '[API Client] Stale WebSocket instance detected. Forcing disconnect before reconnecting.'
-      )
-      this.disconnect()
-    }
 
-    console.log('[API Client] Attempting to connect WebSocket...')
+    this.disconnect()
+
     this.status = 'CONNECTING'
+    logger.info('Attempting to establish WebSocket connection...')
 
     this.connectionPromise = new Promise((resolve, reject) => {
-      this.resolveConnectionPromise = resolve
-      this.rejectConnectionPromise = reject
+      const timeoutId = setTimeout(() => {
+        if (this.status === 'CONNECTING') {
+          logger.error(`Connection timeout after ${timeoutMs}ms`)
+          this.status = 'ERROR'
+          reject(new Error(`Connection timeout after ${timeoutMs}ms`))
+          this.disconnect()
+        }
+      }, timeoutMs)
+
+      this.resolveConnectionPromise = () => {
+        clearTimeout(timeoutId)
+        resolve()
+      }
+
+      this.rejectConnectionPromise = (error: Error) => {
+        clearTimeout(timeoutId)
+        reject(error)
+      }
 
       try {
         this.ws = new WebSocket(this.wsUrl)
         this.ws.binaryType = 'blob'
 
-        this.ws.onopen = () => {
-          this.status = 'OPEN'
-          console.log(
-            `[API Client] WebSocket connection established (readyState: ${this.ws?.readyState}). Status set to OPEN. Sending setup...`
-          )
-
-          this.sendSetupMessage().catch(error => {
-            console.error('[API Client] Failed to send setup message:', error)
-            this.status = 'ERROR'
-            this.rejectConnectionPromise?.(
-              new Error(`Failed to send setup message: ${error.message}`)
-            )
-            this.disconnect()
-          })
-        }
-
-        this.ws.onmessage = event => {
-          if (event.data instanceof Blob) {
-            this.handleWebSocketMessage(event.data)
-          } else {
-            console.error(
-              '[API Client] Received non-Blob message, which is unexpected:',
-              event.data
-            )
-          }
-        }
-
-        this.ws.onerror = event => {
-          console.error('[API Client] WebSocket Error:', event)
-          const errorReason =
-            event instanceof ErrorEvent
-              ? event.message
-              : 'Unknown WebSocket error'
-          this.status = 'ERROR'
-          if (this.rejectConnectionPromise) {
-            this.rejectConnectionPromise(
-              new Error(`WebSocket connection error: ${errorReason}`)
-            )
-            this.rejectConnectionPromise = null
-          }
-          this.ws = null
-          this.connectionPromise = null
-        }
-
-        this.ws.onclose = event => {
-          console.log(
-            `[API Client] WebSocket Closed: Code=${event.code}, Reason=${event.reason || 'No reason specified'}`
-          )
-          const wasConnecting = this.status === 'CONNECTING'
-          const previousStatus = this.status
-          this.status = 'CLOSED'
-          this.ws = null
-
-          if (
-            this.rejectConnectionPromise &&
-            (wasConnecting || previousStatus === 'OPEN')
-          ) {
-            this.rejectConnectionPromise(
-              new Error(
-                `WebSocket closed unexpectedly (Code: ${event.code}, Reason: ${event.reason || 'Unknown'}) before session was fully established.`
-              )
-            )
-            this.rejectConnectionPromise = null
-          }
-
-          this.connectionPromise = null
-
-          if (this.messageCallback && !event.wasClean) {
-            this.messageCallback({
-              messageType: 'error',
-              payload: {
-                error: `WebSocket closed unexpectedly`,
-                code: event.code,
-                reason: event.reason,
-              },
-            })
-          }
-          this.resolveConnectionPromise = null
-          this.rejectConnectionPromise = null
-        }
+        this.setupWebSocketEventHandlers()
       } catch (error: any) {
-        console.error('[API Client] Failed to create WebSocket:', error)
+        clearTimeout(timeoutId)
+        logger.error('Failed to create WebSocket:', error)
         this.status = 'ERROR'
         reject(new Error(`Failed to create WebSocket: ${error.message}`))
         this.connectionPromise = null
       }
     })
+
     return this.connectionPromise
+  }
+
+  private setupWebSocketEventHandlers(): void {
+    if (!this.ws) return
+
+    this.ws.onopen = () => {
+      this.status = 'OPEN'
+      logger.info(
+        `WebSocket connection established (readyState: ${this.ws?.readyState})`
+      )
+
+      this.sendSetupMessage().catch(error => {
+        logger.error('Failed to send setup message:', error)
+        this.status = 'ERROR'
+        this.rejectConnectionPromise?.(
+          new Error(`Failed to send setup message: ${error.message}`)
+        )
+        this.disconnect()
+      })
+    }
+
+    this.ws.onmessage = event => {
+      if (event.data instanceof Blob) {
+        this.handleWebSocketMessage(event.data)
+      } else {
+        logger.error(
+          'Received non-Blob message, which is unexpected:',
+          event.data
+        )
+      }
+    }
+
+    this.ws.onerror = event => {
+      const errorReason =
+        event instanceof ErrorEvent ? event.message : 'Unknown WebSocket error'
+      logger.error('WebSocket Error:', event)
+      this.status = 'ERROR'
+
+      if (this.rejectConnectionPromise) {
+        this.rejectConnectionPromise(
+          new Error(`WebSocket connection error: ${errorReason}`)
+        )
+        this.rejectConnectionPromise = null
+      }
+
+      this.ws = null
+      this.connectionPromise = null
+    }
+
+    this.ws.onclose = event => {
+      const wasConnecting = this.status === 'CONNECTING'
+      const previousStatus = this.status
+
+      logger.info(
+        `WebSocket Closed: Code=${event.code}, Reason=${event.reason || 'No reason specified'}`
+      )
+      this.status = 'CLOSED'
+      this.ws = null
+
+      const shouldAttemptReconnect =
+        !event.wasClean &&
+        this.reconnectAttempts < this.maxReconnectAttempts &&
+        previousStatus !== 'ERROR' &&
+        previousStatus !== 'CLOSING'
+
+      if (shouldAttemptReconnect) {
+        logger.info(
+          `Attempting reconnection (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})...`
+        )
+        this.status = 'RECONNECTING'
+        this.reconnectAttempts++
+
+        setTimeout(() => {
+          this.connect({ timeoutMs: 10000 }).catch(error => {
+            logger.error(`Reconnection attempt failed:`, error)
+          })
+        }, this.reconnectDelay)
+
+        return
+      }
+
+      if (event.wasClean) {
+        this.reconnectAttempts = 0
+      }
+
+      if (
+        this.rejectConnectionPromise &&
+        (wasConnecting || previousStatus === 'OPEN')
+      ) {
+        this.rejectConnectionPromise(
+          new Error(
+            `WebSocket closed unexpectedly (Code: ${event.code}, Reason: ${event.reason || 'Unknown'}) before session was fully established.`
+          )
+        )
+        this.rejectConnectionPromise = null
+      }
+
+      this.connectionPromise = null
+
+      if (this.messageCallback && !event.wasClean) {
+        this.messageCallback({
+          messageType: 'error',
+          payload: {
+            error: `WebSocket closed unexpectedly`,
+            code: event.code,
+            reason: event.reason,
+          },
+        })
+      }
+
+      this.resolveConnectionPromise = null
+      this.rejectConnectionPromise = null
+    }
   }
 
   disconnect(): void {
     if (this.ws) {
-      console.log(
-        `[API Client] Disconnecting WebSocket (readyState: ${this.ws.readyState})...`
+      logger.info(
+        `Disconnecting WebSocket (readyState: ${this.ws.readyState})...`
       )
+
       if (this.status !== 'CLOSED' && this.status !== 'CLOSING') {
         this.status = 'CLOSING'
+
         if (
           this.ws.readyState === WebSocket.OPEN ||
           this.ws.readyState === WebSocket.CONNECTING
         ) {
           try {
             this.ws.close(1000, 'Client initiated disconnect')
-            console.log('[API Client] WebSocket close() called.')
+            logger.info('WebSocket close() called.')
           } catch (e) {
-            console.error('[API Client] Error calling WebSocket close():', e)
+            logger.error('Error calling WebSocket close():', e)
           }
         } else {
-          console.log(
-            `[API Client] WebSocket not in OPEN/CONNECTING state (is ${this.ws.readyState}), skipping close() call.`
+          logger.info(
+            `WebSocket not in OPEN/CONNECTING state (is ${this.ws.readyState}), skipping close() call.`
           )
         }
       }
+
       this.ws = null
     } else {
-      console.log(
-        '[API Client] Disconnect called but WebSocket instance was already null.'
-      )
-    }
-    if (this.status !== 'CLOSED') {
-      this.status = 'CLOSED'
-      console.log('[API Client] Status set to CLOSED.')
+      logger.info('Disconnect called but WebSocket instance was already null.')
     }
 
-    if (this.rejectConnectionPromise && this.status !== 'OPEN') {
+    if (this.status !== 'CLOSED') {
+      this.status = 'CLOSED'
+      logger.info('Status set to CLOSED.')
+    }
+
+    if (this.rejectConnectionPromise) {
       this.rejectConnectionPromise(
         new Error('Connection attempt cancelled by disconnect.')
       )
+      this.rejectConnectionPromise = null
     }
+
     this.connectionPromise = null
     this.resolveConnectionPromise = null
     this.rejectConnectionPromise = null
+
+    this.reconnectAttempts = 0
   }
 
   private async sendJson(payload: object): Promise<void> {
     const isSetupMessage = 'setup' in payload
+    const payloadType = Object.keys(payload)[0] || 'unknown'
 
     if (
       this.status !== 'OPEN' &&
       !(isSetupMessage && this.ws?.readyState === WebSocket.OPEN)
     ) {
-      const payloadType = Object.keys(payload)[0] || 'unknown'
-      const errorMsg = `[API Client] WebSocket not ready to send ${payloadType}. Status: ${this.status}, ReadyState: ${this.ws?.readyState}.`
-      console.error(errorMsg)
+      const errorMsg = `WebSocket not ready to send ${payloadType}. Status: ${this.status}, ReadyState: ${this.ws?.readyState}.`
+      logger.error(errorMsg)
       return Promise.reject(new Error(errorMsg))
     }
 
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
-      const errorMsg = `[API Client] ws.send() SKIPPED. WebSocket instance is null or not in OPEN state (current state: ${this.ws?.readyState}, status: ${this.status})`
-      console.error(errorMsg)
+      const errorMsg = `ws.send() SKIPPED. WebSocket instance is null or not in OPEN state (current state: ${this.ws?.readyState}, status: ${this.status})`
+      logger.error(errorMsg)
+
       if (this.status === 'OPEN') {
-        console.warn(
-          '[API Client] Status discrepancy: Status is OPEN but readyState is not. Setting status to ERROR.'
+        logger.warn(
+          'Status discrepancy: Status is OPEN but readyState is not. Setting status to ERROR.'
         )
         this.status = 'ERROR'
       }
+
       return Promise.reject(new Error(errorMsg))
     }
 
     try {
       const jsonString = JSON.stringify(payload)
       this.ws.send(jsonString)
+      return Promise.resolve()
     } catch (error) {
-      console.error(
-        '[API Client] Failed to send WebSocket message:',
+      logger.error(
+        'Failed to send WebSocket message:',
         error,
         'Payload:',
         payload
@@ -416,28 +358,23 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
     }
 
     await this.sendJson(setupPayload)
-    console.debug(
-      '[API Client] Sent setup message:',
-      JSON.stringify(setupPayload, null, 2)
-    )
+    logger.debug('Sent setup message:', JSON.stringify(setupPayload, null, 2))
   }
 
   private handleWebSocketMessage(blobData: Blob): void {
     const reader = new FileReader()
+
     reader.onload = () => {
       try {
         if (typeof reader.result === 'string') {
           this.processJsonMessage(reader.result)
         } else {
-          console.error(
-            '[API Client] Failed to read Blob as text:',
-            reader.result
-          )
+          logger.error('Failed to read Blob as text:', reader.result)
           this.notifyError('Failed to read Blob data')
         }
       } catch (error) {
-        console.error(
-          '[API Client] Error processing text from Blob:',
+        logger.error(
+          'Error processing text from Blob:',
           error,
           'Blob Text:',
           reader.result
@@ -447,10 +384,12 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         )
       }
     }
+
     reader.onerror = event => {
-      console.error('[API Client] Error reading Blob data:', event)
+      logger.error('Error reading Blob data:', event)
       this.notifyError('Error reading incoming Blob')
     }
+
     reader.readAsText(blobData)
   }
 
@@ -458,15 +397,17 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
     let message
     try {
       message = JSON.parse(jsonString)
-
       let serverMsg: ServerMessage = {
         messageType: 'unknown',
         payload: message,
       }
 
-      const hasToolCall = 'toolCall' in message
+      if (!message) {
+        logger.warn('Received empty or null JSON message')
+        return
+      }
 
-      if (hasToolCall) {
+      if ('toolCall' in message) {
         serverMsg = {
           messageType: 'toolCall',
           payload: message.toolCall as BidiGenerateContentToolCall,
@@ -477,21 +418,7 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
           messageType: 'setupComplete',
           payload: message.setupComplete,
         }
-        if (this.status === 'CONNECTING' || this.status === 'OPEN') {
-          if (this.status === 'CONNECTING') {
-            console.log(
-              '[API Client] Received setupComplete. Updating status from CONNECTING to OPEN.'
-            )
-            this.status = 'OPEN'
-          }
-          this.resolveConnectionPromise?.()
-          this.resolveConnectionPromise = null
-        } else {
-          console.warn(
-            `[API Client] Received setupComplete but status was unexpected: ${this.status}. Setting to OPEN.`
-          )
-          this.status = 'OPEN'
-        }
+        this.handleSetupComplete()
       } else if ('serverContent' in message) {
         serverMsg = {
           messageType: 'serverContent',
@@ -499,27 +426,24 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
           usageMetadata: message.usageMetadata,
         }
       } else if ('goAway' in message) {
-        console.log(`[API Client] --> Identified as goAway.`)
+        logger.info('--> Identified as goAway.')
         serverMsg = { messageType: 'goAway', payload: message.goAway }
-        console.warn('[API Client] Received GoAway message from server.')
+        logger.warn('Received GoAway message from server.')
       } else if ('error' in message) {
-        console.log(`[API Client] --> Identified as error.`)
+        logger.info('--> Identified as error.')
         serverMsg = { messageType: 'error', payload: message.error }
-        console.error(
-          '[API Client] Received explicit error from server:',
-          message.error
-        )
+        logger.error('Received explicit error from server:', message.error)
         this.status = 'ERROR'
         this.notifyError(`Server error: ${JSON.stringify(message.error)}`)
       } else if ('sessionResumptionUpdate' in message) {
-        console.log(`[API Client] --> Identified as sessionResumptionUpdate.`)
+        logger.info('--> Identified as sessionResumptionUpdate.')
         serverMsg = {
           messageType: 'sessionResumptionUpdate',
           payload: message.sessionResumptionUpdate,
         }
       } else {
-        console.warn(
-          '[API Client] Received unhandled JSON message structure (no known top-level key found):',
+        logger.warn(
+          'Received unhandled JSON message structure (no known top-level key found):',
           message
         )
         serverMsg.payload = { error: 'Unhandled JSON structure', data: message }
@@ -528,14 +452,11 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
       if (this.messageCallback) {
         this.messageCallback(serverMsg)
       } else {
-        console.warn(
-          '[API Client] No message callback registered to handle:',
-          serverMsg
-        )
+        logger.warn('No message callback registered to handle:', serverMsg)
       }
     } catch (error) {
-      console.error(
-        '[API Client] JSON parsing failed for message string:',
+      logger.error(
+        'JSON parsing failed for message string:',
         error,
         'Raw String Data:',
         jsonString
@@ -543,6 +464,24 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
       this.notifyError(
         `JSON parsing failed: ${error instanceof Error ? error.message : String(error)}`
       )
+    }
+  }
+
+  private handleSetupComplete(): void {
+    if (this.status === 'CONNECTING' || this.status === 'OPEN') {
+      if (this.status === 'CONNECTING') {
+        logger.info(
+          'Received setupComplete. Updating status from CONNECTING to OPEN.'
+        )
+        this.status = 'OPEN'
+      }
+      this.resolveConnectionPromise?.()
+      this.resolveConnectionPromise = null
+    } else {
+      logger.warn(
+        `Received setupComplete but status was unexpected: ${this.status}. Setting to OPEN.`
+      )
+      this.status = 'OPEN'
     }
   }
 
@@ -556,25 +495,23 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         turnComplete: turnComplete,
       },
     }
-    await this.sendJson(payload)
+    return this.sendJson(payload)
   }
 
   async sendAudioStreamEndSignal(): Promise<void> {
     const payload = { realtimeInput: { audioStreamEnd: true } }
+
     if (this.status === 'OPEN') {
-      console.log('[API Client] Sending audioStreamEnd=true')
+      logger.info('Sending audioStreamEnd=true')
       try {
         await this.sendJson(payload)
       } catch (error) {
-        console.error(
-          '[API Client] Failed to send audioStreamEnd signal:',
-          error
-        )
+        logger.error('Failed to send audioStreamEnd signal:', error)
         throw error
       }
     } else {
-      const errorMsg = `[API Client] WebSocket not OPEN (state: ${this.status}). Cannot send audioStreamEnd.`
-      console.warn(errorMsg)
+      const errorMsg = `WebSocket not OPEN (state: ${this.status}). Cannot send audioStreamEnd.`
+      logger.warn(errorMsg)
       return Promise.reject(new Error(errorMsg))
     }
   }
@@ -586,8 +523,8 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         payload: { error: errorMessage },
       })
     } else {
-      console.error(
-        '[API Client] Error occurred but no message callback is registered:',
+      logger.error(
+        'Error occurred but no message callback is registered:',
         errorMessage
       )
     }
@@ -599,7 +536,7 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         audio: { data: base64AudioChunk },
       },
     }
-    await this.sendJson(payload)
+    return this.sendJson(payload)
   }
 
   async sendImage(base64ImageData: string, mimeType: string): Promise<void> {
@@ -611,11 +548,11 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         },
       },
     }
-    console.log(`[API Client] Sending Image Input (${mimeType})`)
-    await this.sendJson(payload)
+    logger.info(`Sending Image Input (${mimeType})`)
+    return this.sendJson(payload)
   }
 
-  async sendTextTurn(text: string): Promise<void> {
+  async sendTextTurn(text: string, retries = 1): Promise<void> {
     const currentTurnContent: Content = {
       role: 'user',
       parts: [{ text: text }],
@@ -626,28 +563,36 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         turnComplete: true,
       },
     }
-    console.log(
-      `[API Client] Sending Text Turn:`,
-      JSON.stringify(payload, null, 2)
-    )
-    await this.sendJson(payload)
+    logger.info(`Sending Text Turn:`, JSON.stringify(payload, null, 2))
+
+    try {
+      return await this.sendJson(payload)
+    } catch (error) {
+      if (retries > 0 && this.status === 'OPEN') {
+        logger.warn(
+          `Text turn send failed, retrying (${retries} attempts left)...`
+        )
+        return this.sendTextTurn(text, retries - 1)
+      }
+      throw error
+    }
   }
 
   async sendFunctionResults(results: FunctionResponsePayload[]): Promise<void> {
     if (!Array.isArray(results) || results.length === 0) {
       const errorMsg =
-        '[API Client] Invalid or empty results array provided to sendFunctionResults.'
-      console.warn(errorMsg)
+        'Invalid or empty results array provided to sendFunctionResults.'
+      logger.warn(errorMsg)
       return Promise.reject(new Error(errorMsg))
     }
+
     if (
       !results.every(
         r => r && typeof r.id === 'string' && typeof r.response === 'object'
       )
     ) {
-      const errorMsg =
-        '[API Client] Invalid structure in function results array.'
-      console.error(errorMsg, results)
+      const errorMsg = 'Invalid structure in function results array.'
+      logger.error(errorMsg, results)
       return Promise.reject(new Error(errorMsg))
     }
 
@@ -656,20 +601,39 @@ class GeminiLiveApiClientImpl implements GeminiLiveApiClient {
         functionResponses: results,
       },
     }
-    console.log(
-      '[API Client] Sending Function Results:',
-      JSON.stringify(payload, null, 2)
-    )
-    await this.sendJson(payload)
+    logger.info('Sending Function Results:', JSON.stringify(payload, null, 2))
+    return this.sendJson(payload)
+  }
+
+  resetReconnectAttempts(): void {
+    this.reconnectAttempts = 0
+    logger.info('Reconnect attempts reset to 0')
   }
 }
 
 let instance: GeminiLiveApiClient | null = null
 
-export function getGeminiLiveApiClient(): GeminiLiveApiClient {
-  if (!instance) {
-    console.log('[API Client] Creating GeminiLiveApiClient instance.')
+export function getGeminiLiveApiClient(forceNew = false): GeminiLiveApiClient {
+  if (forceNew || !instance) {
+    logger.info(
+      forceNew
+        ? 'Creating new GeminiLiveApiClient instance (forced).'
+        : 'Creating GeminiLiveApiClient instance.'
+    )
     instance = new GeminiLiveApiClientImpl()
   }
   return instance
+}
+
+export function resetGeminiLiveApiClient(): void {
+  if (instance) {
+    try {
+      instance.resetReconnectAttempts()
+      instance.disconnect()
+    } catch (e) {
+      logger.warn('Error while disconnecting during reset:', e)
+    }
+    instance = null
+    logger.info('GeminiLiveApiClient instance reset.')
+  }
 }

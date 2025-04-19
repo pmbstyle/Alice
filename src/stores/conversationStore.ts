@@ -2,15 +2,15 @@ import { ref, nextTick, watch } from 'vue'
 import { defineStore, storeToRefs } from 'pinia'
 import { useGeneralStore } from './generalStore'
 import { executeFunction, FunctionResult } from '../utils/functionCaller'
+import { getGeminiLiveApiClient } from '../api/gemini/liveApiClient'
 import {
-  getGeminiLiveApiClient,
   GeminiLiveApiClient,
   Content,
   ServerMessage,
   FunctionResponsePayload,
   BidiGenerateContentToolCall,
   LiveFunctionCall,
-} from '../api/gemini/liveApiClient'
+} from '../types/geminiTypes'
 
 type WebSocketStatus =
   | 'IDLE'
@@ -307,35 +307,35 @@ export const useConversationStore = defineStore('conversation', () => {
 
           const results: FunctionResponsePayload[] =
             await Promise.all(functionPromises)
-          console.log(
-            '[Store] All functions executed, preparing results:',
-            JSON.stringify(results, null, 2)
-          )
+            console.log(
+              '[Store] All functions executed, preparing results:',
+              JSON.stringify(results, null, 2)
+            )
 
-          chatHistory.value.unshift({
-            role: 'user',
-            parts: results.map(r => {
-              const originalCall = toolCallPayload.functionCalls.find(
-                fc => fc.id === r.id
-              )
-              const functionName = originalCall
-                ? originalCall.name
-                : 'unknown_function'
-              const responseContent =
-                r.response.output !== undefined
-                  ? r.response.output
-                  : { error: r.response.error }
-              return {
-                functionResponse: {
-                  name: functionName,
-                  response: responseContent,
-                },
-              }
-            }),
-          })
-          scrollChat()
+            chatHistory.value.unshift({
+              role: 'user',
+              parts: results.map(r => {
+                const originalCall = toolCallPayload.functionCalls.find(
+                  fc => fc.id === r.id
+                )
+                const functionName = originalCall
+                  ? originalCall.name
+                  : 'unknown_function'
+                const responseContent =
+                  r.response.output !== undefined
+                    ? r.response.output
+                    : { error: r.response.error }
+                return {
+                  functionResponse: {
+                    name: functionName,
+                    response: responseContent,
+                  },
+                }
+              }),
+            })
+            scrollChat()
 
-          await sendFunctionResults(results)
+            await sendFunctionResults(results)
         } else {
           console.warn(
             '[Store] Received toolCall message but no functionCalls found or payload invalid.'

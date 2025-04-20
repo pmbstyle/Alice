@@ -38,23 +38,6 @@
       />
     </button>
     <button
-      class="btn btn-circle border-0 p-2 btn-indicator-side tooltip tooltip-right"
-      :class="{
-        'btn-sm': isMinimized,
-        'bg-success': isScreenSharing,
-        'bg-disabled': !isScreenSharing,
-      }"
-      :data-tip="isScreenSharing ? 'Stop Sharing' : 'Share Screen'"
-      @click="toggleScreenShare"
-      :disabled="takingScreenShot"
-    >
-      <img
-        :src="isScreenSharing ? eyeActiveIcon : eyeIcon"
-        class="indicator indicator-side"
-        :class="{ mini: isMinimized }"
-      />
-    </button>
-    <button
       class="btn btn-circle bg-default border-0 p-2 btn-indicator-side tooltip tooltip-left"
       :data-tip="isMinimized ? 'Maximize' : 'Minimize'"
       :class="{ 'btn-sm': isMinimized }"
@@ -95,8 +78,6 @@ import {
   cameraIcon,
   uploadIcon,
   closeIcon,
-  eyeIcon,
-  eyeActiveIcon
 } from '../utils/assetsImport.ts'
 
 const generalStore = useGeneralStore()
@@ -108,14 +89,13 @@ const props = defineProps({
   },
 })
 
-const emit = defineEmits(['takeScreenShot', 'toggleRecording', 'toggleScreenShare'])
+const emit = defineEmits(['takeScreenShot', 'toggleRecording'])
 const {
   isMinimized,
   takingScreenShot,
   isRecordingRequested,
   statusMessage,
   openChat,
-  isScreenSharing,
 } = storeToRefs(generalStore)
 
 const closeWindow = () => {
@@ -137,13 +117,13 @@ const toggleChat = async () => {
 const toggleMinimize = async () => {
   isMinimized.value = !isMinimized.value
   await nextTick()
-  if (props.isElectron) {
+   if (props.isElectron) {
     if (isMinimized.value) {
       if (openChat.value) {
         await toggleChat()
         setTimeout(() => {
           ;(window as any).electron.mini({ minimize: true })
-        }, 300)
+        }, 300) // Adjust delay if needed
       } else {
         ;(window as any).electron.mini({ minimize: true })
       }
@@ -159,10 +139,6 @@ const takeScreenShot = async () => {
 
 const toggleRecording = async () => {
   await emit('toggleRecording')
-}
-
-const toggleScreenShare = async () => {
-  await emit('toggleScreenShare')
 }
 </script>
 

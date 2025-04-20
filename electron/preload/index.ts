@@ -25,10 +25,6 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
   invoke(...args: Parameters<typeof ipcRenderer.invoke>) {
     const [channel, ...omit] = args
-    if (channel === 'get-screen-sources' || channel === 'capture-screen' || channel === 'show-overlay' || channel === 'hide-overlay' || channel === 'save-screenshot' || channel === 'get-screenshot' || channel === 'electron:open-path' || channel === 'electron:manage-clipboard') {
-      return ipcRenderer.invoke(channel, ...omit)
-    }
-    console.warn(`IPC invoke blocked for channel: ${channel}`);
     return ipcRenderer.invoke(channel, ...omit)
   },
   once(...args: Parameters<typeof ipcRenderer.once>) {

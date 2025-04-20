@@ -693,7 +693,7 @@ export const useConversationStore = defineStore('conversation', () => {
     scrollChat()
 
     logger.info(
-      'Sending image turn content via sendClientContent:',
+      'Sending image turn content:',
       JSON.stringify(imageTurnForApi, null, 2)
     )
 
@@ -777,39 +777,6 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch (e) {
       logger.error('Error decoding base64 string:', e)
       return new ArrayBuffer(0)
-    }
-  }
-
-  /**
-   * Sends a single screen frame as image data to the API using realtimeInput.
-   */
-  const sendScreenFrame = async (base64ImageData: string): Promise<void> => {
-    if (webSocketStatus.value !== 'OPEN' || !liveApiClient.value) {
-      return
-    }
-    if (!base64ImageData) {
-      logger.warn('sendScreenFrame called with empty image data.')
-      return
-    }
-
-    try {
-      await liveApiClient.value.sendRealtimeVideoFrame(
-        base64ImageData,
-        'image/jpeg'
-      )
-    } catch (error: any) {
-      logger.error('Failed to send screen frame:', error)
-      if (
-        error.message.includes('WebSocket not ready') ||
-        error.message.includes('CLOSED')
-      ) {
-        const generalStore = useGeneralStore()
-        if (generalStore.isScreenSharing) {
-          logger.warn(
-            'Stopping screen share due to WebSocket closed/error during send.'
-          )
-        }
-      }
     }
   }
 
@@ -906,6 +873,5 @@ export const useConversationStore = defineStore('conversation', () => {
     sendImageInput,
     completeUserTurn,
     checkAndSendBufferedTurn,
-    sendScreenFrame,
   }
 })

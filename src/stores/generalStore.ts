@@ -30,8 +30,6 @@ export const useGeneralStore = defineStore('general', () => {
   const takingScreenShot = ref<boolean>(false)
   const updateVideo = ref<(type: string) => void>(() => {})
   const scheduledTime = ref(0)
-  const isScreenSharing = ref<boolean>(false)
-  const screenStream = ref<MediaStream | null>(null)
   let justStartedSpeaking = false
 
   const ensureAudioContext = async (): Promise<boolean> => {
@@ -314,7 +312,5 @@ export const useGeneralStore = defineStore('general', () => {
     playNextAudioRaw,
     forceStopAudioPlayback,
     ensureAudioContext,
-    isScreenSharing,
-    screenStream,
   }
 })

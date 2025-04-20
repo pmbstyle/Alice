@@ -2,7 +2,7 @@
 
 Say 'Hi' to Alice 👋
 
-Alice App is a Vue.js/Electron.js application (OpenAI/Groq/Pinecone wrapper) that provides an interactive AI assistant with voice recognition, text-to-speech, and image recognition capabilities. It utilizes OpenAI's GPT-4.1-mini language model and various APIs for natural language processing, speech recognition, function calling, and computer vision tasks.
+Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) that provides an interactive AI assistant with voice recognition, text-to-speech, and image recognition capabilities. It utilizes OpenAI's GPT-4.1-mini language model and various APIs for natural language processing, speech recognition, function calling, and vision tasks.
 This project was created and maintained for personal use and shared with the community.
 
 <p align="center">
@@ -11,13 +11,24 @@ This project was created and maintained for personal use and shared with the com
 
 ## Features
 
-- **Voice recognition:** Users can speak to Alice, and their speech is transcribed into text using Groq's Whisper API.
+- **Voice recognition:** Users can speak to Alice with VAD(Voice Activity Detection), and their speech is transcribed into text using Groq's Whisper API.
 - **Text-to-speech:** Alice can respond with synthesized speech using OpenAI's TTS API.
 - **Image recognition:** Users can take screenshots, and Alice can recognize the contents of the image using OpenAI's Vision API.
-- **Conversation history:** The application stores and retrieves relevant conversation history to provide context-aware responses.
-- **Pinecone vector database:** Conversation messages are embedded and stored in a Pinecone vector database to retrieve relevant memories efficiently.
-- **Animated assistant appearance:** Using prerendered AI-generated videos
-- **Function calling:** Alice can perform web searches, crawl/scrape web page content, open apps or URLs on the user's PC, and manage clipboard content.
+- **Conversation history:** Memory. The application stores and retrieves relevant conversation history to provide context-aware responses.
+- **Pinecone vector database:** Long-term memory. Conversation messages are embedded and stored in a Pinecone vector database to retrieve relevant memories efficiently.
+- **Animated assistant appearance:** Several video states (pre-render, work in progress, more to come):
+  - stand by
+  - thinking
+  - speaking
+- **Function calling:**
+   - web search
+   - get website content
+   - get the weather for a location
+   - open applications on user's computer
+   - open links in user's browser
+   - see user's clipboard content
+   - write to user's clipboard
+   - be aware about current date and time
 
 ## Technologies Used
 

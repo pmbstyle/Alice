@@ -84,6 +84,8 @@ generalStore.setProvider('openai')
 let mediaRecorder: MediaRecorder | null = null
 let audioChunks: BlobPart[] = []
 let myvad: vad.MicVAD | null = null
+const isProcessingAudio = ref(false)
+const processingDebounceTimer = ref<number | null>(null)
 
 const screenShot = ref<string>('')
 const screenshotReady = ref<boolean>(false)
@@ -93,6 +95,15 @@ const startListening = () => {
   statusMessage.value = 'Listening'
   recognizedText.value = ''
 
+  if (myvad) {
+    try {
+      myvad.pause()
+      myvad = null
+    } catch (error) {
+      console.error('Error cleaning up previous VAD instance:', error)
+    }
+  }
+
   vad.MicVAD.new({
     baseAssetPath: './',
     onnxWASMBasePath: './',
@@ -100,7 +111,7 @@ const startListening = () => {
       isRecording.value = true
     },
     onSpeechEnd: (audio: Float32Array) => {
-      if (isRecording.value) {
+      if (isRecording.value && !isProcessingAudio.value) {
         stopRecording(audio)
       }
     },
@@ -120,31 +131,29 @@ const stopRecording = (audio: Float32Array) => {
     mediaRecorder.stop()
     mediaRecorder = null
   }
-  processAudioRecording(audio)
+
+  if (processingDebounceTimer.value) {
+    clearTimeout(processingDebounceTimer.value)
+  }
+
+  processingDebounceTimer.value = window.setTimeout(() => {
+    if (!isProcessingAudio.value) {
+      processAudioRecording(audio)
+    }
+  }, 300)
 }
 
 const processAudioRecording = async (audio?: Float32Array) => {
-  try {
-    if (audio && audio.length > 0) {
-      statusMessage.value = 'Processing audio...'
+  if (isProcessingAudio.value) return
 
+  try {
+    isProcessingAudio.value = true
+    statusMessage.value = 'Processing audio...'
+
+    if (audio && audio.length > 0) {
       const wavBuffer = float32ArrayToWav(audio, 16000)
       const transcription =
         await conversationStore.transcribeAudioMessage(wavBuffer)
-
-      recognizedText.value = transcription
-
-      if (transcription.trim()) {
-        processRequest(transcription)
-      } else {
-        statusMessage.value = 'No speech detected'
-      }
-    } else if (audioChunks.length > 0) {
-      const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
-      const arrayBuffer = await audioBlob.arrayBuffer()
-      const transcription = await conversationStore.transcribeAudioMessage(
-        arrayBuffer as Buffer
-      )
 
       recognizedText.value = transcription
 
@@ -162,6 +171,7 @@ const processAudioRecording = async (audio?: Float32Array) => {
   } finally {
     audioChunks = []
     stopListening()
+    isProcessingAudio.value = false
   }
 }
 
@@ -204,18 +214,26 @@ const writeString = (view: DataView, offset: number, string: string): void => {
     view.setUint8(offset + i, string.charCodeAt(i))
   }
 }
+
 const stopListening = () => {
   if (myvad) {
     try {
       myvad.pause()
+      myvad = null
     } catch (error) {
       console.error('Error stopping VAD:', error)
     }
   }
 
+  if (processingDebounceTimer.value) {
+    clearTimeout(processingDebounceTimer.value)
+    processingDebounceTimer.value = null
+  }
+
   statusMessage.value = 'Stopped Listening'
   isRecording.value = false
 }
+
 const toggleRecording = () => {
   isRecordingRequested.value = !isRecordingRequested.value
 
@@ -224,18 +242,19 @@ const toggleRecording = () => {
   } else {
     if (myvad) {
       try {
-        myvad.start()
-        isRecording.value = true
-        statusMessage.value = 'Listening'
-      } catch (error) {
-        console.error('Error restarting VAD:', error)
+        myvad.pause()
         myvad = null
-        startListening()
+      } catch (error) {
+        console.error('Error cleaning up VAD:', error)
       }
-    } else {
-      isRecording.value = true
-      startListening()
     }
+    isProcessingAudio.value = false
+    if (processingDebounceTimer.value) {
+      clearTimeout(processingDebounceTimer.value)
+      processingDebounceTimer.value = null
+    }
+    isRecording.value = true
+    startListening()
   }
 }
 

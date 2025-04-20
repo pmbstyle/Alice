@@ -54,6 +54,7 @@ import { ref, onMounted, nextTick } from 'vue'
 import { useGeneralStore } from '../stores/generalStore.ts'
 import { useConversationStore } from '../stores/openAIStore.ts'
 import { storeToRefs } from 'pinia'
+import * as vad from '@ricky0123/vad-web'
 
 const generalStore = useGeneralStore()
 const conversationStore = useConversationStore()
@@ -82,168 +83,159 @@ generalStore.setProvider('openai')
 
 let mediaRecorder: MediaRecorder | null = null
 let audioChunks: BlobPart[] = []
-
-const recordingConfig = {
-  silenceThreshold: 43,
-  minRMSValue: 1e-10,
-  bufferLength: 10,
-  silenceTimeout: 499,
-  fftSize: 2048,
-  vadBufferSize: 10,
-}
+let myvad: vad.MicVAD | null = null
 
 const screenShot = ref<string>('')
 const screenshotReady = ref<boolean>(false)
-
-const vadBuffer = {
-  samples: [] as boolean[],
-  add(isSpeaking: boolean) {
-    this.samples.push(isSpeaking)
-    if (this.samples.length > recordingConfig.vadBufferSize) {
-      this.samples.shift()
-    }
-  },
-  isActive() {
-    const activeCount = this.samples.filter(x => x).length
-    return activeCount > recordingConfig.vadBufferSize * 0.3
-  },
-}
 
 const startListening = () => {
   if (!isRecordingRequested.value || isTTSProcessing.value) return
   statusMessage.value = 'Listening'
   recognizedText.value = ''
 
-  const mediaDevices =
-    navigator.mediaDevices ||
-    (navigator as any).webkitGetUserMedia ||
-    (navigator as any).mozGetUserMedia
-
-  mediaDevices
-    .getUserMedia({ audio: true })
-    .then(stream => {
-      const audioContext = new window.AudioContext()
-      const source = audioContext.createMediaStreamSource(stream)
-      const analyser = audioContext.createAnalyser()
-      analyser.fftSize = recordingConfig.fftSize
-      const bufferLength = analyser.frequencyBinCount
-      const dataArray = new Uint8Array(bufferLength)
-      source.connect(analyser)
-
-      mediaRecorder = new MediaRecorder(stream)
-      mediaRecorder.start()
-
-      mediaRecorder.ondataavailable = event => {
-        audioChunks.push(event.data)
+  vad.MicVAD.new({
+    baseAssetPath: './',
+    onnxWASMBasePath: './',
+    onSpeechStart: () => {
+      isRecording.value = true
+    },
+    onSpeechEnd: (audio: Float32Array) => {
+      if (isRecording.value) {
+        stopRecording(audio)
       }
-
-      mediaRecorder.onstop = async () => {
-        try {
-          statusMessage.value = 'Stop listening'
-          if (!isRecordingRequested.value) return
-
-          const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
-          const arrayBuffer = await audioBlob.arrayBuffer()
-          const transcription = await conversationStore.transcribeAudioMessage(
-            arrayBuffer as Buffer
-          )
-          recognizedText.value = transcription
-
-          if (transcription.trim()) {
-            storeMessage.value = true
-            processRequest(transcription)
-          } else {
-            statusMessage.value = 'No speech detected'
-            toggleRecording()
-          }
-        } catch (error) {
-          statusMessage.value = 'Error processing audio'
-          console.error('Error processing audio:', error)
-          handleRecordingError()
-        }
-      }
-
-      let silenceCounter = 0
-      const rmsBuffer = Array(recordingConfig.bufferLength).fill(0)
-
-      const detectSilence = () => {
-        analyser.getByteTimeDomainData(dataArray)
-
-        let sumSquares = 0.0
-        for (let i = 0; i < bufferLength; i++) {
-          const normalized = dataArray[i] / 128.0 - 1.0
-          sumSquares += normalized * normalized
-        }
-        const rms = Math.sqrt(sumSquares / bufferLength)
-
-        const gatedRMS = noiseGate(rms, recordingConfig.minRMSValue)
-
-        rmsBuffer.shift()
-        rmsBuffer.push(gatedRMS)
-
-        const avgRMS =
-          rmsBuffer.reduce((sum, val) => sum + val, 0) / rmsBuffer.length
-        const db =
-          20 * Math.log10(Math.max(avgRMS, recordingConfig.minRMSValue)) * -1
-
-        const isSilent = db > recordingConfig.silenceThreshold
-        vadBuffer.add(!isSilent)
-
-        if (isSilent && !vadBuffer.isActive()) {
-          silenceCounter++
-        } else {
-          silenceCounter = 0
-        }
-
-        if (silenceCounter > recordingConfig.silenceTimeout) {
-          stopListening()
-          silenceCounter = 0
-        } else {
-          requestAnimationFrame(detectSilence)
-        }
-      }
-
-      detectSilence()
+    },
+  })
+    .then(vadInstance => {
+      myvad = vadInstance
+      myvad.start()
     })
-    .catch(error => handleRecordingError())
-
-  isRecording.value = true
+    .catch(err => {
+      console.error('VAD initialization error:', err)
+      statusMessage.value = 'Error initializing VAD'
+    })
 }
 
-const noiseGate = (rms: number, threshold: number) => {
-  return rms < threshold ? 0 : rms
-}
-
-const handleRecordingError = async () => {
-  statusMessage.value = 'Recording error, retrying...'
-  isRecording.value = false
-  audioChunks = []
-
+const stopRecording = (audio: Float32Array) => {
   if (mediaRecorder) {
-    const tracks = mediaRecorder.stream.getTracks()
-    tracks.forEach(track => track.stop())
+    mediaRecorder.stop()
+    mediaRecorder = null
   }
+  processAudioRecording(audio)
+}
 
-  await new Promise(resolve => setTimeout(resolve, 1000))
-  if (isRecordingRequested.value) {
-    startListening()
+const processAudioRecording = async (audio?: Float32Array) => {
+  try {
+    if (audio && audio.length > 0) {
+      statusMessage.value = 'Processing audio...'
+
+      const wavBuffer = float32ArrayToWav(audio, 16000)
+      const transcription =
+        await conversationStore.transcribeAudioMessage(wavBuffer)
+
+      recognizedText.value = transcription
+
+      if (transcription.trim()) {
+        processRequest(transcription)
+      } else {
+        statusMessage.value = 'No speech detected'
+      }
+    } else if (audioChunks.length > 0) {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/wav' })
+      const arrayBuffer = await audioBlob.arrayBuffer()
+      const transcription = await conversationStore.transcribeAudioMessage(
+        arrayBuffer as Buffer
+      )
+
+      recognizedText.value = transcription
+
+      if (transcription.trim()) {
+        processRequest(transcription)
+      } else {
+        statusMessage.value = 'No speech detected'
+      }
+    } else {
+      statusMessage.value = 'No audio data captured'
+    }
+  } catch (error) {
+    console.error('Error processing audio:', error)
+    statusMessage.value = 'Error processing audio'
+  } finally {
+    audioChunks = []
+    stopListening()
   }
 }
 
+const float32ArrayToWav = (
+  samples: Float32Array,
+  sampleRate: number
+): ArrayBuffer => {
+  const buffer = new ArrayBuffer(44 + samples.length * 2)
+  const view = new DataView(buffer)
+
+  writeString(view, 0, 'RIFF')
+  view.setUint32(4, 36 + samples.length * 2, true)
+  writeString(view, 8, 'WAVE')
+
+  writeString(view, 12, 'fmt ')
+  view.setUint32(16, 16, true)
+  view.setUint16(20, 1, true)
+  view.setUint16(22, 1, true)
+  view.setUint32(24, sampleRate, true)
+  view.setUint32(28, sampleRate * 2, true)
+  view.setUint16(32, 2, true)
+  view.setUint16(34, 16, true)
+
+  writeString(view, 36, 'data')
+  view.setUint32(40, samples.length * 2, true)
+
+  let index = 44
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]))
+    const val = s < 0 ? s * 0x8000 : s * 0x7fff
+    view.setInt16(index, val, true)
+    index += 2
+  }
+
+  return buffer
+}
+
+const writeString = (view: DataView, offset: number, string: string): void => {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i))
+  }
+}
 const stopListening = () => {
-  if (!mediaRecorder) return
-  mediaRecorder.stop()
-  audioChunks = []
+  if (myvad) {
+    try {
+      myvad.pause()
+    } catch (error) {
+      console.error('Error stopping VAD:', error)
+    }
+  }
+
+  statusMessage.value = 'Stopped Listening'
   isRecording.value = false
 }
-
 const toggleRecording = () => {
   isRecordingRequested.value = !isRecordingRequested.value
+
   if (!isRecordingRequested.value) {
     stopListening()
   } else {
-    isRecording.value = true
-    startListening()
+    if (myvad) {
+      try {
+        myvad.start()
+        isRecording.value = true
+        statusMessage.value = 'Listening'
+      } catch (error) {
+        console.error('Error restarting VAD:', error)
+        myvad = null
+        startListening()
+      }
+    } else {
+      isRecording.value = true
+      startListening()
+    }
   }
 }
 

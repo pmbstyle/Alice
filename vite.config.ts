@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import electron from 'vite-plugin-electron/simple'
+import { viteStaticCopy } from 'vite-plugin-static-copy'
 import pkg from './package.json'
 
 export default defineConfig(({ command }) => {
@@ -14,6 +15,26 @@ export default defineConfig(({ command }) => {
   return {
     plugins: [
       vue(),
+      viteStaticCopy({
+        targets: [
+          {
+            src: 'node_modules/@ricky0123/vad-web/dist/vad.worklet.bundle.min.js',
+            dest: './'
+          },
+          {
+            src: 'node_modules/@ricky0123/vad-web/dist/silero_vad_v5.onnx',
+            dest: './'
+          },
+          {
+            src: 'node_modules/@ricky0123/vad-web/dist/silero_vad_legacy.onnx',
+            dest: './'
+          },
+          {
+            src: 'node_modules/onnxruntime-web/dist/*.wasm',
+            dest: './'
+          }
+        ]
+      }),
       electron({
         main: {
           entry: 'electron/main/index.ts',

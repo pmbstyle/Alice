@@ -23,21 +23,13 @@ This project was created and maintained for personal use and shared with the com
 
 - [Vue.js](https://vuejs.org/) (JS framework)
 - [Pinia](https://pinia.vuejs.org/) (State Management)
-- [OpenAI API](https://platform.openai.com/docs/api-reference/introduction) (GPT-4o-mini, TTS, Vision)
+- [OpenAI API](https://platform.openai.com/docs/api-reference/introduction) (GPT-4.1-mini, TTS, Vision)
 - [Groq API](https://console.groq.com/) (Whisper)
 - [Pinecone](https://www.pinecone.io/) (Vector Database)
 - [Electron](https://www.electronjs.org/) (Desktop Application framework)
 - [ChatGPT 4o](https://chat.com) (Native image generation)
 - [Kling 1.6 pro (fal.ai)](https://fal.ai/) (Image-to-video)
-- [Crawl4AI](https://github.com/unclecode/crawl4ai) (Web Crawler & Scraper)
-
-## TODO
-- add a settings menu
-- add an option to choose vector DB provider/source
-- add a real-time API option with the audio-to-audio interface and video(screen-sharing/camera) input
-- add the ability to output images and other media content
-- make Alice animations real-time with the lip sync
-- something else ... depends on where the technology will be at the moment
+- [TavilyAI](https://github.com/unclecode/crawl4ai) (Web search & crawler)
 
 ## Getting Started
 

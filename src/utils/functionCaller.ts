@@ -74,15 +74,15 @@ async function perform_web_search(
 }
 
 /**
- * Gets context from a website using the custom scraper API.
+ * Gets context from a website using the Tavily Extract API.
  */
 async function get_website_context(
   args: Crawl4AiArgs
 ): Promise<FunctionResult> {
-  if (!CRAWL4AI_API_KEY || !CRAWL4AI_API_URL) {
+  if (!TAVILY_API_KEY) {
     return {
       success: false,
-      error: 'Crawl4AI API key or URL is not configured.',
+      error: 'Tavily API key is not configured.',
     }
   }
 
@@ -93,86 +93,45 @@ async function get_website_context(
   console.log(`Fetching data from: ${args.url}`)
   try {
     const response = await axios.post(
-      `${CRAWL4AI_API_URL}/crawl`,
+      'https://api.tavily.com/extract',
       {
         urls: args.url,
-        priority: 10,
+        include_images: false,
+        extract_depth: 'basic'
       },
       {
         headers: {
-          Authorization: `Bearer ${CRAWL4AI_API_KEY}`,
+          Authorization: `Bearer ${TAVILY_API_KEY}`,
           'Content-Type': 'application/json',
         },
         timeout: 10000,
       }
     )
 
-    if (!response.data || !response.data.task_id) {
+    if (!response.data || !response.data.results || response.data.results.length === 0) {
       return {
         success: false,
-        error: 'Invalid response from crawler API - no task ID returned',
+        error: 'No content was extracted from the URL',
       }
     }
 
-    const taskId = response.data.task_id
-    console.log(`Crawl job submitted, task ID: ${taskId}`)
-
-    let taskCompleted = false
-    let taskResult = null
-    let pollCount = 0
-    const maxPolls = 30
-    const pollInterval = 2000
-
-    while (!taskCompleted && pollCount < maxPolls) {
-      pollCount++
-
-      await new Promise(resolve => setTimeout(resolve, pollInterval))
-
-      const statusResponse = await axios.get(
-        `${CRAWL4AI_API_URL}/task/${taskId}`,
-        {
-          headers: {
-            Authorization: `Bearer ${CRAWL4AI_API_KEY}`,
-          },
-          timeout: 5000,
-        }
-      )
-
-      console.log(`Poll #${pollCount} - Status: ${statusResponse.data.status}`)
-
-      if (statusResponse.data.status === 'completed') {
-        taskCompleted = true
-        taskResult = statusResponse.data
-      } else if (statusResponse.data.status === 'failed') {
-        return {
-          success: false,
-          error: `Crawl job failed: ${statusResponse.data.error || 'Unknown error'}`,
-        }
-      }
-    }
-
-    if (!taskCompleted) {
+    const result = response.data.results[0];
+    const content = result.raw_content;
+    
+    if (!content) {
       return {
         success: false,
-        error: `Crawl job timed out after ${maxPolls} polling attempts`,
+        error: 'Extraction completed but no content was returned',
       }
     }
 
-    if (!taskResult.result || !taskResult.result.markdown) {
-      return {
-        success: false,
-        error: 'Crawl completed but no markdown content was returned',
-      }
-    }
-
-    const markdown = taskResult.result.markdown
     console.log(
-      `Successfully extracted ${markdown.length} chars of markdown content`
+      `Successfully extracted ${content.length} chars of content`
     )
 
     return {
       success: true,
-      data: markdown,
+      data: content,
     }
   } catch (error: any) {
     console.error(
@@ -185,6 +144,7 @@ async function get_website_context(
     }
   }
 }
+
 
 /**
  * Gets the current weather forecast using the OpenWeatherMap API.

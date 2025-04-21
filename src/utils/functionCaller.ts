@@ -2,8 +2,6 @@ import axios from 'axios'
 
 const TAVILY_API_KEY = import.meta.env.VITE_TAVILY_API_KEY
 const OPENWEATHERMAP_API_KEY = import.meta.env.VITE_OPENWEATHERMAP_API_KEY
-const CRAWL4AI_API_KEY = import.meta.env.VITE_CRAWL4AI_API_KEY
-const CRAWL4AI_API_URL = import.meta.env.VITE_CRAWL4AI_API_URL
 
 interface WebSearchArgs {
   query: string
@@ -22,6 +20,10 @@ interface FunctionResult {
   success: boolean
   data?: any
   error?: string
+}
+
+interface OpenPathArgs {
+  target: string
 }
 
 /**
@@ -144,7 +146,6 @@ async function get_website_context(
     }
   }
 }
-
 
 /**
  * Gets the current weather forecast using the OpenWeatherMap API.
@@ -286,10 +287,6 @@ async function get_current_datetime(args: {
       error: `Failed to get current datetime: ${error.message}`,
     }
   }
-}
-
-interface OpenPathArgs {
-  target: string
 }
 
 /**

@@ -27,7 +27,7 @@
     </div>
   </div>
   <div
-    class="absolute w-full px-2 flex justify-between z-80"
+    class="absolute w-full px-2 flex justify-between z-80 inside-actions"
     :class="{ 'top-[80px]': isMinimized, 'top-[220px]': !isMinimized }"
     v-if="props.isElectron"
   >
@@ -57,7 +57,7 @@
     </button>
   </div>
   <div
-    class="absolute w-full flex justify-center z-80 top-2"
+    class="absolute w-full flex justify-center z-80 top-2 inside-actions"
     v-if="props.isElectron"
   >
     <button
@@ -155,7 +155,7 @@ const toggleRecording = async () => {
 .indicator {
   cursor: pointer;
   transition: all 0.3s ease-in-out;
-  @apply p-2 rounded-full touch-auto w-14;
+  @apply p-2 rounded-full touch-auto w-14 select-none;
   &:hover {
     @apply bg-primary bg-opacity-10;
   }
@@ -181,9 +181,13 @@ const toggleRecording = async () => {
   }
 }
 
+.inside-actions {
+  @apply opacity-0;
+  transition: all 0.3s ease-in-out;
+}
+
 .dragable {
   -webkit-user-select: none;
   -webkit-app-region: drag;
-  cursor: move;
 }
 </style>

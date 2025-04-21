@@ -1,7 +1,4 @@
 import bg from '../assets/images/bg.png'
-import videoSrc from '../assets/videos/speaking.mp4'
-import videoSrcStandBy from '../assets/videos/standby.mp4'
-import videoSrcProcessing from '../assets/videos/processing.mp4'
 import micIcon from '../assets/images/mic.svg'
 import micIconActive from '../assets/images/mic-active.svg'
 import speakerIcon from '../assets/images/speaker.svg'
@@ -17,9 +14,6 @@ import closeIcon from '../assets/images/close.svg'
 
 export {
   bg,
-  videoSrc,
-  videoSrcStandBy,
-  videoSrcProcessing,
   micIcon,
   micIconActive,
   speakerIcon,

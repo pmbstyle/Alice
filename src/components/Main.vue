@@ -496,5 +496,10 @@ onMounted(async () => {
   &.open {
     @apply pr-[505px];
   }
+  &:hover {
+    :deep(.inside-actions) {
+      @apply opacity-100;
+    }
+  }
 }
 </style>

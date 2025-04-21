@@ -180,6 +180,7 @@ const stopListening = () => {
   if (myvad) {
     try {
       myvad.pause()
+      myvad.destroy()
       myvad = null
     } catch (error) {
       console.error('Error stopping VAD:', error)

@@ -48,11 +48,12 @@
 <script setup lang="ts">
 import Actions from './Actions.vue'
 import Chat from './Chat.vue'
-import { bg } from '../utils/assetsImport.ts'
-import { setVideo } from '../utils/videoProcess.ts'
+import { bg } from '../utils/assetsImport'
+import { setVideo } from '../utils/videoProcess'
+import { float32ArrayToWav } from '../utils/audioProcess'
 import { ref, onMounted, nextTick } from 'vue'
-import { useGeneralStore } from '../stores/generalStore.ts'
-import { useConversationStore } from '../stores/openAIStore.ts'
+import { useGeneralStore } from '../stores/generalStore'
+import { useConversationStore } from '../stores/openAIStore'
 import { storeToRefs } from 'pinia'
 import * as vad from '@ricky0123/vad-web'
 
@@ -175,46 +176,6 @@ const processAudioRecording = async (audio?: Float32Array) => {
   }
 }
 
-const float32ArrayToWav = (
-  samples: Float32Array,
-  sampleRate: number
-): ArrayBuffer => {
-  const buffer = new ArrayBuffer(44 + samples.length * 2)
-  const view = new DataView(buffer)
-
-  writeString(view, 0, 'RIFF')
-  view.setUint32(4, 36 + samples.length * 2, true)
-  writeString(view, 8, 'WAVE')
-
-  writeString(view, 12, 'fmt ')
-  view.setUint32(16, 16, true)
-  view.setUint16(20, 1, true)
-  view.setUint16(22, 1, true)
-  view.setUint32(24, sampleRate, true)
-  view.setUint32(28, sampleRate * 2, true)
-  view.setUint16(32, 2, true)
-  view.setUint16(34, 16, true)
-
-  writeString(view, 36, 'data')
-  view.setUint32(40, samples.length * 2, true)
-
-  let index = 44
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]))
-    const val = s < 0 ? s * 0x8000 : s * 0x7fff
-    view.setInt16(index, val, true)
-    index += 2
-  }
-
-  return buffer
-}
-
-const writeString = (view: DataView, offset: number, string: string): void => {
-  for (let i = 0; i < string.length; i++) {
-    view.setUint8(offset + i, string.charCodeAt(i))
-  }
-}
-
 const stopListening = () => {
   if (myvad) {
     try {
@@ -230,7 +191,6 @@ const stopListening = () => {
     processingDebounceTimer.value = null
   }
 
-  statusMessage.value = 'Stopped Listening'
   isRecording.value = false
 }
 
@@ -414,8 +374,6 @@ const processRequest = async (text: string) => {
     ],
   })
 
-  scrollChat()
-
   const prompt = await conversationStore.createOpenAIPrompt(
     userMessage,
     storeMessage.value
@@ -435,16 +393,6 @@ const takeScreenShot = async () => {
     takingScreenShot.value = true
     statusMessage.value = 'Taking a screenshot'
     await window.electron.showOverlay()
-  }
-}
-
-const scrollChat = () => {
-  const chatHistoryElement = document.getElementById('chatHistory')
-  if (chatHistoryElement) {
-    chatHistoryElement.scrollTo({
-      top: chatHistoryElement.scrollHeight,
-      behavior: 'smooth',
-    })
   }
 }
 

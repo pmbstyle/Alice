@@ -73,7 +73,7 @@
 
 <script setup lang="ts">
 import { nextTick, defineEmits, defineProps } from 'vue'
-import { useGeneralStore } from '../stores/generalStore.ts'
+import { useGeneralStore } from '../stores/generalStore'
 import { storeToRefs } from 'pinia'
 import {
   micIcon,

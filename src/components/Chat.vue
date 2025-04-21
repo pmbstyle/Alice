@@ -3,7 +3,11 @@
     class="chat-wrapper h-[480px] ml-[380px] bg-gray-900 bg-opacity-90 flex flex-col absolute z-10 rounded-r-lg"
     :class="{ open: openChat }"
   >
-    <div id="chatHistory" class="messages-wrapper pb-14 w-full">
+    <div
+      id="chatHistory"
+      class="messages-wrapper w-full overflow-y-auto"
+      ref="chatHistoryElement"
+    >
       <template v-if="chatHistoryDisplay.length">
         <div
           class="chat mb-2"
@@ -43,11 +47,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineEmits, ref } from 'vue'
-import { useGeneralStore } from '../stores/generalStore.ts'
-import { messageMarkdown } from '../utils/markdown.ts'
+import { computed, defineEmits, ref, watch } from 'vue'
+import { useGeneralStore } from '../stores/generalStore'
+import { messageMarkdown } from '../utils/markdown'
 import { storeToRefs } from 'pinia'
 const generalStore = useGeneralStore()
+
+const chatHistoryElement = ref<null | HTMLElement>(null)
 
 const emit = defineEmits(['processRequest'])
 const { isInProgress, chatHistory, chatInput, openChat, storeMessage } =
@@ -63,6 +69,10 @@ const chatHistoryDisplay = computed(() => {
 let debounceTimeout = ref<number | null>(null)
 const debounceDelay = 300
 
+watch(chatHistoryDisplay, () => {
+  scrollChat()
+})
+
 const chatInputHandle = async () => {
   if (chatInput.value.length > 0) {
     if (debounceTimeout.value) {
@@ -74,6 +84,14 @@ const chatInputHandle = async () => {
       chatInput.value = ''
     }, debounceDelay)
   }
+}
+
+const scrollChat = () => {
+  if (!chatHistoryElement.value) return
+  chatHistoryElement.value.scrollTo({
+    top: chatHistoryElement.value.scrollHeight,
+    behavior: 'smooth',
+  })
 }
 </script>
 
@@ -91,6 +109,7 @@ const chatInputHandle = async () => {
     @apply w-full max-w-[960px] py-4 pl-[300px] opacity-100 border-blue-500/50 shadow-md;
   }
 }
+
 .messages-wrapper::-webkit-scrollbar {
   width: 8px;
 }
@@ -142,5 +161,4 @@ const chatInputHandle = async () => {
   background-position: 100% 100%;
   opacity: 1;
 }
-
 </style>

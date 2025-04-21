@@ -3,7 +3,6 @@
 Say 'Hi' to Alice 👋
 
 Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) that provides an interactive AI assistant with voice recognition, text-to-speech, and image recognition capabilities. It utilizes OpenAI's GPT-4.1-mini language model and various APIs for natural language processing, speech recognition, function calling, and vision tasks.
-This project was created and maintained for personal use and shared with the community.
 
 <p align="center">
   <img src="https://github.com/pmbstyle/Alice/blob/main/animation.gif?raw=true" alt="Alice Animation">

@@ -123,4 +123,40 @@ export const assistantTools = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'search_torrents',
+      description:
+        'Searches for torrents using Jackett. Use this when the user asks to find or download a specific movie, show, or file.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description: 'The name of the movie, show, or file to search for.',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'add_torrent_to_qb',
+      description:
+        'Adds a torrent to qBittorrent using a magnet link. Use this when the user selects or confirms a torrent to download.',
+      parameters: {
+        type: 'object',
+        properties: {
+          magnet: {
+            type: 'string',
+            description: 'The magnet link of the torrent to add.',
+          },
+        },
+        required: ['magnet'],
+      },
+    },
+  },
 ]

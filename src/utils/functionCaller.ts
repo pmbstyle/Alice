@@ -26,6 +26,14 @@ interface OpenPathArgs {
   target: string
 }
 
+interface TorrentSearchArgs {
+  query: string
+}
+
+interface AddTorrentArgs {
+  magnet: string
+}
+
 /**
  * Performs a web search using the Tavily API.
  */
@@ -99,7 +107,7 @@ async function get_website_context(
       {
         urls: args.url,
         include_images: false,
-        extract_depth: 'basic'
+        extract_depth: 'basic',
       },
       {
         headers: {
@@ -110,16 +118,20 @@ async function get_website_context(
       }
     )
 
-    if (!response.data || !response.data.results || response.data.results.length === 0) {
+    if (
+      !response.data ||
+      !response.data.results ||
+      response.data.results.length === 0
+    ) {
       return {
         success: false,
         error: 'No content was extracted from the URL',
       }
     }
 
-    const result = response.data.results[0];
-    const content = result.raw_content;
-    
+    const result = response.data.results[0]
+    const content = result.raw_content
+
     if (!content) {
       return {
         success: false,
@@ -127,9 +139,7 @@ async function get_website_context(
       }
     }
 
-    console.log(
-      `Successfully extracted ${content.length} chars of content`
-    )
+    console.log(`Successfully extracted ${content.length} chars of content`)
 
     return {
       success: true,
@@ -389,6 +399,131 @@ async function manage_clipboard(args: {
   }
 }
 
+/**
+ * Searches for torrents using the Torrent Search API.
+ */
+
+async function search_torrents(
+  args: TorrentSearchArgs
+): Promise<FunctionResult> {
+  const JACKETT_API_KEY = import.meta.env.VITE_JACKETT_API_KEY
+  const JACKETT_URL = import.meta.env.VITE_JACKETT_URL
+
+  if (!JACKETT_API_KEY || !JACKETT_URL || !args.query) {
+    return { success: false, error: 'Missing Jackett configuration or query.' }
+  }
+
+  try {
+    const url = `${JACKETT_URL}/api/v2.0/indexers/all/results/torznab/api?apikey=${JACKETT_API_KEY}&t=search&q=${encodeURIComponent(args.query)}`
+    const response = await axios.get(url, { responseType: 'text' })
+
+    const parser = new DOMParser()
+    const xml = parser.parseFromString(response.data, 'application/xml')
+    const items = Array.from(xml.querySelectorAll('item'))
+
+    const results = items
+      .map(item => ({
+        title: item.querySelector('title')?.textContent ?? 'No title',
+        magnet: getMagnetLink(item),
+        seeders: getAttributeValue(item, 'seeders'),
+        size: formatFileSize(item.querySelector('size')?.textContent ?? ''),
+      }))
+      .filter(item => item.magnet.startsWith('magnet:'))
+      .sort((a, b) => parseInt(b.seeders ?? '0') - parseInt(a.seeders ?? '0'))
+      .slice(0, 8)
+
+    console.log('Torrent search results:', results)
+
+    return { success: true, data: results }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to parse XML' }
+  }
+}
+
+//helpers
+
+function formatFileSize(bytes: string): string {
+  const b = parseInt(bytes, 10)
+  if (isNaN(b)) return 'unknown'
+  const kb = b / 1024
+  const mb = kb / 1024
+  const gb = mb / 1024
+  if (gb > 1) return `${gb.toFixed(1)} GB`
+  if (mb > 1) return `${mb.toFixed(1)} MB`
+  return `${kb.toFixed(1)} KB`
+}
+
+function getAttributeValue(item: Element, attrName: string): string {
+  const attrs = item.getElementsByTagName('torznab:attr')
+  for (const attr of Array.from(attrs)) {
+    if (attr.getAttribute('name') === attrName) {
+      return attr.getAttribute('value') ?? ''
+    }
+  }
+  return ''
+}
+
+function getMagnetLink(item: Element): string {
+  const guid = item.querySelector('guid')?.textContent
+  if (guid?.startsWith('magnet:')) return guid
+
+  const attrs = item.getElementsByTagName('torznab:attr')
+  for (const attr of Array.from(attrs)) {
+    if (attr.getAttribute('name') === 'magneturl') {
+      return attr.getAttribute('value') ?? ''
+    }
+  }
+
+  return ''
+}
+
+/**
+ * Adds a torrent to qBittorrent using the provided magnet link.
+ */
+async function add_torrent_to_qb(
+  args: AddTorrentArgs
+): Promise<FunctionResult> {
+  const QB_URL = import.meta.env.VITE_QB_URL
+  const QB_USERNAME = import.meta.env.VITE_QB_USERNAME
+  const QB_PASSWORD = import.meta.env.VITE_QB_PASSWORD
+
+  if (!QB_URL || !QB_USERNAME || !QB_PASSWORD) {
+    return { success: false, error: 'qBittorrent credentials not configured.' }
+  }
+  if (!args.magnet) {
+    return { success: false, error: 'Magnet link is missing.' }
+  }
+
+  console.log('Adding torrent to qBittorrent:', args.magnet)
+
+  try {
+    const loginRes = await axios.post(
+      `/api/v2/auth/login`,
+      new URLSearchParams({ username: QB_USERNAME, password: QB_PASSWORD }),
+      { withCredentials: true }
+    )
+
+    if (loginRes.data !== 'Ok.') {
+      return { success: false, error: 'Login failed' }
+    }
+
+    await axios.post(
+      `/api/v2/torrents/add`,
+      new URLSearchParams({ urls: args.magnet }),
+      {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        withCredentials: true,
+      }
+    )
+
+    return { success: true, data: 'Torrent added successfully.' }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Failed to add torrent.' }
+  }
+}
+
 const functionRegistry: {
   [key: string]: (args: any) => Promise<FunctionResult>
 } = {
@@ -398,6 +533,8 @@ const functionRegistry: {
   open_path: open_path,
   manage_clipboard: manage_clipboard,
   get_website_context: get_website_context,
+  search_torrents: search_torrents,
+  add_torrent_to_qb: add_torrent_to_qb,
 }
 
 const functionSchemas = {
@@ -407,6 +544,8 @@ const functionSchemas = {
   open_path: { required: ['target'] },
   manage_clipboard: { required: ['action'] },
   get_website_context: { required: ['url'] },
+  search_torrents: { required: ['query'] },
+  add_torrent_to_qb: { required: ['magnet'] },
 }
 
 /**

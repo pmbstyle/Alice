@@ -28,6 +28,8 @@ Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) th
    - see user's clipboard content
    - write to user's clipboard
    - be aware about current date and time
+   - search torrents using [Jackett](https://github.com/Jackett/Jackett) (should be hosted by user)
+   - add found torrents to [qBittorrent](https://www.qbittorrent.org/) (should be hosted by user)
 
 ## Technologies Used
 

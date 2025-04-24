@@ -16,20 +16,24 @@ Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) th
 - **Conversation history:** Memory. The application stores and retrieves relevant conversation history to provide context-aware responses.
 - **Pinecone vector database:** Long-term memory. Conversation messages are embedded and stored in a Pinecone vector database to retrieve relevant memories efficiently.
 - **Animated assistant appearance:** Several video states (pre-render, work in progress, more to come):
-  - stand by
-  - thinking
-  - speaking
+  - Stand by
+  - Thinking
+  - Speaking
 - **Function calling:**
-   - web search
-   - get website content
-   - get the weather for a location
-   - open applications on user's computer
-   - open links in user's browser
-   - see user's clipboard content
-   - write to user's clipboard
-   - be aware about current date and time
-   - search torrents using [Jackett](https://github.com/Jackett/Jackett) (should be hosted by user)
-   - add found torrents to [qBittorrent](https://www.qbittorrent.org/) (should be hosted by user)
+
+  Data retrieval:
+   - Web search
+   - Get website content
+   - Search torrents
+   - Get the weather for a location
+   - Be aware of the current date and time
+
+  Computer, software use:
+   - Open applications on user's computer
+   - Open links in user's browser
+   - See user's clipboard content
+   - Write to user's clipboard
+   - Add found torrents to the client
 
 ## Technologies Used
 
@@ -41,7 +45,11 @@ Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) th
 - [Pinecone](https://www.pinecone.io/) (Vector Database for long-term memory)
 - [ChatGPT 4o](https://chat.com) (Native image generation: Alice image)
 - [Kling 1.6 pro (fal.ai)](https://fal.ai/) (Image-to-video: Alice animation)
+  
+Tools:
 - [TavilyAI](https://tavily.com) (Web search & crawler)
+- [Jackett](https://github.com/Jackett/Jackett) (Torrent search)
+- [qBittorrent](https://www.qbittorrent.org/) (Torrent client)
 
 ## Getting Started
 

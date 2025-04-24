@@ -5,15 +5,14 @@ import electron from 'vite-plugin-electron/simple'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import pkg from './package.json'
 
-
 export default defineConfig(({ mode, command }) => {
-  const env = loadEnv(mode, process.cwd(), '')
   fs.rmSync('dist-electron', { recursive: true, force: true })
 
   const isServe = command === 'serve'
   const isBuild = command === 'build'
   const sourcemap = isServe || !!process.env.VSCODE_DEBUG
-  const QB_URL = env.VITE_QB_URL
+  const env = loadEnv(mode, process.cwd(), '')
+  const QB_BASE_URL = env.VITE_QB_URL
 
   return {
     plugins: [
@@ -22,21 +21,21 @@ export default defineConfig(({ mode, command }) => {
         targets: [
           {
             src: 'node_modules/@ricky0123/vad-web/dist/vad.worklet.bundle.min.js',
-            dest: './'
+            dest: './',
           },
           {
             src: 'node_modules/@ricky0123/vad-web/dist/silero_vad_v5.onnx',
-            dest: './'
+            dest: './',
           },
           {
             src: 'node_modules/@ricky0123/vad-web/dist/silero_vad_legacy.onnx',
-            dest: './'
+            dest: './',
           },
           {
             src: 'node_modules/onnxruntime-web/dist/*.wasm',
-            dest: './'
-          }
-        ]
+            dest: './',
+          },
+        ],
       }),
       electron({
         main: {
@@ -65,7 +64,7 @@ export default defineConfig(({ mode, command }) => {
           input: 'electron/preload/index.ts',
           vite: {
             build: {
-              sourcemap: sourcemap ? 'inline' : undefined, // #332
+              sourcemap: sourcemap ? 'inline' : undefined,
               minify: isBuild,
               outDir: 'dist-electron/preload',
               rollupOptions: {
@@ -87,21 +86,21 @@ export default defineConfig(({ mode, command }) => {
           port: +url.port,
           proxy: {
             '/api/v2': {
-              target: QB_URL,
+              target: QB_BASE_URL,
               changeOrigin: true,
               secure: false,
-            }
-          }
+            },
+          },
         }
       } else {
         return {
           proxy: {
             '/api/v2': {
-              target: QB_URL,
+              target: QB_BASE_URL,
               changeOrigin: true,
               secure: false,
-            }
-          }
+            },
+          },
         }
       }
     })(),

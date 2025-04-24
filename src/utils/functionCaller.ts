@@ -483,11 +483,12 @@ function getMagnetLink(item: Element): string {
 async function add_torrent_to_qb(
   args: AddTorrentArgs
 ): Promise<FunctionResult> {
-  const QB_URL = import.meta.env.VITE_QB_URL
+  const isDev = import.meta.env.DEV
+  const QB_BASE_URL = isDev ? '' : import.meta.env.VITE_QB_URL
   const QB_USERNAME = import.meta.env.VITE_QB_USERNAME
   const QB_PASSWORD = import.meta.env.VITE_QB_PASSWORD
 
-  if (!QB_URL || !QB_USERNAME || !QB_PASSWORD) {
+  if (!QB_USERNAME || !QB_PASSWORD) {
     return { success: false, error: 'qBittorrent credentials not configured.' }
   }
   if (!args.magnet) {
@@ -498,7 +499,7 @@ async function add_torrent_to_qb(
 
   try {
     const loginRes = await axios.post(
-      `/api/v2/auth/login`,
+      `${QB_BASE_URL}/api/v2/auth/login`,
       new URLSearchParams({ username: QB_USERNAME, password: QB_PASSWORD }),
       { withCredentials: true }
     )
@@ -508,7 +509,7 @@ async function add_torrent_to_qb(
     }
 
     await axios.post(
-      `/api/v2/torrents/add`,
+      `${QB_BASE_URL}/api/v2/torrents/add`,
       new URLSearchParams({ urls: args.magnet }),
       {
         headers: {

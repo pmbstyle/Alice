@@ -1,0 +1,38 @@
+.indicator {
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+  @apply p-2 rounded-full touch-auto w-14 select-none;
+}
+.indicator:hover {
+  @apply bg-white/10;
+}
+.indicator.mini {
+  @apply w-4 h-4 p-0;
+}
+.indicator.indicator-side {
+  @apply rounded-none p-0;
+}
+.indicator.indicator-side:hover {
+  @apply bg-primary/0;
+}
+
+.btn-indicator-side {
+  transition: all 0.3s ease-in-out;
+  @apply bg-black/20 outline-none;
+}
+.btn-indicator-side:hover {
+  @apply bg-black/60;
+}
+.btn-indicator-side:hover.close {
+  @apply bg-red-500;
+}
+
+.inside-actions {
+  @apply opacity-0;
+  transition: all 0.3s ease-in-out;
+}
+
+.dragable {
+  -webkit-user-select: none;
+  -webkit-app-region: drag;
+}

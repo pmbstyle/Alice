@@ -1,6 +1,6 @@
 <template>
   <div
-    class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black bg-opacity-60"
+    class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black bg-black/60"
   >
     <div class="pb-2 rounded-lg flex items-center justify-center gap-8">
       <img
@@ -10,7 +10,7 @@
         @click="toggleRecording"
       />
       <img
-        :src="isPlaying ? speakerIconInactive : speakerIcon"
+        :src="!isPlaying ? speakerIconInactive : speakerIcon"
         class="indicator"
         :class="{ mini: isMinimized }"
         @click="togglePlaying"
@@ -150,44 +150,3 @@ const toggleRecording = async () => {
   await emit('toggleRecording')
 }
 </script>
-
-<style scoped lang="postcss">
-.indicator {
-  cursor: pointer;
-  transition: all 0.3s ease-in-out;
-  @apply p-2 rounded-full touch-auto w-14 select-none;
-  &:hover {
-    @apply bg-primary bg-opacity-10;
-  }
-  &.mini {
-    @apply w-4 h-4 p-0;
-  }
-  &.indicator-side {
-    @apply rounded-none p-0;
-    &:hover {
-      @apply bg-opacity-0;
-    }
-  }
-}
-
-.btn-indicator-side {
-  transition: all 0.3s ease-in-out;
-  @apply bg-opacity-30;
-  &:hover {
-    @apply bg-opacity-80;
-    &.close {
-      @apply bg-red-500;
-    }
-  }
-}
-
-.inside-actions {
-  @apply opacity-0;
-  transition: all 0.3s ease-in-out;
-}
-
-.dragable {
-  -webkit-user-select: none;
-  -webkit-app-region: drag;
-}
-</style>

@@ -1,0 +1,20 @@
+.avatar-wrapper {
+  height: 500px;
+}
+.avatar-wrapper.mini {
+  height: 200px;
+}
+.avatar-ring {
+  @apply rounded-full ring-2 ring-blue-500 ring-offset-base-100 ring-offset-2
+  relative overflow-hidden !flex justify-center items-center
+  z-20 bg-no-repeat bg-cover bg-center shadow-md;
+}
+.avatar {
+  transition: all 0.1s ease-in-out;
+}
+.avatar.open {
+  @apply pr-[505px];
+}
+.avatar:hover .inside-actions{
+  opacity:1;
+}

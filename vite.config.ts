@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import { defineConfig, loadEnv } from 'vite'
+import tailwindcss from '@tailwindcss/vite'
 import vue from '@vitejs/plugin-vue'
 import electron from 'vite-plugin-electron/simple'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
@@ -17,6 +18,7 @@ export default defineConfig(({ mode, command }) => {
   return {
     plugins: [
       vue(),
+      tailwindcss(),
       viteStaticCopy({
         targets: [
           {
@@ -78,6 +80,12 @@ export default defineConfig(({ mode, command }) => {
         renderer: {},
       }),
     ],
+    css: {
+      postcss: {
+        plugins: [
+        ]
+      }
+    },
     server: (() => {
       if (process.env.VSCODE_DEBUG) {
         const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)

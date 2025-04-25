@@ -8,7 +8,7 @@
         <div
           class="avatar-ring"
           :class="{
-            'ring-success': isPlaying,
+            'ring-green-500!': isPlaying,
             'w-[200px] h-[200px]': isMinimized,
             'w-[480px] h-[480px]': !isMinimized && isElectron,
             'w-[430px] h-[430px]': !isElectron,
@@ -20,7 +20,7 @@
         >
           <audio ref="audioPlayer" class="hidden"></audio>
           <video
-            class="max-w-screen-md rounded-full ring"
+            class="max-w-screen-md rounded-full"
             :class="{
               'h-[200px]': isMinimized,
               'h-[480px]': !isMinimized && isElectron,
@@ -426,29 +426,3 @@ onMounted(async () => {
   }
 })
 </script>
-
-<style scoped lang="postcss">
-.avatar-wrapper {
-  height: 500px;
-  &.mini {
-    height: 200px;
-  }
-  .avatar-ring {
-    @apply rounded-full ring ring-offset-base-100 ring-offset-2
-    relative overflow-hidden !flex justify-center items-center
-    z-20 bg-no-repeat bg-cover bg-center shadow-md;
-  }
-}
-
-.avatar {
-  transition: all 0.1s ease-in-out;
-  &.open {
-    @apply pr-[505px];
-  }
-  &:hover {
-    :deep(.inside-actions) {
-      @apply opacity-100;
-    }
-  }
-}
-</style>

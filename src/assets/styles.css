@@ -1,0 +1,13 @@
+@import "tailwindcss";
+@plugin "daisyui";
+@import "./css/main.css";
+@import "./css/chat.css";
+@import "./css/actions.css";
+
+html {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+body {
+  overflow: hidden;
+}

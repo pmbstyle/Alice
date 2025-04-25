@@ -4,7 +4,7 @@
       class="avatar-wrapper flex container h-full items-center justify-center relative z-2"
       :class="{ mini: isMinimized }"
     >
-      <div class="avatar" :class="{ open: openChat }">
+      <div class="avatar" :class="{ open: openSidebar }">
         <div
           class="avatar-ring"
           :class="{
@@ -40,14 +40,14 @@
           />
         </div>
       </div>
-      <Chat @processRequest="processRequest" />
+      <Sidebar @processRequest="processRequest" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import Actions from './Actions.vue'
-import Chat from './Chat.vue'
+import Sidebar from './Sidebar.vue'
 import { bg } from '../utils/assetsImport'
 import { setVideo } from '../utils/videoProcess'
 import { float32ArrayToWav } from '../utils/audioProcess'
@@ -73,7 +73,7 @@ const {
   audioContext,
   audioSource,
   chatInput,
-  openChat,
+  openSidebar,
   isMinimized,
   storeMessage,
   takingScreenShot,

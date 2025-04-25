@@ -32,7 +32,7 @@ export const useGeneralStore = defineStore('general', () => {
   const audioQueue = ref<Response[]>([])
   const chatInput = ref<string>('')
 
-  const openChat = ref<boolean>(false)
+  const openSidebar = ref<boolean>(false)
   const isMinimized = ref<boolean>(false)
 
   const storeMessage = ref<boolean>(false)
@@ -77,7 +77,7 @@ export const useGeneralStore = defineStore('general', () => {
     audioContext,
     audioSource,
     chatInput,
-    openChat,
+    openSidebar,
     isMinimized,
     storeMessage,
     takingScreenShot,

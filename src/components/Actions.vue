@@ -104,7 +104,7 @@ const {
   isRecordingRequested,
   isPlaying,
   statusMessage,
-  openChat,
+  openSidebar,
 } = storeToRefs(generalStore)
 
 const closeWindow = () => {
@@ -112,9 +112,9 @@ const closeWindow = () => {
 }
 
 const toggleChat = async () => {
-  openChat.value = !openChat.value
+  openSidebar.value = !openSidebar.value
   await nextTick()
-  if (openChat.value) {
+  if (openSidebar.value) {
     ;(window as any).electron.resize({ width: 1200, height: 500 })
   } else {
     ;(window as any).electron.resize({ width: 500, height: 500 })
@@ -125,7 +125,7 @@ const toggleMinimize = async () => {
   isMinimized.value = !isMinimized.value
   await nextTick()
   if (isMinimized.value) {
-    if (openChat.value) {
+    if (openSidebar.value) {
       toggleChat()
       setTimeout(() => {
         ;(window as any).electron.mini({ minimize: true })

@@ -77,8 +77,7 @@ export const runAssistant = async (
     stream: true,
     temperature: 0.5,
     additional_instructions:
-      `Current datetime: ${new Date().toLocaleString()}. Memories related to user question: ${h}. Memories related to user question: ` +
-      h,
+      `Current datetime: ${new Date().toLocaleString()}. Memories related to user question: ${h}.`,
   })
   return run
 }
@@ -86,8 +85,7 @@ export const runAssistant = async (
 export const submitToolOutputs = async (
   threadId: string,
   runId: string,
-  toolOutputs: any[],
-  assistantId: string
+  toolOutputs: any[]
 ) => {
   try {
     return openai.beta.threads.runs.submitToolOutputs(threadId, runId, {

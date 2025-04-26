@@ -24,7 +24,7 @@ export const setIndex = async (
   ])
 }
 
-export const getRelatedMessages = async (topK = 5, embedding: any) => {
+export const getRelatedMessages = async (topK = 8, embedding: any) => {
   const results = await index.query({
     vector: embedding,
     topK,

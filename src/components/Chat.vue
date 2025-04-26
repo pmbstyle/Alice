@@ -5,13 +5,16 @@
       v-for="(message, index) in chatHistoryDisplay"
       :key="index"
       :class="{
-        'chat-start': message.role === 'assistant',
+        'chat-start': message.role === 'assistant' || message.role === 'system',
         'chat-end': message.role === 'user',
       }"
     >
       <div
         class="chat-bubble mb-2"
-        :class="{ 'chat-bubble-primary': message.role === 'assistant' }"
+        :class="{ 
+          'chat-bubble-primary': message.role === 'assistant',
+          'chat-bubble-success': message.role === 'system',
+        }"
         v-html="messageMarkdown(message.content[0].text.value)"
       ></div>
     </div>
@@ -30,9 +33,12 @@ const emit = defineEmits(['processRequest'])
 const { chatHistory } = storeToRefs(generalStore)
 const chatHistoryDisplay = computed(() => {
   let history = [...chatHistory.value]
-  history = history.filter(
-    item => !item.content[0].text.value.includes('[start screenshot]')
-  )
+  history = history.map((message) => {
+    if (message.content[0].text.value.includes("I'm checking that for you.\n Using")) {
+      message.role = 'system'
+    }
+    return message
+  })
   return history.reverse()
 })
 

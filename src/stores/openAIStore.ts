@@ -112,27 +112,28 @@ export const useConversationStore = defineStore('conversation', () => {
           const toolCalls =
             chunk.data.required_action.submit_tool_outputs.tool_calls
 
-          if (!messageId) {
-            chatHistory.value.unshift({
-              id: 'temp-' + Date.now(),
-              role: 'assistant',
-              content: [
-                {
-                  type: 'text',
-                  text: {
-                    value: `I'm checking that for you...`,
-                    annotations: [],
-                  },
-                },
-              ],
-            })
-          }
-
           const toolOutputs = []
           for (const toolCall of toolCalls) {
             if (toolCall.type === 'function') {
               const functionName = toolCall.function.name
               const functionArgs = toolCall.function.arguments
+
+              const formattedFunctionName = functionName.replace(/_/g, ' ')
+                .replace(/\b\w/g, char => char.toUpperCase())
+
+              chatHistory.value.unshift({
+                id: 'temp-' + Date.now(),
+                role: 'assistant',
+                content: [
+                  {
+                    type: 'text',
+                    text: {
+                      value: `I'm checking that for you.\n Using **${formattedFunctionName}** tool.`,
+                      annotations: [],
+                    },
+                  },
+                ],
+              })
 
               try {
                 const formattedFunctionName = functionName.replace(/_/g, ' ')

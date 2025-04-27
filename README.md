@@ -48,14 +48,6 @@ Tools:
 - [Jackett](https://github.com/Jackett/Jackett) (Torrent search aggregation)
 - [qBittorrent](https://www.qbittorrent.org/) (Torrent client for downloads)
 
-## Memory Model
-
-Alice's memory is structured into two distinct layers:
-- **Thoughts:** Dynamic, similarity-based recall of conversation fragments stored via vector embeddings in Pinecone.
-- **Memories:** Permanent, structured facts about Slava stored in Supabase, retrievable via specific memory tools (save, recall, delete).
-
-This system helps Alice maintain both lively ongoing conversations and deep personal context over time.
-
 ## Getting Started
 
 1. Clone the repository:  

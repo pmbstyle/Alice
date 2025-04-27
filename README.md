@@ -10,14 +10,18 @@ Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) th
 
 ## Features
 
-- **Voice recognition:** Speak to Alice using voice with Voice Activity Detection (VAD), transcribed via Groq's Whisper API.
-- **Text-to-speech:** Alice responds with natural-sounding speech using OpenAI's TTS API.
-- **Image recognition:** Capture screenshots and let Alice interpret them using OpenAI's Vision API.
-- **Memory system:**  
+- **Voice recognition.**
+  Speak to Alice using voice with Voice Activity Detection (VAD), transcribed via Groq's Whisper API.
+- **Text-to-speech.**
+  Alice responds with natural-sounding speech using OpenAI's TTS API.
+- **Image recognition.**
+  Capture screenshots and let Alice interpret them using OpenAI's Vision API.
+- **Memory system.**  
   - **Thoughts:** Past conversation fragments embedded in a Pinecone vector database for quick context inspiration.  
   - **Memories:** Long-term structured facts stored in a Supabase database, retrievable on demand via memory tools.
-- **Animated assistant appearance:** Several video states (standby, thinking, speaking) to make interactions lively.
-- **Function calling:**  
+- **Animated assistant appearance.**
+  Several video states (standby, thinking, speaking) to make interactions lively.
+- **Function calling.**  
   Data retrieval:
    - Web search
    - Website content extraction

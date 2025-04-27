@@ -128,7 +128,7 @@ export const useConversationStore = defineStore('conversation', () => {
                   {
                     type: 'text',
                     text: {
-                      value: `I'm checking that for you.\n Using **${formattedFunctionName}** tool.`,
+                      value: `🛠: Using **${formattedFunctionName}** tool`,
                       annotations: [],
                     },
                   },

@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { saveMemory, deleteMemory, getRecentMemories } from '../api/supabase/client'
 
 const TAVILY_API_KEY = import.meta.env.VITE_TAVILY_API_KEY
 const OPENWEATHERMAP_API_KEY = import.meta.env.VITE_OPENWEATHERMAP_API_KEY
@@ -32,6 +33,72 @@ interface TorrentSearchArgs {
 
 interface AddTorrentArgs {
   magnet: string
+}
+
+interface SaveMemoryArgs {
+  content: string
+  memoryType?: string
+}
+
+interface GetRecentMemoriesArgs {
+  memoryType?: string
+}
+
+interface DeleteMemoryArgs {
+  id: number
+}
+
+/**
+ * Saves a memory to the database.
+ */
+async function save_memory(args: SaveMemoryArgs) {
+  if (!args.content) {
+    return { success: false, error: 'Content is required.' }
+  }
+
+  try {
+    const { data, error } = await saveMemory(args.content, args.memoryType)
+    if (error) {
+      return { success: false, error: 'Error saving memory.' }
+    }
+    console.log('Memory saved:', data)
+    return { success: true, data }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Deletes a memory from the database.
+ */
+async function delete_memory(args: DeleteMemoryArgs) {
+  try {
+    const { data, error } = await deleteMemory(args.id)
+    if (error) {
+      return { success: false, error: 'Error deleting memory.' }
+    }
+    console.log('Memory deleted:', data)
+    return { success: true, data }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+/**
+ * Get the list of recent memories from the database.
+ */
+async function recall_memories(args: GetRecentMemoriesArgs) {
+  try {
+    const { data, error } = await getRecentMemories(20, args.memoryType)
+    if (error) {
+      console.error('Error fetching memories:', error)
+      return { success: false, error: error.message || 'Error fetching memories.' }
+    }
+    console.log('Memories fetched:', data)
+    return { success: true, data }
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Error fetching memories.' }
+  }
 }
 
 /**
@@ -528,6 +595,9 @@ async function add_torrent_to_qb(
 const functionRegistry: {
   [key: string]: (args: any) => Promise<FunctionResult>
 } = {
+  save_memory: save_memory,
+  delete_memory: delete_memory,
+  recall_memories: recall_memories,
   perform_web_search: perform_web_search,
   get_weather_forecast: get_weather_forecast,
   get_current_datetime: get_current_datetime,
@@ -539,6 +609,9 @@ const functionRegistry: {
 }
 
 const functionSchemas = {
+  save_memory: { required: ['content'] },
+  delete_memory: { required: ['id'] },
+  recall_memories: { required: [] },
   perform_web_search: { required: ['query'] },
   get_weather_forecast: { required: ['location'] },
   get_current_datetime: { required: ['format'] },

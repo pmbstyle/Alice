@@ -49,6 +49,7 @@
   "dependencies": {
     "@pinecone-database/pinecone": "^2.2.2",
     "@ricky0123/vad-web": "^0.0.22",
+    "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/vite": "^4.1.4",
     "fs": "^0.0.1-security",
     "groq-sdk": "^0.9.1",

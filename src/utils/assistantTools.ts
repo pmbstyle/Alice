@@ -2,6 +2,73 @@ export const assistantTools = [
   {
     type: 'function',
     function: {
+      name: 'save_memory',
+      description:
+        'Save a memory about User for future reference.',
+      parameters: {
+        type: 'object',
+        properties: {
+          content: {
+            type: 'string',
+            description:
+              'The memory content to store.',
+          },
+          memoryType: {
+            type: 'string',
+            description:
+              'The type of memory. Default is "general". This can be used to categorize memories.',
+            default: 'general',
+          },
+        },
+        required: ['content'],
+      },
+    },
+  },
+
+  {
+    type: 'function',
+    function: {
+      name: 'delete_memory',
+      description:
+        'Deletes a memory from the database.',
+      parameters: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'number',
+            description:
+              'The ID of the memory to delete.',
+          },
+        },
+        required: ['id'],
+      },
+    },
+  },
+
+  {
+    type: 'function',
+    function: {
+      name: 'get_recent_memories',
+      description:
+        'Get a list of recent memories.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: {
+            type: 'number',
+            description:
+              'The maximum number of memories to retrieve. Default is 20.',
+            default: 20,
+          },
+        },
+        required: [],
+      },
+    },
+  },
+
+  {
+    type: 'function',
+    function: {
       name: 'perform_web_search',
       description:
         'Searches the web for information on a given query. Use this for current events, general knowledge questions, or topics not covered by other tools.',

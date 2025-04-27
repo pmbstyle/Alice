@@ -13,7 +13,7 @@
         class="chat-bubble mb-2"
         :class="{ 
           'chat-bubble-primary': message.role === 'assistant',
-          'chat-bubble-success': message.role === 'system',
+          'chat-bubble-success text-xs': message.role === 'system',
         }"
         v-html="messageMarkdown(message.content[0].text.value)"
       ></div>
@@ -34,7 +34,7 @@ const { chatHistory } = storeToRefs(generalStore)
 const chatHistoryDisplay = computed(() => {
   let history = [...chatHistory.value]
   history = history.map((message) => {
-    if (message.content[0].text.value.includes("I'm checking that for you.\n Using")) {
+    if (message.content[0].text.value.includes("🛠: Using")) {
       message.role = 'system'
     }
     return message

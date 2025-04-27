@@ -10,57 +10,68 @@ Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) th
 
 ## Features
 
-- **Voice recognition:** Users can speak to Alice with VAD(Voice Activity Detection), and their speech is transcribed into text using Groq's Whisper API.
-- **Text-to-speech:** Alice can respond with synthesized speech using OpenAI's TTS API.
-- **Image recognition:** Users can take screenshots, and Alice can recognize the contents of the image using OpenAI's Vision API.
-- **Conversation history:** Memory. The application stores and retrieves relevant conversation history to provide context-aware responses.
-- **Pinecone vector database:** Long-term memory. Conversation messages are embedded and stored in a Pinecone vector database to retrieve relevant memories efficiently.
-- **Animated assistant appearance:** Several video states (pre-render, work in progress, more to come):
-  - Stand by
-  - Thinking
-  - Speaking
-- **Function calling:**
-
+- **Voice recognition:** Speak to Alice using voice with Voice Activity Detection (VAD), transcribed via Groq's Whisper API.
+- **Text-to-speech:** Alice responds with natural-sounding speech using OpenAI's TTS API.
+- **Image recognition:** Capture screenshots and let Alice interpret them using OpenAI's Vision API.
+- **Memory system:**  
+  - **Thoughts:** Past conversation fragments embedded in a Pinecone vector database for quick context inspiration.  
+  - **Memories:** Long-term structured facts stored in a Supabase database, retrievable on demand via memory tools.
+- **Animated assistant appearance:** Several video states (standby, thinking, speaking) to make interactions lively.
+- **Function calling:**  
   Data retrieval:
    - Web search
-   - Get website content
-   - Search torrents
-   - Get the weather for a location
-   - Be aware of the current date and time
+   - Website content extraction
+   - Torrent search
+   - Weather checking
+   - Current date and time awareness
 
-  Computer, software use:
-   - Open applications on user's computer
-   - Open links in user's browser
-   - See user's clipboard content
-   - Write to user's clipboard
-   - Add found torrents to the client
+  Computer and software use:
+   - Open applications
+   - Open URLs
+   - Read/write clipboard content
+   - Add torrents to the download client
 
 ## Technologies Used
 
-- [Vue.js](https://vuejs.org/) (JS framework)
-- [Electron](https://www.electronjs.org/) (Desktop application framework)
-- [Pinia](https://pinia.vuejs.org/) (App state Management)
+- [Vue.js](https://vuejs.org/) (Frontend framework)
+- [Electron](https://www.electronjs.org/) (Desktop app framework)
+- [Pinia](https://pinia.vuejs.org/) (App state management)
 - [OpenAI API](https://platform.openai.com/docs/api-reference/introduction) (GPT-4.1-mini, TTS, Vision)
-- [Groq API](https://console.groq.com/) (Whisper: STT)
-- [Pinecone](https://www.pinecone.io/) (Vector Database for long-term memory)
-- [ChatGPT 4o](https://chat.com) (Native image generation: Alice image)
-- [Kling 1.6 pro (fal.ai)](https://fal.ai/) (Image-to-video: Alice animation)
-  
+- [Groq API](https://console.groq.com/) (Whisper: speech-to-text)
+- [Pinecone](https://www.pinecone.io/) (Vector database for thought retrieval)
+- [Supabase](https://supabase.com/) (PostgreSQL cloud database for long-term memory storage)
+- [ChatGPT 4o](https://chat.openai.com) (Native image generation: Alice image)
+- [Kling 1.6 Pro (fal.ai)](https://fal.ai/) (Image-to-video animation: Alice's animated states)
+
 Tools:
-- [TavilyAI](https://tavily.com) (Web search & crawler)
-- [Jackett](https://github.com/Jackett/Jackett) (Torrent search)
-- [qBittorrent](https://www.qbittorrent.org/) (Torrent client)
+- [TavilyAI](https://tavily.com) (Web search and crawler)
+- [Jackett](https://github.com/Jackett/Jackett) (Torrent search aggregation)
+- [qBittorrent](https://www.qbittorrent.org/) (Torrent client for downloads)
+
+## Memory Model
+
+Alice's memory is structured into two distinct layers:
+- **Thoughts:** Dynamic, similarity-based recall of conversation fragments stored via vector embeddings in Pinecone.
+- **Memories:** Permanent, structured facts about Slava stored in Supabase, retrievable via specific memory tools (save, recall, delete).
+
+This system helps Alice maintain both lively ongoing conversations and deep personal context over time.
 
 ## Getting Started
 
-1. Clone the repository: `git clone https://github.com/pmbstyle/Alice.git`
-2. Install dependencies: `npm install`
-3. Set up an assistant on the [OpenAI platform](https://platform.openai.com/assistants), add tools if needed
-4. Set up environment variables with your OpenAI & Groq, and Pinecone API keys.
-5. (optional) Set up environment variables for tool calling (you can define tools to use in the [Assistant API dashboard](https://platform.openai.com/assistants))
-6. Run the development server: `npm run dev`
-7. Build the Electron app: `npm run build`
-8. Install the app from the `release` folder
-9. Enjoy =)
+1. Clone the repository:  
+   `git clone https://github.com/pmbstyle/Alice.git`
+2. Install dependencies:  
+   `npm install`
+3. Set up an assistant on the [OpenAI Platform](https://platform.openai.com/assistants), define tools if needed.
+4. Set up environment variables with your OpenAI, Groq, Pinecone, and Supabase API keys.
+5. (Optional) Set up additional tool keys for web search, torrent management, etc.
+6. Run the development server:  
+   `npm run dev`
+7. Build the Electron app:  
+   `npm run build`
+8. Install the app from the `release` folder.
+9. Enjoy your personal AI companion! 🧠💬
 
-Feel free to open an issue or contact me directly to help you figure out how to set it up.
+---
+
+Feel free to open an issue or contact me directly if you need help setting Alice up!

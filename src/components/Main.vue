@@ -267,6 +267,11 @@ const playNextAudio = async () => {
     stopListening()
   }
 
+  if (audioPlayer.value) {
+    audioPlayer.value.pause()
+    audioPlayer.value.removeAttribute('src')
+  }
+
   isPlaying.value = true
   const audioResponse = generalStore.audioQueue.shift()
 
@@ -296,7 +301,11 @@ const playNextAudio = async () => {
           .read()
           .then(({ done, value }) => {
             if (done) {
-              mediaSource.endOfStream()
+              try {
+                mediaSource.endOfStream()
+              } catch (e) {
+                console.warn('MediaSource already ended or closed:', e)
+              }
               return
             }
             try {
@@ -309,10 +318,17 @@ const playNextAudio = async () => {
                 sourceBuffer.addEventListener(
                   'updateend',
                   () => {
-                    sourceBuffer.appendBuffer(value)
-                    sourceBuffer.addEventListener('updateend', pushChunk, {
-                      once: true,
-                    })
+                    try {
+                      sourceBuffer.appendBuffer(value)
+                      sourceBuffer.addEventListener('updateend', pushChunk, {
+                        once: true,
+                      })
+                    } catch (e) {
+                      console.warn(
+                        'Error appending buffer, source may be closed:',
+                        e
+                      )
+                    }
                   },
                   { once: true }
                 )

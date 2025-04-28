@@ -58,7 +58,7 @@ Tools:
    `git clone https://github.com/pmbstyle/Alice.git`
 2. Install dependencies:  
    `npm install`
-3. Set up an assistant on the [OpenAI Platform](https://platform.openai.com/assistants), define tools if needed.
+3. Set up an assistant on the [OpenAI Platform](https://platform.openai.com/assistants), set system prompt ([example](https://github.com/pmbstyle/Alice/blob/main/docs/systemPrompt.md)), and define tools if needed.
 4. Set up environment variables with your OpenAI, Groq, Pinecone, and Supabase API keys.
 5. (Optional) Set up additional tool keys for web search, torrent management, etc.
 6. Run the development server:  

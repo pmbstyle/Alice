@@ -20,7 +20,7 @@ Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) th
   - **Thoughts:** Past conversation fragments embedded in a Pinecone vector database for quick context inspiration.  
   - **Memories:** Long-term structured facts stored in a Supabase database, retrievable on demand via memory tools.
 - **Animated assistant appearance.**
-  Several video states (standby, thinking, speaking) to make interactions lively.
+  Several video states (standby, thinking, speaking) are used to make interactions lively.
 - **Function calling.**  
   Data retrieval:
    - Web search

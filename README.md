@@ -58,15 +58,14 @@ Tools:
    `git clone https://github.com/pmbstyle/Alice.git`
 2. Install dependencies:  
    `npm install`
-3. Set up an assistant on the [OpenAI Platform](https://platform.openai.com/assistants), define tools if needed.
-4. Set up environment variables with your OpenAI, Groq, Pinecone, and Supabase API keys.
-5. (Optional) Set up additional tool keys for web search, torrent management, etc.
-6. Run the development server:  
+3. Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupInstructions.md) to create all needed API references and set up your environment variables in a `.env` file.  
+   Note: You can use the example `.env.example` file as a reference.
+4. Run the development server:  
    `npm run dev`
-7. Build the Electron app:  
+5. Build the Electron app:  
    `npm run build`
-8. Install the app from the `release` folder.
-9. Enjoy your personal AI companion! 🧠💬
+6. Install the app from the `release` folder.
+7. Enjoy your personal AI companion! 🧠💬
 
 ---
 

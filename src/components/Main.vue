@@ -243,20 +243,20 @@ const togglePlaying = () => {
   }
 }
 
-generalStore.playAudio = async (audioResponse: Response) => {
+generalStore.playAudio = async (audioResponse: Response, tool = false) => {
   if (!audioPlayer.value) return
 
   generalStore.audioQueue.push(audioResponse)
 
   if (!isPlaying.value) {
-    playNextAudio()
+    playNextAudio(tool)
   }
 }
 
-const playNextAudio = async () => {
+const playNextAudio = async (tool = false) => {
   if (generalStore.audioQueue.length === 0) {
     isPlaying.value = false
-    statusMessage.value = 'Stand by'
+    statusMessage.value = tool ? 'Thinking...' : 'Stand by'
     if (isRecordingRequested.value) {
       startListening()
     }
@@ -282,7 +282,7 @@ const playNextAudio = async () => {
     audioPlayer.value.addEventListener(
       'ended',
       () => {
-        playNextAudio()
+        playNextAudio(tool)
       },
       { once: true }
     )

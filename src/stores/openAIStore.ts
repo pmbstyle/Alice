@@ -135,14 +135,79 @@ export const useConversationStore = defineStore('conversation', () => {
 
               try {
                 const audioResponse = await ttsStream(toolStatusMessage)
-                generalStore.playAudio(audioResponse)
+                generalStore.playAudio(audioResponse, true)
               } catch (err) {
                 console.warn('TTS failed for system message:', err)
               }
 
+              const fillerLines = [
+                'Still looking... one sec.',
+                'Let me double-check that.',
+                'Almost got it...',
+                'Going deeper...',
+                'Hold tight—this one’s tricky.',
+                'Sneaking past digital dragons...',
+                "This one's taking a moment...",
+                'Doing a deep scan... cyber-style.',
+                'Almost there, I can feel it.',
+                'Beep boop… still thinking.',
+                "Ugh, data's being dramatic today.",
+              ]
+
+              let fillerTimer: ReturnType<typeof setTimeout> | null = null
+              let fillerPlayed = false
+              let stopFiller = false
+
+              async function playFillerLoop() {
+                await new Promise(resolve =>
+                  setTimeout(resolve, 10000 + Math.random() * 500)
+                )
+
+                while (!stopFiller) {
+                  const line =
+                    fillerLines[Math.floor(Math.random() * fillerLines.length)]
+                  try {
+                    chatHistory.value.unshift({
+                      id: 'temp-' + Date.now(),
+                      role: 'assistant',
+                      content: [
+                        {
+                          type: 'text',
+                          text: {
+                            value: line,
+                            annotations: [],
+                          },
+                        },
+                      ],
+                    })
+                    const fillerAudio = await ttsStream(line)
+                    generalStore.playAudio(fillerAudio, true)
+                    fillerPlayed = true
+                  } catch (err) {
+                    console.warn('TTS filler failed:', err)
+                  }
+
+                  await new Promise(resolve =>
+                    setTimeout(resolve, 10000 + Math.random() * 2000)
+                  )
+                }
+              }
+
+              playFillerLoop()
+
               try {
-                statusMessage.value = 'Processing...'
+                statusMessage.value = 'Thinking...'
+
                 const result = await executeFunction(functionName, functionArgs)
+
+                stopFiller = true
+                if (fillerTimer) clearTimeout(fillerTimer)
+
+                if (fillerPlayed) {
+                  await new Promise(resolve => setTimeout(resolve, 400))
+                }
+
+                statusMessage.value = 'Processing...'
 
                 toolOutputs.push({
                   tool_call_id: toolCall.id,
@@ -154,6 +219,9 @@ export const useConversationStore = defineStore('conversation', () => {
                   error
                 )
                 statusMessage.value = `Error executing function`
+
+                stopFiller = true
+                if (fillerTimer) clearTimeout(fillerTimer)
 
                 toolOutputs.push({
                   tool_call_id: toolCall.id,
@@ -235,7 +303,7 @@ export const useConversationStore = defineStore('conversation', () => {
 
       if (currentSentence.trim().length > 0) {
         const audioResponse = await ttsStream(currentSentence)
-        generalStore.playAudio(audioResponse, true)
+        generalStore.playAudio(audioResponse)
       }
     } catch (error) {
       console.error('Error in chat process:', error)

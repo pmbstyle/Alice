@@ -117,18 +117,16 @@ export const useConversationStore = defineStore('conversation', () => {
             if (toolCall.type === 'function') {
               const functionName = toolCall.function.name
               const functionArgs = toolCall.function.arguments
-
-              const formattedFunctionName = functionName.replace(/_/g, ' ')
-                .replace(/\b\w/g, char => char.toUpperCase())
+              const toolStatusMessage = getToolStatusMessage(functionName)
 
               chatHistory.value.unshift({
                 id: 'temp-' + Date.now(),
-                role: 'assistant',
+                role: 'system',
                 content: [
                   {
                     type: 'text',
                     text: {
-                      value: `🛠: Using **${formattedFunctionName}** tool`,
+                      value: toolStatusMessage,
                       annotations: [],
                     },
                   },
@@ -188,6 +186,35 @@ export const useConversationStore = defineStore('conversation', () => {
                   },
                 ],
               })
+            }
+          }
+
+          function getToolStatusMessage(toolName: string): string {
+            switch (toolName) {
+              case 'perform_web_search':
+                return '🔍 Searching the web...'
+              case 'get_weather_forecast':
+                return '🌦️ Checking the skies...'
+              case 'get_current_datetime':
+                return '🕒 Looking at the clock...'
+              case 'open_path':
+                return '📂 Opening that for you...'
+              case 'manage_clipboard':
+                return '📋 Working with your clipboard...'
+              case 'get_website_context':
+                return '🌐 Reading the page...'
+              case 'search_torrents':
+                return '🧲 Looking through the torrent net...'
+              case 'add_torrent_to_qb':
+                return '🚀 Starting your download...'
+              case 'save_memory':
+                return '🧠 Got it, remembering that...'
+              case 'recall_memories':
+                return '🧠 Let me think back...'
+              case 'delete_memory':
+                return '🗑️ Forgetting that now...'
+              default:
+                return '⚙️ Working on that...'
             }
           }
         }

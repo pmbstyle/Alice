@@ -11,9 +11,9 @@
     >
       <div
         class="chat-bubble mb-2"
-        :class="{ 
+        :class="{
           'chat-bubble-primary': message.role === 'assistant',
-          'chat-bubble-success text-xs': message.role === 'system',
+          'chat-bubble-success': message.role === 'system',
         }"
         v-html="messageMarkdown(message.content[0].text.value)"
       ></div>
@@ -31,15 +31,8 @@ const generalStore = useGeneralStore()
 
 const emit = defineEmits(['processRequest'])
 const { chatHistory } = storeToRefs(generalStore)
-const chatHistoryDisplay = computed(() => {
-  let history = [...chatHistory.value]
-  history = history.map((message) => {
-    if (message.content[0].text.value.includes("🛠: Using")) {
-      message.role = 'system'
-    }
-    return message
-  })
-  return history.reverse()
-})
 
+const chatHistoryDisplay = computed(() => {
+  return [...chatHistory.value].reverse()
+})
 </script>

@@ -134,6 +134,13 @@ export const useConversationStore = defineStore('conversation', () => {
               })
 
               try {
+                const audioResponse = await ttsStream(toolStatusMessage)
+                generalStore.playAudio(audioResponse)
+              } catch (err) {
+                console.warn('TTS failed for system message:', err)
+              }
+
+              try {
                 statusMessage.value = 'Processing...'
                 const result = await executeFunction(functionName, functionArgs)
 

@@ -38,7 +38,7 @@
       @click="takeScreenShot"
     >
       <img
-        :src="takingScreenShot ? uploadIcon : cameraIcon"
+        :src="cameraIcon"
         class="indicator indicator-side"
         :class="{ mini: isMinimized }"
       />
@@ -84,7 +84,6 @@ import {
   miniIcon,
   maxiIcon,
   cameraIcon,
-  uploadIcon,
   closeIcon,
 } from '../utils/assetsImport.ts'
 
@@ -100,7 +99,6 @@ const props = defineProps({
 const emit = defineEmits(['takeScreenShot', 'togglePlaying', 'toggleRecording'])
 const {
   isMinimized,
-  takingScreenShot,
   isRecordingRequested,
   isPlaying,
   statusMessage,

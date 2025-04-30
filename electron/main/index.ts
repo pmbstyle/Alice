@@ -116,6 +116,7 @@ async function createWindow() {
 
   ipcMain.handle('hide-overlay', () => {
     overlayWindow?.hide()
+    win?.webContents.send('overlay-closed')
     return true
   })
   ipcMain.handle('save-screenshot', (event, dataURL) => {

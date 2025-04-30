@@ -223,7 +223,7 @@ const togglePlaying = () => {
   if (isPlaying.value) {
     audioPlayer.value?.pause()
     updateVideo.value('STAND_BY')
-    statusMessage.value = 'Stand by'
+    statusMessage.value = isRecordingRequested.value ? 'Listening' : 'Stand by'
 
     if (audioContext.value) {
       audioContext.value.close()
@@ -256,7 +256,7 @@ generalStore.playAudio = async (audioResponse: Response, tool = false) => {
 const playNextAudio = async (tool = false) => {
   if (generalStore.audioQueue.length === 0) {
     isPlaying.value = false
-    statusMessage.value = tool ? 'Thinking...' : 'Stand by'
+    statusMessage.value = tool ? 'Thinking...' : isRecordingRequested.value ? 'Listening' : 'Stand by'
     if (isRecordingRequested.value) {
       startListening()
     }
@@ -438,6 +438,10 @@ onMounted(async () => {
       } finally {
         takingScreenShot.value = false
       }
+    })
+    window.ipcRenderer.on('overlay-closed', () => {
+      takingScreenShot.value = false
+      statusMessage.value = isRecordingRequested.value ? 'Listening' : 'Stand by'
     })
   }
 })

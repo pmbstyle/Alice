@@ -49,6 +49,7 @@ async function createWindow() {
     height: 500,
     resizable: true,
     alwaysOnTop: true,
+    hasShadow: false,
     webPreferences: {
       preload,
     },
@@ -250,8 +251,11 @@ async function createOverlayWindow() {
     transparent: true,
     frame: false,
     alwaysOnTop: true,
-    fullscreen: true,
+    fullscreen: false,
     skipTaskbar: true,
+    hasShadow: false,
+    resizable: false,
+    backgroundColor: '#00000000',
     webPreferences: {
       preload,
     },

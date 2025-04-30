@@ -6,11 +6,8 @@ import speakerIconInactive from '../assets/images/speaker-inactive.svg'
 import chatIcon from '../assets/images/chat.svg'
 import miniIcon from '../assets/images/mini.svg'
 import maxiIcon from '../assets/images/maxi.svg'
-import eyeIcon from '../assets/images/eye.svg'
-import eyeActiveIcon from '../assets/images/eye-active.svg'
 import cameraIcon from '../assets/images/camera.svg'
-import uploadIcon from '../assets/images/upload.svg'
-import closeIcon from '../assets/images/close.svg'
+import hamburgerIcon from '../assets/images/hamburger.svg'
 
 export {
   bg,
@@ -21,9 +18,6 @@ export {
   chatIcon,
   miniIcon,
   maxiIcon,
-  eyeIcon,
-  eyeActiveIcon,
   cameraIcon,
-  uploadIcon,
-  closeIcon,
+  hamburgerIcon,
 }

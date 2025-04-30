@@ -60,14 +60,29 @@
     class="absolute w-full flex justify-center z-80 top-2 inside-actions"
     v-if="props.isElectron"
   >
-    <button
-      class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side close tooltip tooltip-bottom"
-      data-tip="Close the App"
-      :class="{ 'btn-sm': isMinimized }"
-      @click="closeWindow()"
-    >
-      <img :src="closeIcon" class="indicator indicator-side" />
-    </button>
+    <div class="dropdown dropdown-hover dropdown-center">
+      <div
+        tabindex="0"
+        role="button"
+        class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side close tooltip tooltip-bottom mb-2"
+        :class="{ 'btn-sm': isMinimized }"
+      >
+        <img :src="hamburgerIcon" class="indicator indicator-side" />
+      </div>
+      <ul
+        tabindex="0"
+        class="dropdown-content menu bg-black/60 rounded-box z-1 w-36 p-2 shadow-sm"
+      >
+        <!-- <li>
+          <a>Settings</a>
+        </li> -->
+        <li>
+          <a @click="closeWindow()">
+            Close app
+          </a>
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -84,7 +99,7 @@ import {
   miniIcon,
   maxiIcon,
   cameraIcon,
-  closeIcon,
+  hamburgerIcon,
 } from '../utils/assetsImport.ts'
 
 const generalStore = useGeneralStore()

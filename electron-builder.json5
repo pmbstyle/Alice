@@ -10,6 +10,7 @@
   files: ['dist', 'dist-electron'],
   mac: {
     target: ['dmg'],
+    icon: 'public/app_logo.png',
     artifactName: '${productName}-Mac-${version}-Installer.${ext}',
   },
   win: {

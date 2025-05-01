@@ -13,6 +13,11 @@ on:
       - '.gitignore'
       - '.github/**'
       - '!.github/workflows/pr-build.yml'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Pull Request Number'
+        required: true
 
 jobs:
   build:
@@ -26,7 +31,14 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.event.pull_request.head.sha || github.ref }}
+
+      - name: Checkout PR Branch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          gh pr checkout ${{ github.event.inputs.pr_number }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v3

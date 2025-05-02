@@ -48,7 +48,7 @@
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^2.2.2",
-    "@ricky0123/vad-web": "^0.0.22",
+    "@ricky0123/vad-web": "^0.0.23",
     "@supabase/supabase-js": "^2.49.4",
     "@tailwindcss/vite": "^4.1.4",
     "fs": "^0.0.1-security",

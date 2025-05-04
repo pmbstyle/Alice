@@ -14,6 +14,7 @@ import {
 import { transcribeAudio } from '../api/openAI/stt'
 import { useGeneralStore } from './generalStore'
 import { executeFunction } from '../utils/functionCaller'
+import { useAudioProcessing } from '../composables/useAudioProcessing'
 
 export const useConversationStore = defineStore('conversation', () => {
   const {
@@ -23,8 +24,12 @@ export const useConversationStore = defineStore('conversation', () => {
     updateVideo,
     isProcessingRequest,
     isTTSProcessing,
+    isTTSEnabled,
+    isRecordingRequested,
   } = storeToRefs(useGeneralStore())
   const generalStore = useGeneralStore()
+
+  const { startListening } = useAudioProcessing()
 
   const assistant = ref<string>('')
   getAssistantData().then(data => {
@@ -90,9 +95,13 @@ export const useConversationStore = defineStore('conversation', () => {
         }
 
         if (textChunk.match(/[.!?]\s*$/)) {
-          const audioResponse = await ttsStream(currentSentence)
-          generalStore.playAudio(audioResponse)
-          currentSentence = ''
+          if (textChunk.match(/[.!?]\s*$/) && generalStore.isTTSEnabled) {
+            const audioResponse = await ttsStream(currentSentence)
+            generalStore.playAudio(audioResponse)
+            currentSentence = ''
+          } else if (textChunk.match(/[.!?]\s*$/)) {
+            currentSentence = ''
+          }
         }
       }
     }
@@ -326,6 +335,14 @@ export const useConversationStore = defineStore('conversation', () => {
       generalStore.storeMessage = false
       isProcessingRequest.value = false
       isTTSProcessing.value = false
+      if (!isTTSEnabled.value) {
+        if (isRecordingRequested.value) {
+          startListening()
+          statusMessage.value = 'Listening'
+        } else {
+          statusMessage.value = 'Stand by'
+        }
+      }
     }
   }
 

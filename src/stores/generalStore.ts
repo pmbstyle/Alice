@@ -39,23 +39,36 @@ export const useGeneralStore = defineStore('general', () => {
 
   const takingScreenShot = ref<boolean>(false)
   const updateVideo = ref<(type: string) => void>(() => {})
-  const playAudio = ref<(audio: string, isTTS: boolean) => void>(() => {})
+  const playAudio = ref<(audio: Response, isTTS?: boolean) => void>(() => {})
+  const isTTSEnabled = ref<boolean>(true)
+  const safetyTimer = ref<number | null>(null)
 
-  const setProvider = (provider: string) => {
-    provider = provider || 'openai'
+  const setProvider = (providerName: string) => {
+    provider.value = providerName || 'openai'
   }
 
-  watch(statusMessage, (newStatus) => {
-    switch (newStatus) {
-      case 'Speaking...':
-        updateVideo.value('SPEAKING')
-        break
-      case 'Thinking...':
-        updateVideo.value('PROCESSING')
-        break
-      default:
-        updateVideo.value('STAND_BY')
-        break
+  function startRecording() {
+    isRecording.value = true
+  }
+
+  function stopRecording() {
+    isRecording.value = false
+  }
+
+  watch(statusMessage, newStatus => {
+    console.log('Status changed:', newStatus)
+    if (typeof updateVideo.value === 'function') {
+      switch (newStatus) {
+        case 'Speaking...':
+          updateVideo.value('SPEAKING')
+          break
+        case 'Thinking...':
+          updateVideo.value('PROCESSING')
+          break
+        default:
+          updateVideo.value('STAND_BY')
+          break
+      }
     }
   })
 
@@ -84,5 +97,10 @@ export const useGeneralStore = defineStore('general', () => {
     updateVideo,
     audioQueue,
     isTTSProcessing,
+    startRecording,
+    stopRecording,
+    playAudio,
+    isTTSEnabled,
+    safetyTimer,
   }
 })

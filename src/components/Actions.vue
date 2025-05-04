@@ -1,7 +1,5 @@
 <template>
-  <div
-    class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black bg-black/60"
-  >
+  <div class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black/60">
     <div class="pb-2 rounded-lg flex items-center justify-center gap-8">
       <img
         :src="isRecordingRequested ? micIconActive : micIcon"
@@ -10,7 +8,7 @@
         @click="toggleRecording"
       />
       <img
-        :src="!isPlaying ? speakerIconInactive : speakerIcon"
+        :src="!isTTSEnabled ? speakerIconInactive : speakerIcon"
         class="indicator"
         :class="{ mini: isMinimized }"
         @click="togglePlaying"
@@ -71,15 +69,13 @@
       </div>
       <ul
         tabindex="0"
-        class="dropdown-content menu bg-black/60 rounded-box z-1 w-36 p-2 shadow-sm"
+        class="dropdown-content menu bg-black/60 rounded-box z-1 w-36 p-2"
       >
         <!-- <li>
           <a>Settings</a>
         </li> -->
         <li>
-          <a @click="closeWindow()">
-            Close app
-          </a>
+          <a @click="closeWindow()"> Close app </a>
         </li>
       </ul>
     </div>
@@ -109,16 +105,15 @@ const props = defineProps({
     type: Boolean,
     default: false,
   },
+  isTTSEnabled: {
+    type: Boolean,
+    default: true,
+  },
 })
 
 const emit = defineEmits(['takeScreenShot', 'togglePlaying', 'toggleRecording'])
-const {
-  isMinimized,
-  isRecordingRequested,
-  isPlaying,
-  statusMessage,
-  openSidebar,
-} = storeToRefs(generalStore)
+const { isMinimized, isRecordingRequested, statusMessage, openSidebar } =
+  storeToRefs(generalStore)
 
 const closeWindow = () => {
   ;(window as any).electron.closeApp()

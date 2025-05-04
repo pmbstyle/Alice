@@ -37,6 +37,7 @@
             @togglePlaying="togglePlaying"
             @toggleRecording="toggleRecording"
             :isElectron="isElectron"
+            :isTTSEnabled="isTTSEnabled"
           />
         </div>
       </div>
@@ -50,305 +51,46 @@ import Actions from './Actions.vue'
 import Sidebar from './Sidebar.vue'
 import { bg } from '../utils/assetsImport'
 import { setVideo } from '../utils/videoProcess'
-import { float32ArrayToWav } from '../utils/audioProcess'
-import { ref, onMounted, nextTick } from 'vue'
+import { onMounted, nextTick } from 'vue'
 import { useGeneralStore } from '../stores/generalStore'
 import { useConversationStore } from '../stores/openAIStore'
 import { storeToRefs } from 'pinia'
-import * as vad from '@ricky0123/vad-web'
+import { useAudioProcessing } from '../composables/useAudioProcessing'
+import { useAudioPlayback } from '../composables/useAudioPlayback'
+import { useScreenshot } from '../composables/useScreenshot'
+import eventBus from '../utils/eventBus'
 
 const generalStore = useGeneralStore()
 const conversationStore = useConversationStore()
 const isElectron = typeof window !== 'undefined' && window?.electron
 
+const { toggleRecording, startListening, stopListening } = useAudioProcessing()
+const { setupAudioPlayback, togglePlaying } = useAudioPlayback(
+  startListening,
+  stopListening
+)
 const {
-  recognizedText,
-  isRecordingRequested,
-  isRecording,
-  audioPlayer,
+  screenShot,
+  screenshotReady,
+  takeScreenShot,
+  setupScreenshotListeners,
+} = useScreenshot()
+
+const {
   aiVideo,
   videoSource,
   isPlaying,
   statusMessage,
-  audioContext,
-  audioSource,
+  audioPlayer,
   chatInput,
   openSidebar,
   isMinimized,
   storeMessage,
-  takingScreenShot,
   updateVideo,
-  isTTSProcessing,
+  isTTSEnabled,
 } = storeToRefs(generalStore)
+
 generalStore.setProvider('openai')
-
-let mediaRecorder: MediaRecorder | null = null
-let audioChunks: BlobPart[] = []
-let myvad: vad.MicVAD | null = null
-const isProcessingAudio = ref(false)
-const processingDebounceTimer = ref<number | null>(null)
-
-const screenShot = ref<string>('')
-const screenshotReady = ref<boolean>(false)
-
-const startListening = () => {
-  if (!isRecordingRequested.value || isTTSProcessing.value) return
-  statusMessage.value = 'Listening'
-  recognizedText.value = ''
-
-  if (myvad) {
-    try {
-      myvad.pause()
-      myvad = null
-    } catch (error) {
-      console.error('Error cleaning up previous VAD instance:', error)
-    }
-  }
-
-  vad.MicVAD.new({
-    baseAssetPath: './',
-    onnxWASMBasePath: './',
-    onSpeechStart: () => {
-      isRecording.value = true
-    },
-    onSpeechEnd: (audio: Float32Array) => {
-      if (isRecording.value && !isProcessingAudio.value) {
-        stopRecording(audio)
-      }
-    },
-  })
-    .then(vadInstance => {
-      myvad = vadInstance
-      myvad.start()
-    })
-    .catch(err => {
-      console.error('VAD initialization error:', err)
-      statusMessage.value = 'Error initializing VAD'
-    })
-}
-
-const stopRecording = (audio: Float32Array) => {
-  if (mediaRecorder) {
-    mediaRecorder.stop()
-    mediaRecorder = null
-  }
-
-  if (processingDebounceTimer.value) {
-    clearTimeout(processingDebounceTimer.value)
-  }
-
-  processingDebounceTimer.value = window.setTimeout(() => {
-    if (!isProcessingAudio.value) {
-      processAudioRecording(audio)
-    }
-  }, 300)
-}
-
-const processAudioRecording = async (audio?: Float32Array) => {
-  if (isProcessingAudio.value) return
-
-  try {
-    isProcessingAudio.value = true
-    statusMessage.value = 'Processing audio...'
-
-    if (audio && audio.length > 0) {
-      const wavBuffer = float32ArrayToWav(audio, 16000)
-      const transcription =
-        await conversationStore.transcribeAudioMessage(wavBuffer)
-
-      recognizedText.value = transcription
-
-      if (transcription.trim()) {
-        processRequest(transcription)
-      } else {
-        statusMessage.value = 'No speech detected'
-      }
-    } else {
-      statusMessage.value = 'No audio data captured'
-    }
-  } catch (error) {
-    console.error('Error processing audio:', error)
-    statusMessage.value = 'Error processing audio'
-  } finally {
-    audioChunks = []
-    stopListening()
-    isProcessingAudio.value = false
-  }
-}
-
-const stopListening = () => {
-  if (myvad) {
-    try {
-      myvad.pause()
-      myvad.destroy()
-      myvad = null
-    } catch (error) {
-      console.error('Error stopping VAD:', error)
-    }
-  }
-
-  if (processingDebounceTimer.value) {
-    clearTimeout(processingDebounceTimer.value)
-    processingDebounceTimer.value = null
-  }
-
-  isRecording.value = false
-}
-
-const toggleRecording = () => {
-  isRecordingRequested.value = !isRecordingRequested.value
-
-  if (!isRecordingRequested.value) {
-    stopListening()
-  } else {
-    if (myvad) {
-      try {
-        myvad.pause()
-        myvad = null
-      } catch (error) {
-        console.error('Error cleaning up VAD:', error)
-      }
-    }
-    isProcessingAudio.value = false
-    if (processingDebounceTimer.value) {
-      clearTimeout(processingDebounceTimer.value)
-      processingDebounceTimer.value = null
-    }
-    isRecording.value = true
-    startListening()
-  }
-}
-
-const togglePlaying = () => {
-  if (isPlaying.value) {
-    audioPlayer.value?.pause()
-    updateVideo.value('STAND_BY')
-    statusMessage.value = isRecordingRequested.value ? 'Listening' : 'Stand by'
-
-    if (audioContext.value) {
-      audioContext.value.close()
-      audioContext.value = null
-    }
-
-    generalStore.audioQueue = []
-
-    isPlaying.value = false
-    if (isRecordingRequested.value) {
-      isRecording.value = true
-      startListening()
-    }
-  } else {
-    audioSource.value?.start()
-    isPlaying.value = true
-  }
-}
-
-generalStore.playAudio = async (audioResponse: Response, tool = false) => {
-  if (!audioPlayer.value) return
-
-  generalStore.audioQueue.push(audioResponse)
-
-  if (!isPlaying.value) {
-    playNextAudio(tool)
-  }
-}
-
-const playNextAudio = async (tool = false) => {
-  if (generalStore.audioQueue.length === 0) {
-    isPlaying.value = false
-    statusMessage.value = tool ? 'Thinking...' : isRecordingRequested.value ? 'Listening' : 'Stand by'
-    if (isRecordingRequested.value) {
-      startListening()
-    }
-    return
-  }
-
-  if (isRecording.value) {
-    stopListening()
-  }
-
-  if (audioPlayer.value) {
-    audioPlayer.value.pause()
-    audioPlayer.value.removeAttribute('src')
-  }
-
-  isPlaying.value = true
-  const audioResponse = generalStore.audioQueue.shift()
-
-  if (audioPlayer.value && audioResponse) {
-    const mediaSource = new MediaSource()
-    audioPlayer.value.src = URL.createObjectURL(mediaSource)
-
-    audioPlayer.value.addEventListener(
-      'ended',
-      () => {
-        playNextAudio(tool)
-      },
-      { once: true }
-    )
-
-    mediaSource.addEventListener('sourceopen', () => {
-      const sourceBuffer = mediaSource.addSourceBuffer('audio/mpeg')
-      const reader = audioResponse.body?.getReader()
-
-      if (!reader) {
-        console.error('Failed to get reader from audio response body.')
-        return
-      }
-
-      function pushChunk() {
-        reader
-          .read()
-          .then(({ done, value }) => {
-            if (done) {
-              try {
-                mediaSource.endOfStream()
-              } catch (e) {
-                console.warn('MediaSource already ended or closed:', e)
-              }
-              return
-            }
-            try {
-              if (!sourceBuffer.updating) {
-                sourceBuffer.appendBuffer(value)
-                sourceBuffer.addEventListener('updateend', pushChunk, {
-                  once: true,
-                })
-              } else {
-                sourceBuffer.addEventListener(
-                  'updateend',
-                  () => {
-                    try {
-                      sourceBuffer.appendBuffer(value)
-                      sourceBuffer.addEventListener('updateend', pushChunk, {
-                        once: true,
-                      })
-                    } catch (e) {
-                      console.warn(
-                        'Error appending buffer, source may be closed:',
-                        e
-                      )
-                    }
-                  },
-                  { once: true }
-                )
-              }
-            } catch (error) {
-              console.error('Failed to append audio chunk:', error)
-            }
-          })
-          .catch(err => {
-            console.error('Error reading audio stream:', err)
-          })
-      }
-
-      pushChunk()
-    })
-
-    await audioPlayer.value.play()
-    statusMessage.value = 'Speaking...'
-  }
-}
 
 const processRequest = async (text: string) => {
   updateVideo.value('PROCESSING')
@@ -405,16 +147,16 @@ const processRequest = async (text: string) => {
   await conversationStore.chat(prompt.history)
 }
 
-const takeScreenShot = async () => {
-  if (!takingScreenShot.value) {
-    takingScreenShot.value = true
-    statusMessage.value = 'Taking a screenshot'
-    await window.electron.showOverlay()
-  }
-}
-
 onMounted(async () => {
   await conversationStore.createNewThread()
+
+  audioPlayer.value = document.querySelector('audio')
+  if (audioPlayer.value) {
+    console.log('Audio player element initialized:', !!audioPlayer.value)
+  } else {
+    console.error('Audio player element not found')
+  }
+
   updateVideo.value = async (type: string) => {
     const playVideo = async (videoType: string) => {
       videoSource.value = setVideo(videoType)
@@ -425,24 +167,22 @@ onMounted(async () => {
   }
   updateVideo.value('STAND_BY')
 
+  setupAudioPlayback()
+
+  eventBus.on('processing-complete', transcription => {
+    console.log(
+      'Processing complete event received with transcription:',
+      transcription
+    )
+    if (transcription && transcription.trim()) {
+      processRequest(transcription)
+    } else {
+      statusMessage.value = 'No speech detected'
+    }
+  })
+
   if (isElectron) {
-    window.ipcRenderer.on('screenshot-captured', async () => {
-      try {
-        const dataURI = await window.ipcRenderer.invoke('get-screenshot')
-        screenShot.value = dataURI
-        screenshotReady.value = true
-        statusMessage.value = 'Screenshot ready'
-      } catch (error) {
-        console.error('Error retrieving screenshot:', error)
-        statusMessage.value = 'Error taking screenshot'
-      } finally {
-        takingScreenShot.value = false
-      }
-    })
-    window.ipcRenderer.on('overlay-closed', () => {
-      takingScreenShot.value = false
-      statusMessage.value = isRecordingRequested.value ? 'Listening' : 'Stand by'
-    })
+    setupScreenshotListeners()
   }
 })
 </script>

@@ -8,17 +8,21 @@
         <div
           class="avatar-ring"
           :class="{
-            'ring-green-500!': isPlaying,
+            'ring-green-500!': audioState === 'SPEAKING',
+            'ring-yellow-500!':
+              audioState === 'PROCESSING_AUDIO' ||
+              audioState === 'WAITING_FOR_RESPONSE',
+            'ring-blue-500!': audioState === 'LISTENING',
             'w-[200px] h-[200px]': isMinimized,
             'w-[480px] h-[480px]': !isMinimized && isElectron,
             'w-[430px] h-[430px]': !isElectron,
           }"
           :style="{
-            backgroundImage: `url('${bg}'`,
+            backgroundImage: `url('${bg}')`,
             backgroundPositionY: !isMinimized ? '-62px' : '-25px',
           }"
         >
-          <audio ref="audioPlayer" class="hidden"></audio>
+          <audio ref="audioPlayerElement" class="hidden"></audio>
           <video
             class="max-w-screen-md rounded-full"
             :class="{
@@ -26,163 +30,246 @@
               'h-[480px]': !isMinimized && isElectron,
               'h-[430px]': !isElectron,
             }"
-            ref="aiVideo"
+            ref="aiVideoElement"
             :src="videoSource"
             loop
             muted
-            :autoplay="isPlaying"
+            autoplay
+            playsinline
           ></video>
           <Actions
-            @takeScreenShot="takeScreenShot"
-            @togglePlaying="togglePlaying"
-            @toggleRecording="toggleRecording"
+            @takeScreenShot="handleTakeScreenshot"
+            @togglePlaying="handleToggleTTS"
+            @toggleRecording="handleToggleRecording"
             :isElectron="isElectron"
             :isTTSEnabled="isTTSEnabled"
+            :audioState="audioState"
           />
         </div>
       </div>
-      <Sidebar @processRequest="processRequest" />
+      <Sidebar @processRequest="processRequestFromSidebar" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { onMounted, onUnmounted, ref as vueRef } from 'vue'
+import { storeToRefs } from 'pinia'
 import Actions from './Actions.vue'
 import Sidebar from './Sidebar.vue'
 import { bg } from '../utils/assetsImport'
-import { setVideo } from '../utils/videoProcess'
-import { onMounted, nextTick } from 'vue'
+
 import { useGeneralStore } from '../stores/generalStore'
 import { useConversationStore } from '../stores/openAIStore'
-import { storeToRefs } from 'pinia'
 import { useAudioProcessing } from '../composables/useAudioProcessing'
 import { useAudioPlayback } from '../composables/useAudioPlayback'
 import { useScreenshot } from '../composables/useScreenshot'
 import eventBus from '../utils/eventBus'
 
-const generalStore = useGeneralStore()
-const conversationStore = useConversationStore()
-const isElectron = typeof window !== 'undefined' && window?.electron
-
-const { toggleRecording, startListening, stopListening } = useAudioProcessing()
-const { setupAudioPlayback, togglePlaying } = useAudioPlayback(
-  startListening,
-  stopListening
-)
+const { toggleRecordingRequest } = useAudioProcessing()
+const { toggleTTSPreference } = useAudioPlayback()
 const {
   screenShot,
   screenshotReady,
   takeScreenShot,
   setupScreenshotListeners,
+  cleanupScreenshotListeners,
 } = useScreenshot()
 
+const generalStore = useGeneralStore()
+const conversationStore = useConversationStore()
+
 const {
+  audioState,
   aiVideo,
   videoSource,
-  isPlaying,
-  statusMessage,
   audioPlayer,
   chatInput,
   openSidebar,
   isMinimized,
   storeMessage,
-  updateVideo,
   isTTSEnabled,
+  takingScreenShot,
 } = storeToRefs(generalStore)
+const { setAudioState } = generalStore
+const {
+  createOpenAIPrompt,
+  sendMessageToThread,
+  chat,
+  uploadScreenshotToOpenAI,
+} = conversationStore
 
-generalStore.setProvider('openai')
-
-const processRequest = async (text: string) => {
-  updateVideo.value('PROCESSING')
-
-  let messageContent: any[] = [{ type: 'text', text: text }]
-
-  if (screenshotReady.value && screenShot.value) {
-    try {
-      const fileId = await conversationStore.uploadScreenshotToOpenAI(
-        screenShot.value
-      )
-
-      messageContent.push({
-        type: 'image_file',
-        image_file: {
-          file_id: fileId,
-        },
-      })
-
-      screenshotReady.value = false
-      screenShot.value = ''
-    } catch (error) {
-      console.error('Error uploading screenshot:', error)
-      statusMessage.value = 'Error uploading screenshot'
-    }
-  }
-
-  const userMessage = {
-    role: 'user',
-    content: messageContent,
-  }
-
-  generalStore.chatHistory.unshift({
-    role: 'user',
-    content: [
-      {
-        type: 'text',
-        text: { value: text, annotations: [] },
-      },
-    ],
-  })
-
-  const prompt = await conversationStore.createOpenAIPrompt(
-    userMessage,
-    storeMessage.value
-  )
-
-  await conversationStore.sendMessageToThread(
-    prompt.message,
-    storeMessage.value
-  )
-
-  chatInput.value = ''
-  await conversationStore.chat(prompt.history)
-}
+const isElectron = typeof window !== 'undefined' && (window as any).electron
+const audioPlayerElement = vueRef<HTMLAudioElement | null>(null)
+const aiVideoElement = vueRef<HTMLVideoElement | null>(null)
 
 onMounted(async () => {
-  await conversationStore.createNewThread()
+  audioPlayer.value = audioPlayerElement.value
+  aiVideo.value = aiVideoElement.value
 
-  audioPlayer.value = document.querySelector('audio')
-  if (audioPlayer.value) {
-    console.log('Audio player element initialized:', !!audioPlayer.value)
+  if (!audioPlayer.value) {
+    console.error('Audio player element not found after mount!')
+  }
+  if (!aiVideo.value) {
+    console.error('AI video element not found after mount!')
   } else {
-    console.error('Audio player element not found')
+    aiVideo.value
+      .play()
+      .catch(e => console.warn('Initial video play failed:', e))
   }
-
-  updateVideo.value = async (type: string) => {
-    const playVideo = async (videoType: string) => {
-      videoSource.value = setVideo(videoType)
-      await nextTick()
-      aiVideo.value?.play()
-    }
-    await playVideo(type)
-  }
-  updateVideo.value('STAND_BY')
-
-  setupAudioPlayback()
-
-  eventBus.on('processing-complete', transcription => {
-    console.log(
-      'Processing complete event received with transcription:',
-      transcription
-    )
-    if (transcription && transcription.trim()) {
-      processRequest(transcription)
-    } else {
-      statusMessage.value = 'No speech detected'
-    }
-  })
 
   if (isElectron) {
     setupScreenshotListeners()
   }
+
+  eventBus.on('processing-complete', handleProcessingComplete)
 })
+
+onUnmounted(() => {
+  console.log('Main component unmounted.')
+  if (isElectron) {
+    cleanupScreenshotListeners()
+  }
+  eventBus.off('processing-complete', handleProcessingComplete)
+})
+
+const handleTakeScreenshot = () => {
+  if (isElectron && !takingScreenShot.value) {
+    takeScreenShot()
+  }
+}
+
+const handleToggleTTS = () => {
+  toggleTTSPreference()
+}
+
+const handleToggleRecording = () => {
+  toggleRecordingRequest()
+}
+
+const handleProcessingComplete = (transcription: string) => {
+  console.log(
+    '[Main.vue] Processing complete event received with transcription:',
+    transcription
+  )
+  if (
+    transcription &&
+    transcription.trim() &&
+    audioState.value === 'PROCESSING_AUDIO'
+  ) {
+    processRequest(transcription)
+  } else {
+    console.warn(
+      "[Main.vue] Transcription received, but state wasn't PROCESSING_AUDIO or text empty. State:",
+      audioState.value
+    )
+  }
+}
+
+const processRequestFromSidebar = (text: string) => {
+  if (text && text.trim()) {
+    if (audioState.value === 'IDLE' || audioState.value === 'LISTENING') {
+      addMessageToHistory('user', text)
+      processRequest(text)
+      chatInput.value = ''
+    } else {
+      console.warn(
+        'Cannot process sidebar request, system busy. State:',
+        audioState.value
+      )
+      generalStore.statusMessage = 'Busy, please wait...'
+      setTimeout(() => {
+        if (generalStore.statusMessage === 'Busy, please wait...')
+          generalStore.setAudioState(audioState.value)
+      }, 2000)
+    }
+  }
+}
+
+const addMessageToHistory = (
+  role: 'user' | 'assistant' | 'system',
+  text: string,
+  id?: string
+) => {
+  generalStore.chatHistory.unshift({
+    id: id || `temp-${Date.now()}`,
+    role: role,
+    content: [{ type: 'text', text: { value: text, annotations: [] } }],
+  })
+}
+
+const processRequest = async (text: string) => {
+  console.log(`[Main.vue] Processing request: "${text}"`)
+
+  let messageContent: any[] = [{ type: 'text', text: text }]
+
+  if (screenshotReady.value && screenShot.value) {
+    console.log('[Main.vue] Screenshot ready, attempting upload.')
+    try {
+      const fileId = await uploadScreenshotToOpenAI(screenShot.value)
+      if (fileId) {
+        messageContent.push({
+          type: 'image_file',
+          image_file: { file_id: fileId },
+        })
+        console.log('[Main.vue] Screenshot added to message content.')
+      } else {
+        console.error(
+          '[Main.vue] Screenshot upload failed, proceeding without image.'
+        )
+        addMessageToHistory('system', '(System: Failed to upload screenshot)')
+      }
+    } catch (error) {
+      console.error('[Main.vue] Error during screenshot upload:', error)
+      addMessageToHistory('system', '(System: Error uploading screenshot)')
+    } finally {
+      screenshotReady.value = false
+      screenShot.value = ''
+    }
+  }
+  const userMessagePayload = {
+    role: 'user',
+    content: messageContent,
+  }
+
+  const alreadyAdded =
+    generalStore.chatHistory[0]?.role === 'user' &&
+    generalStore.chatHistory[0]?.content[0]?.text?.value === text
+  if (!alreadyAdded) {
+    addMessageToHistory('user', text)
+  }
+
+  const prompt = await createOpenAIPrompt(
+    userMessagePayload,
+    storeMessage.value
+  )
+
+  if (!prompt || !prompt.message) {
+    console.error('[Main.vue] Failed to create prompt.')
+    setAudioState(isTTSEnabled.value ? 'LISTENING' : 'IDLE')
+    addMessageToHistory('system', '(System: Error preparing request)')
+    return
+  }
+
+  const messageSent = await sendMessageToThread(
+    prompt.message,
+    storeMessage.value
+  )
+
+  if (!messageSent) {
+    console.error('[Main.vue] Failed to send message to thread.')
+    setAudioState(isTTSEnabled.value ? 'LISTENING' : 'IDLE')
+    addMessageToHistory('system', '(System: Error sending message)')
+    return
+  }
+
+  setAudioState('WAITING_FOR_RESPONSE')
+  await chat(prompt.history)
+}
 </script>
+
+<style scoped lang="postcss">
+.avatar-ring {
+  transition: ring-color 0.3s ease-in-out;
+}
+</style>

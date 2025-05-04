@@ -2,89 +2,100 @@
   <div class="absolute bottom-0 py-2 z-20 flex flex-col w-full bg-black/60">
     <div class="pb-2 rounded-lg flex items-center justify-center gap-8">
       <img
-        :src="isRecordingRequested ? micIconActive : micIcon"
+        :src="micIconSrc"
         class="indicator"
         :class="{ mini: isMinimized }"
-        @click="toggleRecording"
+        @click="emit('toggleRecording')"
+        data-tip="Toggle Microphone"
+        :aria-label="micAriaLabel"
       />
       <img
-        :src="!isTTSEnabled ? speakerIconInactive : speakerIcon"
+        :src="props.isTTSEnabled ? speakerIcon : speakerIconInactive"
         class="indicator"
         :class="{ mini: isMinimized }"
-        @click="togglePlaying"
+        @click="emit('togglePlaying')"
+        data-tip="Toggle Speech Output"
+        aria-label="Toggle Speech Output"
       />
       <img
+        v-if="!isMinimized"
         :src="chatIcon"
         class="indicator"
-        :class="{ hidden: isMinimized }"
-        @click="toggleChat()"
+        @click="toggleChat"
+        data-tip="Toggle Chat Panel"
+        aria-label="Toggle Chat Panel"
       />
     </div>
-    <div class="text-center dragable" :class="{ 'text-xs': isMinimized }">
+    <div
+      class="text-center dragable select-none"
+      :class="{ 'text-xs': isMinimized }"
+    >
       {{ statusMessage }}
     </div>
   </div>
-  <div
-    class="absolute w-full px-2 flex justify-between z-80 inside-actions"
-    :class="{ 'top-[80px]': isMinimized, 'top-[220px]': !isMinimized }"
-    v-if="props.isElectron"
-  >
-    <button
-      class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side tooltip tooltip-right"
-      data-tip="Screenshot"
-      :class="{ 'btn-sm': isMinimized }"
-      @click="takeScreenShot"
+
+  <template v-if="props.isElectron">
+    <div
+      class="absolute w-full px-2 flex justify-between z-30 inside-actions"
+      :class="{ 'top-[80px]': isMinimized, 'top-[220px]': !isMinimized }"
     >
-      <img
-        :src="cameraIcon"
-        class="indicator indicator-side"
-        :class="{ mini: isMinimized }"
-      />
-    </button>
-    <button
-      class="btn btn-circle bg-default border-0 p-2 btn-indicator-side tooltip tooltip-left"
-      :data-tip="isMinimized ? 'Maximize' : 'Minimize'"
-      :class="{ 'btn-sm': isMinimized }"
-      @click="toggleMinimize"
-    >
-      <img
-        :src="isMinimized ? maxiIcon : miniIcon"
-        class="indicator indicator-side"
-        :class="{ mini: isMinimized }"
-      />
-    </button>
-  </div>
-  <div
-    class="absolute w-full flex justify-center z-80 top-2 inside-actions"
-    v-if="props.isElectron"
-  >
-    <div class="dropdown dropdown-hover dropdown-center">
-      <div
-        tabindex="0"
-        role="button"
-        class="btn btn-circle bg-disabled border-0 p-2 btn-indicator-side close tooltip tooltip-bottom mb-2"
+      <button
+        class="btn btn-circle bg-opacity-20 bg-gray-500 border-0 p-2 btn-indicator-side tooltip tooltip-right"
+        data-tip="Take Screenshot"
+        aria-label="Take Screenshot"
         :class="{ 'btn-sm': isMinimized }"
+        @click="emit('takeScreenShot')"
+        :disabled="takingScreenShot"
       >
-        <img :src="hamburgerIcon" class="indicator indicator-side" />
-      </div>
-      <ul
-        tabindex="0"
-        class="dropdown-content menu bg-black/60 rounded-box z-1 w-36 p-2"
+        <img
+          :src="cameraIcon"
+          class="indicator indicator-side"
+          :class="{ mini: isMinimized }"
+          alt=""
+        />
+      </button>
+      <button
+        class="btn btn-circle bg-opacity-20 bg-gray-500 border-0 p-2 btn-indicator-side tooltip tooltip-left"
+        :data-tip="isMinimized ? 'Maximize' : 'Minimize'"
+        :aria-label="isMinimized ? 'Maximize Window' : 'Minimize Window'"
+        :class="{ 'btn-sm': isMinimized }"
+        @click="toggleMinimize"
       >
-        <!-- <li>
-          <a>Settings</a>
-        </li> -->
-        <li>
-          <a @click="closeWindow()"> Close app </a>
-        </li>
-      </ul>
+        <img
+          :src="isMinimized ? maxiIcon : miniIcon"
+          class="indicator indicator-side"
+          :class="{ mini: isMinimized }"
+          alt=""
+        />
+      </button>
     </div>
-  </div>
+
+    <div class="absolute w-full flex justify-center z-30 top-2 inside-actions">
+      <div class="dropdown dropdown-hover dropdown-center">
+        <button
+          tabindex="0"
+          role="button"
+          aria-label="Application Menu"
+          class="btn btn-circle bg-opacity-20 bg-gray-500 border-0 p-2 btn-indicator-side close tooltip tooltip-bottom mb-2"
+          :class="{ 'btn-sm': isMinimized }"
+        >
+          <img :src="hamburgerIcon" class="indicator indicator-side" alt="" />
+        </button>
+        <ul
+          tabindex="0"
+          class="dropdown-content menu bg-base-200 bg-opacity-80 rounded-box z-[1] w-36 p-2 shadow"
+        >
+          <!-- <li><a>Settings</a></li> -->
+          <li><a @click="closeWindow">Close app</a></li>
+        </ul>
+      </div>
+    </div>
+  </template>
 </template>
 
 <script setup lang="ts">
-import { nextTick, defineEmits, defineProps } from 'vue'
-import { useGeneralStore } from '../stores/generalStore'
+import { computed, defineEmits, defineProps, nextTick } from 'vue'
+import { useGeneralStore, AudioState } from '../stores/generalStore'
 import { storeToRefs } from 'pinia'
 import {
   micIcon,
@@ -96,9 +107,7 @@ import {
   maxiIcon,
   cameraIcon,
   hamburgerIcon,
-} from '../utils/assetsImport.ts'
-
-const generalStore = useGeneralStore()
+} from '../utils/assetsImport'
 
 const props = defineProps({
   isElectron: {
@@ -107,54 +116,70 @@ const props = defineProps({
   },
   isTTSEnabled: {
     type: Boolean,
-    default: true,
+    required: true,
+  },
+  audioState: {
+    type: String as () => AudioState,
+    required: true,
   },
 })
 
 const emit = defineEmits(['takeScreenShot', 'togglePlaying', 'toggleRecording'])
-const { isMinimized, isRecordingRequested, statusMessage, openSidebar } =
+
+const generalStore = useGeneralStore()
+const { isMinimized, statusMessage, openSidebar, takingScreenShot } =
   storeToRefs(generalStore)
 
+const micIconSrc = computed(() => {
+  return props.audioState === 'LISTENING' ||
+    (generalStore.isRecordingRequested && props.audioState !== 'IDLE')
+    ? micIconActive
+    : micIcon
+})
+
+const micAriaLabel = computed(() => {
+  return generalStore.isRecordingRequested
+    ? 'Stop Microphone'
+    : 'Start Microphone'
+})
+
 const closeWindow = () => {
-  ;(window as any).electron.closeApp()
+  if (props.isElectron) {
+    ;(window as any).electron.closeApp()
+  }
 }
 
 const toggleChat = async () => {
   openSidebar.value = !openSidebar.value
-  await nextTick()
-  if (openSidebar.value) {
-    ;(window as any).electron.resize({ width: 1200, height: 500 })
-  } else {
-    ;(window as any).electron.resize({ width: 500, height: 500 })
+  if (props.isElectron) {
+    await nextTick()
+    const targetWidth = openSidebar.value ? 1200 : 500
+    const targetHeight = 500
+    console.log(`Resizing window to: ${targetWidth}x${targetHeight}`)
+    ;(window as any).electron.resize({
+      width: targetWidth,
+      height: targetHeight,
+    })
   }
 }
 
 const toggleMinimize = async () => {
-  isMinimized.value = !isMinimized.value
-  await nextTick()
-  if (isMinimized.value) {
-    if (openSidebar.value) {
-      toggleChat()
+  const willMinimize = !isMinimized.value
+  isMinimized.value = willMinimize
+
+  if (props.isElectron) {
+    await nextTick()
+
+    if (willMinimize && openSidebar.value) {
+      await toggleChat()
       setTimeout(() => {
+        console.log('Minimizing window after closing sidebar.')
         ;(window as any).electron.mini({ minimize: true })
-      }, 1000)
+      }, 300)
     } else {
-      ;(window as any).electron.mini({ minimize: true })
+      console.log(`Toggling minimize state: ${willMinimize}`)
+      ;(window as any).electron.mini({ minimize: willMinimize })
     }
-  } else {
-    ;(window as any).electron.mini({ minimize: false })
   }
-}
-
-const takeScreenShot = async () => {
-  await emit('takeScreenShot')
-}
-
-const togglePlaying = async () => {
-  await emit('togglePlaying')
-}
-
-const toggleRecording = async () => {
-  await emit('toggleRecording')
 }
 </script>

@@ -14,341 +14,350 @@ import {
 import { transcribeAudio } from '../api/openAI/stt'
 import { useGeneralStore } from './generalStore'
 import { executeFunction } from '../utils/functionCaller'
-import { useAudioProcessing } from '../composables/useAudioProcessing'
 
 export const useConversationStore = defineStore('conversation', () => {
-  const {
-    messages,
-    chatHistory,
-    statusMessage,
-    updateVideo,
-    isProcessingRequest,
-    isTTSProcessing,
-    isTTSEnabled,
-    isRecordingRequested,
-  } = storeToRefs(useGeneralStore())
   const generalStore = useGeneralStore()
-
-  const { startListening } = useAudioProcessing()
+  const { setAudioState, queueAudioForPlayback } = generalStore
+  const { isRecordingRequested, audioState, chatHistory, messages } =
+    storeToRefs(generalStore)
 
   const assistant = ref<string>('')
-  getAssistantData().then(data => {
-    assistant.value = data.id
-  })
-
   const thread = ref<string>('')
 
+  const initialize = async () => {
+    try {
+      const data = await getAssistantData()
+      assistant.value = data.id
+      console.log('Assistant ID loaded:', assistant.value)
+      if (assistant.value) {
+        await createNewThread()
+      } else {
+        console.error('Assistant ID not loaded, cannot create thread.')
+        generalStore.statusMessage = 'Error: Assistant setup failed'
+      }
+    } catch (error) {
+      console.error('Failed to initialize OpenAI Store:', error)
+      generalStore.statusMessage = 'Error: Assistant setup failed'
+    }
+  }
+  initialize()
+
   const createNewThread = async () => {
-    thread.value = await createThread()
+    try {
+      thread.value = await createThread()
+      console.log('New OpenAI thread created:', thread.value)
+      generalStore.chatHistory = []
+      generalStore.messages = []
+    } catch (error) {
+      console.error('Failed to create new thread:', error)
+      generalStore.statusMessage = 'Error: Could not create chat thread'
+    }
   }
 
-  const getMessages = async (threadId: string, last: boolean = false) => {
-    messages.value = await listMessages(threadId, last)
+  const getMessages = async (last: boolean = false) => {
+    if (!thread.value) {
+      console.warn('Cannot get messages, thread ID not available.')
+      return
+    }
+    try {
+      generalStore.messages = await listMessages(thread.value, last)
+    } catch (error) {
+      console.error('Failed to list messages:', error)
+    }
   }
 
   const sendMessageToThread = async (message: any, store: boolean = true) => {
-    await sendMessage(thread.value, message, assistant.value, store)
-    getMessages(thread.value)
+    if (!thread.value || !assistant.value) {
+      console.warn('Cannot send message, thread or assistant ID not available.')
+      return false
+    }
+    try {
+      await sendMessage(thread.value, message, assistant.value, store)
+      return true
+    } catch (error) {
+      console.error('Failed to send message:', error)
+      generalStore.statusMessage = 'Error: Could not send message'
+      return false
+    }
   }
 
   const chat = async (memories: any) => {
-    statusMessage.value = 'Thinking...'
-    updateVideo.value('PROCESSING')
-    isProcessingRequest.value = true
-    isTTSProcessing.value = true
+    if (!thread.value || !assistant.value) {
+      console.error('Chat aborted: Thread or Assistant ID missing.')
+      generalStore.statusMessage = 'Error: Chat not initialized'
+      setAudioState('IDLE')
+      return
+    }
+
+    setAudioState('WAITING_FOR_RESPONSE')
 
     let currentSentence = ''
     let messageId: string | null = null
+    let assistantResponseStarted = false
 
     async function processChunk(chunk) {
       if (
         (chunk.event === 'thread.message.created' ||
           chunk.event === 'thread.message.createddata') &&
-        chunk.data.assistant_id === assistant.value
+        chunk.data.assistant_id === assistant.value &&
+        !assistantResponseStarted
       ) {
         messageId = chunk.data.id
         if (messageId) {
-          chatHistory.value.unshift({
+          assistantResponseStarted = true
+          generalStore.chatHistory.unshift({
             id: messageId,
             role: 'assistant',
             content: [{ type: 'text', text: { value: '', annotations: [] } }],
           })
+          console.log('Assistant message placeholder added, ID:', messageId)
         }
       }
 
       if (
         (chunk.event === 'thread.message.delta' ||
           chunk.event === 'thread.message.deltadata') &&
-        chunk.data.delta?.content?.[0]?.type === 'text'
+        chunk.data.delta?.content?.[0]?.type === 'text' &&
+        messageId
       ) {
-        const textChunk = chunk.data.delta?.content[0].text.value
+        const textChunk = chunk.data.delta.content[0].text.value || ''
         currentSentence += textChunk
 
-        if (messageId) {
-          const existingMessageIndex = chatHistory.value.findIndex(
-            m => m.id === messageId
+        const existingMessageIndex = generalStore.chatHistory.findIndex(
+          m => m.id === messageId
+        )
+        if (existingMessageIndex > -1) {
+          generalStore.chatHistory[
+            existingMessageIndex
+          ].content[0].text.value += textChunk
+        } else {
+          console.warn(
+            "Received text delta but couldn't find message placeholder with ID:",
+            messageId
           )
-          if (existingMessageIndex > -1) {
-            chatHistory.value[existingMessageIndex].content[0].text.value +=
-              textChunk
-          }
         }
 
-        if (textChunk.match(/[.!?]\s*$/)) {
-          if (textChunk.match(/[.!?]\s*$/) && generalStore.isTTSEnabled) {
-            const audioResponse = await ttsStream(currentSentence)
-            generalStore.playAudio(audioResponse)
-            currentSentence = ''
-          } else if (textChunk.match(/[.!?]\s*$/)) {
+        if (textChunk.match(/[.!?]\s*$/) || textChunk.endsWith('\n')) {
+          if (currentSentence.trim()) {
+            const queued = generalStore.queueAudioForPlayback(
+              await ttsStream(currentSentence.trim())
+            )
+            if (queued && audioState.value !== 'SPEAKING') {
+              setAudioState('SPEAKING')
+            }
             currentSentence = ''
           }
         }
+      }
+    }
+
+    async function handleToolCalls(runId: string, toolCalls: any[]) {
+      const toolOutputs = []
+
+      for (const toolCall of toolCalls) {
+        if (toolCall.type === 'function') {
+          const functionName = toolCall.function.name
+          const functionArgs = toolCall.function.arguments
+          const toolStatusMessage = getToolStatusMessage(functionName)
+
+          generalStore.chatHistory.unshift({
+            id: 'system-' + Date.now(),
+            role: 'system',
+            content: [
+              {
+                type: 'text',
+                text: { value: toolStatusMessage, annotations: [] },
+              },
+            ],
+          })
+
+          try {
+            const queued = generalStore.queueAudioForPlayback(
+              await ttsStream(toolStatusMessage)
+            )
+            if (queued && audioState.value !== 'SPEAKING') {
+              setAudioState('SPEAKING')
+            }
+          } catch (err) {
+            console.warn('TTS failed for system message:', err)
+          }
+
+          try {
+            console.log(
+              `Executing tool: ${functionName} with args: ${functionArgs}`
+            )
+            const result = await executeFunction(functionName, functionArgs)
+            console.log(`Tool ${functionName} result:`, result)
+            toolOutputs.push({
+              tool_call_id: toolCall.id,
+              output: result,
+            })
+          } catch (error: any) {
+            console.error(`Error executing function ${functionName}:`, error)
+            toolOutputs.push({
+              tool_call_id: toolCall.id,
+              output: `Error: ${error.message || 'Function execution failed'}`,
+            })
+            generalStore.chatHistory.unshift({
+              id: 'error-' + Date.now(),
+              role: 'system',
+              content: [
+                {
+                  type: 'text',
+                  text: {
+                    value: `Error using tool: ${functionName}`,
+                    annotations: [],
+                  },
+                },
+              ],
+            })
+          }
+        }
+      }
+
+      if (toolOutputs.length > 0 && runId) {
+        console.log('Submitting tool outputs:', toolOutputs)
+        try {
+          const continuedRunStream = await submitToolOutputs(
+            thread.value,
+            runId,
+            toolOutputs
+          )
+          await processRunStream(continuedRunStream)
+        } catch (error) {
+          console.error('Error submitting tool outputs:', error)
+          generalStore.statusMessage = 'Error: Tool submission failed'
+          setAudioState('IDLE')
+          generalStore.chatHistory.unshift({
+            id: 'error-' + Date.now(),
+            role: 'assistant',
+            content: [
+              {
+                type: 'text',
+                text: {
+                  value: `I encountered an issue using my tools. Please try again.`,
+                  annotations: [],
+                },
+              },
+            ],
+          })
+        }
+      } else if (toolOutputs.length === 0) {
+        console.log('No tool outputs to submit.')
       }
     }
 
     async function processRunStream(runStream) {
       let runId = null
 
-      for await (const chunk of runStream) {
-        await processChunk(chunk)
-
-        if (
-          chunk.event === 'thread.run.requires_action' &&
-          chunk.data.required_action?.type === 'submit_tool_outputs'
-        ) {
-          runId = chunk.data.id
-
-          const toolCalls =
-            chunk.data.required_action.submit_tool_outputs.tool_calls
-
-          const toolOutputs = []
-          for (const toolCall of toolCalls) {
-            if (toolCall.type === 'function') {
-              const functionName = toolCall.function.name
-              const functionArgs = toolCall.function.arguments
-              const toolStatusMessage = getToolStatusMessage(functionName)
-
-              chatHistory.value.unshift({
-                id: 'temp-' + Date.now(),
-                role: 'system',
-                content: [
-                  {
-                    type: 'text',
-                    text: {
-                      value: toolStatusMessage,
-                      annotations: [],
-                    },
-                  },
-                ],
-              })
-
-              try {
-                const audioResponse = await ttsStream(toolStatusMessage)
-                generalStore.playAudio(audioResponse, true)
-              } catch (err) {
-                console.warn('TTS failed for system message:', err)
-              }
-
-              const fillerLines = [
-                'Still looking... one sec.',
-                'Let me double-check that.',
-                'Almost got it...',
-                'Going deeper...',
-                'Hold tight—this one’s tricky.',
-                'Sneaking past digital dragons...',
-                "This one's taking a moment...",
-                'Doing a deep scan... cyber-style.',
-                'Almost there, I can feel it.',
-                'Beep boop… still thinking.',
-                "Ugh, data's being dramatic today.",
-              ]
-
-              let fillerTimer: ReturnType<typeof setTimeout> | null = null
-              let fillerPlayed = false
-              let stopFiller = false
-
-              async function playFillerLoop() {
-                await new Promise(resolve =>
-                  setTimeout(resolve, 10000 + Math.random() * 500)
-                )
-
-                while (!stopFiller) {
-                  const line =
-                    fillerLines[Math.floor(Math.random() * fillerLines.length)]
-                  try {
-                    chatHistory.value.unshift({
-                      id: 'temp-' + Date.now(),
-                      role: 'assistant',
-                      content: [
-                        {
-                          type: 'text',
-                          text: {
-                            value: line,
-                            annotations: [],
-                          },
-                        },
-                      ],
-                    })
-                    const fillerAudio = await ttsStream(line)
-                    generalStore.playAudio(fillerAudio, true)
-                    fillerPlayed = true
-                  } catch (err) {
-                    console.warn('TTS filler failed:', err)
-                  }
-
-                  await new Promise(resolve =>
-                    setTimeout(resolve, 10000 + Math.random() * 2000)
-                  )
-                }
-              }
-
-              playFillerLoop()
-
-              try {
-                statusMessage.value = 'Thinking...'
-
-                const result = await executeFunction(functionName, functionArgs)
-
-                stopFiller = true
-                if (fillerTimer) clearTimeout(fillerTimer)
-
-                if (fillerPlayed) {
-                  await new Promise(resolve => setTimeout(resolve, 400))
-                }
-
-                statusMessage.value = 'Processing...'
-
-                toolOutputs.push({
-                  tool_call_id: toolCall.id,
-                  output: result,
-                })
-              } catch (error) {
-                console.error(
-                  `Error executing function ${functionName}:`,
-                  error
-                )
-                statusMessage.value = `Error executing function`
-
-                stopFiller = true
-                if (fillerTimer) clearTimeout(fillerTimer)
-
-                toolOutputs.push({
-                  tool_call_id: toolCall.id,
-                  output: `Error: ${error.message || 'Unknown error occurred during function execution'}`,
-                })
-              }
-            }
+      try {
+        for await (const chunk of runStream) {
+          if (chunk.data?.id && chunk.event.startsWith('thread.run.')) {
+            runId = chunk.data.id
           }
 
-          if (toolOutputs.length > 0) {
-            try {
-              statusMessage.value = 'Processing...'
+          await processChunk(chunk)
 
-              const continuedRun = await submitToolOutputs(
-                thread.value,
-                runId,
-                toolOutputs,
-                assistant.value
-              )
-
-              await processRunStream(continuedRun)
-              return
-            } catch (error) {
-              console.error('Error submitting tool outputs:', error)
-              statusMessage.value = 'Function error'
-
-              chatHistory.value.unshift({
-                id: 'error-' + Date.now(),
-                role: 'assistant',
-                content: [
-                  {
-                    type: 'text',
-                    text: {
-                      value: `I'm sorry, but I encountered an error while processing your request. Please try again.`,
-                      annotations: [],
-                    },
-                  },
-                ],
-              })
-            }
+          if (
+            chunk.event === 'thread.run.requires_action' &&
+            chunk.data.required_action?.type === 'submit_tool_outputs' &&
+            runId
+          ) {
+            console.log('Run requires action (tool calls). Run ID:', runId)
+            await handleToolCalls(
+              runId,
+              chunk.data.required_action.submit_tool_outputs.tool_calls
+            )
+            return
           }
 
-          function getToolStatusMessage(toolName: string): string {
-            switch (toolName) {
-              case 'perform_web_search':
-                return '🔍 Searching the web...'
-              case 'get_weather_forecast':
-                return '🌦️ Checking the skies...'
-              case 'get_current_datetime':
-                return '🕒 Looking at the clock...'
-              case 'open_path':
-                return '📂 Opening that for you...'
-              case 'manage_clipboard':
-                return '📋 Working with your clipboard...'
-              case 'get_website_context':
-                return '🌐 Reading the page...'
-              case 'search_torrents':
-                return '🧲 Looking through the torrent net...'
-              case 'add_torrent_to_qb':
-                return '🚀 Starting your download...'
-              case 'save_memory':
-                return '🧠 Got it, remembering that...'
-              case 'recall_memories':
-                return '🧠 Let me think back...'
-              case 'delete_memory':
-                return '🗑️ Forgetting that now...'
-              default:
-                return '⚙️ Working on that...'
-            }
+          if (chunk.event === 'thread.run.failed') {
+            console.error('Run failed:', chunk.data)
+            generalStore.statusMessage = 'Error: Assistant run failed'
+            break
+          }
+          if (chunk.event === 'thread.run.completed') {
+            console.log('Run completed successfully.')
           }
         }
+
+        if (currentSentence.trim()) {
+          console.log(
+            'Processing remaining sentence fragment for TTS:',
+            currentSentence
+          )
+          const queued = generalStore.queueAudioForPlayback(
+            await ttsStream(currentSentence.trim())
+          )
+          if (queued && audioState.value !== 'SPEAKING') {
+            setAudioState('SPEAKING')
+          }
+        }
+      } catch (error) {
+        console.error('Error processing run stream:', error)
+        generalStore.statusMessage = 'Error: Processing response failed'
+        generalStore.chatHistory.unshift({
+          id: 'error-' + Date.now(),
+          role: 'assistant',
+          content: [
+            {
+              type: 'text',
+              text: {
+                value: `I had trouble processing that. Please try again.`,
+                annotations: [],
+              },
+            },
+          ],
+        })
+      } finally {
+        if (
+          audioState.value === 'WAITING_FOR_RESPONSE' &&
+          generalStore.audioQueue.length === 0
+        ) {
+          setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+        }
+        generalStore.storeMessage = false
       }
     }
 
     try {
-      const run = await runAssistant(thread.value, assistant.value, memories)
-
-      await processRunStream(run)
-
-      if (currentSentence.trim().length > 0) {
-        const audioResponse = await ttsStream(currentSentence)
-        generalStore.playAudio(audioResponse)
-      }
+      const runStream = await runAssistant(
+        thread.value,
+        assistant.value,
+        memories
+      )
+      await processRunStream(runStream)
     } catch (error) {
-      console.error('Error in chat process:', error)
-      statusMessage.value = 'Processing error'
-
-      chatHistory.value.unshift({
+      console.error('Error starting assistant run:', error)
+      generalStore.statusMessage = 'Error: Could not start assistant'
+      setAudioState('IDLE')
+      generalStore.chatHistory.unshift({
         id: 'error-' + Date.now(),
         role: 'assistant',
         content: [
           {
             type: 'text',
             text: {
-              value: `I apologize, but something went wrong. Please try again.`,
+              value: `I couldn't start processing your request. Please check the connection or try again.`,
               annotations: [],
             },
           },
         ],
       })
-    } finally {
-      generalStore.storeMessage = false
-      isProcessingRequest.value = false
-      isTTSProcessing.value = false
-      if (!isTTSEnabled.value) {
-        if (isRecordingRequested.value) {
-          startListening()
-          statusMessage.value = 'Listening'
-        } else {
-          statusMessage.value = 'Stand by'
-        }
-      }
     }
   }
 
-  const transcribeAudioMessage = async (audioBuffer: Buffer) => {
-    const response = await transcribeAudio(audioBuffer)
-    return response
+  const transcribeAudioMessage = async (
+    audioBuffer: Buffer
+  ): Promise<string> => {
+    try {
+      const response = await transcribeAudio(audioBuffer)
+      return response || ''
+    } catch (error) {
+      console.error('Transcription failed:', error)
+      generalStore.statusMessage = 'Error: Transcription service failed'
+      return ''
+    }
   }
 
   const createOpenAIPrompt = async (
@@ -359,29 +368,62 @@ export const useConversationStore = defineStore('conversation', () => {
     let userMessage: any
 
     if (typeof newMessage === 'string') {
-      userMessage = { role: 'user', content: newMessage }
-
-      if (store) {
-        const relevantMemories = await retrieveRelevantMemories(newMessage)
-        memoryMessages = relevantMemories.map(memory => ({
-          role: 'assistant',
-          content: memory,
-        }))
+      userMessage = {
+        role: 'user',
+        content: [{ type: 'text', text: newMessage }],
+      }
+    } else if (
+      typeof newMessage === 'object' &&
+      newMessage.role &&
+      newMessage.content
+    ) {
+      if (!Array.isArray(newMessage.content)) {
+        if (typeof newMessage.content === 'string') {
+          userMessage = {
+            role: newMessage.role,
+            content: [{ type: 'text', text: newMessage.content }],
+          }
+        } else {
+          console.error('Invalid message content format:', newMessage.content)
+          return { message: null, history: [] }
+        }
+      } else {
+        userMessage = newMessage
       }
     } else {
-      userMessage = newMessage
+      console.error(
+        'Invalid message format provided to createOpenAIPrompt:',
+        newMessage
+      )
+      return { message: null, history: [] }
+    }
 
-      if (store) {
-        const textContent = newMessage.content
-          .filter(item => item.type === 'text')
-          .map(item => item.text)
-          .join(' ')
+    if (store && userMessage) {
+      const textContent = userMessage.content
+        .filter(item => item.type === 'text' && item.text)
+        .map(item =>
+          typeof item.text === 'string' ? item.text : item.text.value || ''
+        )
+        .join(' ')
 
-        const relevantMemories = await retrieveRelevantMemories(textContent)
-        memoryMessages = relevantMemories.map(memory => ({
-          role: 'assistant',
-          content: memory,
-        }))
+      if (textContent.trim()) {
+        try {
+          const relevantMemories = await retrieveRelevantMemories(textContent)
+          memoryMessages = relevantMemories
+            .filter(memory => memory)
+            .map(memory => ({
+              role: 'assistant',
+              content: [
+                {
+                  type: 'text',
+                  text: `[Thought from past conversation: ${memory}]`,
+                },
+              ],
+            }))
+          console.log('Retrieved relevant memories:', memoryMessages.length)
+        } catch (error) {
+          console.error('Failed to retrieve relevant memories:', error)
+        }
       }
     }
 
@@ -391,13 +433,47 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  const uploadScreenshotToOpenAI = async (screenshot: string) => {
+  const uploadScreenshotToOpenAI = async (
+    screenshotDataURI: string
+  ): Promise<string | null> => {
+    if (!screenshotDataURI) return null
     try {
-      const response = await uploadScreenshot(screenshot)
-      return response
+      const fileId = await uploadScreenshot(screenshotDataURI)
+      console.log('Screenshot uploaded, File ID:', fileId)
+      return fileId
     } catch (error) {
       console.error('Error uploading screenshot:', error)
+      generalStore.statusMessage = 'Error: Screenshot upload failed'
       return null
+    }
+  }
+
+  function getToolStatusMessage(toolName: string): string {
+    switch (toolName) {
+      case 'perform_web_search':
+        return '🔍 Searching the web...'
+      case 'get_weather_forecast':
+        return '🌦️ Checking the skies...'
+      case 'get_current_datetime':
+        return '🕒 Looking at the clock...'
+      case 'open_path':
+        return '📂 Opening that for you...'
+      case 'manage_clipboard':
+        return '📋 Working with your clipboard...'
+      case 'get_website_context':
+        return '🌐 Reading the page...'
+      case 'search_torrents':
+        return '🧲 Looking for torrents...'
+      case 'add_torrent_to_qb':
+        return '🚀 Starting your download...'
+      case 'save_memory':
+        return '🧠 Got it, remembering that...'
+      case 'recall_memories':
+        return '🧠 Let me think back...'
+      case 'delete_memory':
+        return '🗑️ Forgetting that now...'
+      default:
+        return `⚙️ Using tool: ${toolName}...`
     }
   }
 
@@ -405,11 +481,11 @@ export const useConversationStore = defineStore('conversation', () => {
     assistant,
     thread,
     createNewThread,
-    getMessages,
     sendMessageToThread,
     chat,
     transcribeAudioMessage,
     createOpenAIPrompt,
     uploadScreenshotToOpenAI,
+    getMessages,
   }
 })

@@ -1,4 +1,4 @@
-import { ref, onMounted } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import * as vad from '@ricky0123/vad-web'
 import { float32ArrayToWav } from '../utils/audioProcess'
 import { useGeneralStore } from '../stores/generalStore'
@@ -10,173 +10,155 @@ export function useAudioProcessing() {
   const generalStore = useGeneralStore()
   const conversationStore = useConversationStore()
 
-  const {
-    recognizedText,
-    isRecordingRequested,
-    isRecording,
-    statusMessage,
-    isTTSProcessing,
-  } = storeToRefs(generalStore)
+  const { audioState, isRecordingRequested } = storeToRefs(generalStore)
+  const { setAudioState } = generalStore
 
-  let myvad: vad.MicVAD | null = null
-  const isProcessingAudio = ref(false)
-  const processingDebounceTimer = ref<number | null>(null)
-  let audioChunks: BlobPart[] = []
-  let mediaRecorder: MediaRecorder | null = null
+  const myvad = ref<vad.MicVAD | null>(null)
+  const isVadInitializing = ref(false)
+  const isSpeechDetected = ref(false)
 
-  const startListening = () => {
-    if (!isRecordingRequested.value || isTTSProcessing.value) return
-    statusMessage.value = 'Listening'
-    recognizedText.value = ''
-
-    if (myvad) {
-      try {
-        myvad.pause()
-        myvad = null
-      } catch (error) {
-        console.error('Error cleaning up previous VAD instance:', error)
-      }
+  const initializeVAD = async () => {
+    if (myvad.value || isVadInitializing.value) {
+      console.log('VAD init skipped: Already initialized or initializing.')
+      return
     }
 
-    vad.MicVAD.new({
-      baseAssetPath: './',
-      onnxWASMBasePath: './',
-      onSpeechStart: () => {
-        isRecording.value = true
-        console.log('Speech started - recording active')
-      },
-      onSpeechEnd: (audio: Float32Array) => {
-        console.log('Speech ended - processing recording')
-        if (isRecording.value && !isProcessingAudio.value) {
-          stopRecording(audio)
-        }
-      },
-    })
-      .then(vadInstance => {
-        myvad = vadInstance
-        myvad.start()
-        console.log('VAD started - listening for speech')
-      })
-      .catch(err => {
-        console.error('VAD initialization error:', err)
-        statusMessage.value = 'Error initializing VAD'
-      })
-  }
+    console.log('[VAD Manager] Initializing VAD...')
+    isVadInitializing.value = true
+    isSpeechDetected.value = false
 
-  const stopRecording = (audio: Float32Array) => {
-    console.log('Stop recording called with audio length:', audio?.length || 0)
-    if (mediaRecorder) {
-      mediaRecorder.stop()
-      mediaRecorder = null
-    }
-
-    if (processingDebounceTimer.value) {
-      clearTimeout(processingDebounceTimer.value)
-    }
-
-    processingDebounceTimer.value = window.setTimeout(() => {
-      if (!isProcessingAudio.value) {
-        processAudioRecording(audio)
-      }
-    }, 300)
-  }
-
-  const processAudioRecording = async (
-    audio?: Float32Array
-  ): Promise<string> => {
-    if (isProcessingAudio.value) return ''
-    console.log('Processing audio recording...')
+    await destroyVAD()
 
     try {
-      isProcessingAudio.value = true
-      statusMessage.value = 'Processing audio...'
+      const vadInstance = await vad.MicVAD.new({
+        baseAssetPath: './',
+        onnxWASMBasePath: './',
+        onSpeechStart: () => {
+          isSpeechDetected.value = true
+          console.log('[VAD Callback] Speech started.')
+        },
+        onSpeechEnd: (audio: Float32Array) => {
+          console.log(
+            `[VAD Callback] Speech ended. Audio length: ${audio?.length}. Current state: ${audioState.value}`
+          )
+          if (audioState.value === 'LISTENING' && isSpeechDetected.value) {
+            processAudioRecording(audio)
+          } else {
+            console.log(
+              '[VAD Callback] Speech ended, but not processing (state changed or no speech detected).'
+            )
+            if (audioState.value === 'LISTENING') {
+              isSpeechDetected.value = false
+            }
+          }
+        },
+      })
 
-      if (audio && audio.length > 0) {
-        const wavBuffer = float32ArrayToWav(audio, 16000)
-        console.log('Converted audio to WAV, sending for transcription...')
-        const transcription =
-          await conversationStore.transcribeAudioMessage(wavBuffer)
-        console.log('Received transcription:', transcription)
+      myvad.value = vadInstance
+      myvad.value.start()
+      console.log('[VAD Manager] VAD initialized and started successfully.')
+    } catch (error) {
+      console.error('[VAD Manager] VAD initialization failed:', error)
+      setAudioState('IDLE')
+      generalStore.statusMessage = 'Error: Mic/VAD init failed'
+    } finally {
+      isVadInitializing.value = false
+    }
+  }
 
-        recognizedText.value = transcription
+  const destroyVAD = async () => {
+    if (!myvad.value) {
+      return
+    }
 
-        if (transcription.trim()) {
-          eventBus.emit('processing-complete', transcription)
-          return transcription
-        } else {
-          console.log('No speech detected in transcription')
-          statusMessage.value = 'No speech detected'
-        }
+    console.log('[VAD Manager] Destroying VAD instance...')
+    try {
+      myvad.value.pause()
+      console.log('[VAD Manager] VAD paused.')
+    } catch (error) {
+      console.error('[VAD Manager] Error pausing VAD:', error)
+    } finally {
+      myvad.value = null
+      console.log('[VAD Manager] VAD instance reference removed.')
+    }
+  }
+
+  const processAudioRecording = async (audio: Float32Array) => {
+    if (audioState.value !== 'LISTENING' || !audio || audio.length === 0) {
+      console.warn(
+        '[Audio Processing] Processing aborted (invalid state or no audio).'
+      )
+      return
+    }
+
+    console.log('[Audio Processing] Starting audio processing...')
+    setAudioState('PROCESSING_AUDIO')
+
+    try {
+      const wavBuffer = float32ArrayToWav(audio, 16000)
+      console.log(
+        '[Audio Processing] Converted to WAV, sending for transcription...'
+      )
+
+      const transcription =
+        await conversationStore.transcribeAudioMessage(wavBuffer)
+      console.log('[Audio Processing] Received transcription:', transcription)
+
+      if (transcription && transcription.trim()) {
+        generalStore.recognizedText = transcription
+        eventBus.emit('processing-complete', transcription)
       } else {
-        console.log('No audio data captured')
-        statusMessage.value = 'No audio data captured'
+        console.log('[Audio Processing] No speech detected in transcription.')
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+        isSpeechDetected.value = false
       }
     } catch (error) {
-      console.error('Error processing audio:', error)
-      statusMessage.value = 'Error processing audio'
-    } finally {
-      audioChunks = []
-      stopListening()
-      isProcessingAudio.value = false
-      console.log('Audio processing complete')
+      console.error('[Audio Processing] Error during transcription:', error)
+      generalStore.statusMessage = 'Error: Transcription failed'
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      isSpeechDetected.value = false
     }
-    return ''
   }
 
-  const stopListening = () => {
-    console.log('Stopping listening')
-    if (myvad) {
-      try {
-        myvad.pause()
-        myvad.destroy()
-        myvad = null
-      } catch (error) {
-        console.error('Error stopping VAD:', error)
+  watch(audioState, (newState, oldState) => {
+    console.log(
+      `[VAD Watcher] Audio state changed from ${oldState} to ${newState}`
+    )
+    if (newState === 'LISTENING') {
+      initializeVAD()
+    } else if (oldState === 'LISTENING' && newState !== 'LISTENING') {
+      destroyVAD()
+    }
+  })
+
+  watch(isRecordingRequested, requested => {
+    console.log(`[VAD Watcher] Recording requested changed: ${requested}`)
+    const currentState = audioState.value
+
+    if (requested) {
+      if (currentState === 'IDLE') {
+        setAudioState('LISTENING')
       }
-    }
-
-    if (processingDebounceTimer.value) {
-      clearTimeout(processingDebounceTimer.value)
-      processingDebounceTimer.value = null
-    }
-
-    isRecording.value = false
-  }
-
-  const toggleRecording = () => {
-    isRecordingRequested.value = !isRecordingRequested.value
-    console.log('Recording toggled:', isRecordingRequested.value ? 'ON' : 'OFF')
-
-    if (!isRecordingRequested.value) {
-      stopListening()
     } else {
-      if (myvad) {
-        try {
-          myvad.pause()
-          myvad = null
-        } catch (error) {
-          console.error('Error cleaning up VAD:', error)
-        }
+      if (currentState === 'LISTENING' || currentState === 'PROCESSING_AUDIO') {
+        setAudioState('IDLE')
       }
-      isProcessingAudio.value = false
-      if (processingDebounceTimer.value) {
-        clearTimeout(processingDebounceTimer.value)
-        processingDebounceTimer.value = null
-      }
-      isRecording.value = true
-      startListening()
     }
+  })
+
+  const toggleRecordingRequest = () => {
+    isRecordingRequested.value = !isRecordingRequested.value
+    console.log(
+      `Recording request toggled via UI: ${isRecordingRequested.value}`
+    )
   }
 
-  onMounted(() => {
-    eventBus.on('start-listening', startListening)
-    eventBus.on('stop-listening', stopListening)
+  onUnmounted(() => {
+    console.log('[Audio Processing] Component unmounted, ensuring VAD cleanup.')
+    destroyVAD()
   })
 
   return {
-    startListening,
-    stopListening,
-    toggleRecording,
-    processAudioRecording,
+    toggleRecordingRequest,
   }
 }

@@ -9,7 +9,7 @@
           class="avatar-ring"
           :class="{
             'ring-green-500!': audioState === 'SPEAKING',
-            'ring-yellow-500!':
+            'ring-cyan-500!':
               audioState === 'PROCESSING_AUDIO' ||
               audioState === 'WAITING_FOR_RESPONSE',
             'ring-blue-500!': audioState === 'LISTENING',

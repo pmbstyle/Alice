@@ -1,0 +1,3 @@
+.input-field {
+  @apply w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors;
+}

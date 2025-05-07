@@ -85,7 +85,7 @@
           tabindex="0"
           class="dropdown-content menu bg-base-200 bg-opacity-80 rounded-box z-[1] w-36 p-2 shadow"
         >
-          <!-- <li><a>Settings</a></li> -->
+          <li><a @click="openSettings">Settings</a></li>
           <li><a @click="closeWindow">Close app</a></li>
         </ul>
       </div>
@@ -142,6 +142,11 @@ const micAriaLabel = computed(() => {
     ? 'Stop Microphone'
     : 'Start Microphone'
 })
+
+const openSettings = () => {
+  generalStore.forceOpenSettings = true
+  toggleChat()
+}
 
 const closeWindow = () => {
   if (props.isElectron) {

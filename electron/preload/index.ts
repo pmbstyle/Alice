@@ -35,6 +35,12 @@ contextBridge.exposeInMainWorld('ipcRenderer', {
   },
 })
 
+contextBridge.exposeInMainWorld('settingsAPI', {
+  loadSettings: () => ipcRenderer.invoke('settings:load'),
+  saveSettings: (settings: any) =>
+    ipcRenderer.invoke('settings:save', settings),
+})
+
 // --------- Preload scripts loading ---------
 function domReady(
   condition: DocumentReadyState[] = ['complete', 'interactive']
@@ -126,4 +132,3 @@ domReady()
 window.onmessage = ev => {
   ev.data.payload === 'removeLoading' && removeLoading()
 }
-

@@ -1,13 +1,21 @@
 import OpenAI from 'openai'
+import { useSettingsStore } from '../../stores/settingsStore'
 
-const openai = new OpenAI({
-  organization: import.meta.env.VITE_OPENAI_ORGANIZATION,
-  project: import.meta.env.VITE_OPENAI_PROJECT,
-  apiKey: import.meta.env.VITE_OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true,
-})
+const getOpenAIClient = () => {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_OPENAI_API_KEY) {
+    console.error('OpenAI API Key is not configured in production.')
+  }
+  return new OpenAI({
+    organization: settings.VITE_OPENAI_ORGANIZATION,
+    project: settings.VITE_OPENAI_PROJECT,
+    apiKey: settings.VITE_OPENAI_API_KEY,
+    dangerouslyAllowBrowser: true,
+  })
+}
 
 export const tts = async (text: string) => {
+  const openai = getOpenAIClient()
   const response = await openai.audio.speech.create({
     model: 'tts-1',
     voice: 'nova',

@@ -7,7 +7,8 @@
       class="sidebar-content w-full flex-1 overflow-y-auto flex flex-col"
       ref="sidebarContentElement"
     >
-      <Chat @changeView="changeView" v-if="view === 'chat'"/>
+      <Chat @changeView="changeView" v-if="view === 'chat'" />
+      <Settings @changeView="changeView" v-if="view === 'settings'" />
     </div>
     <div class="w-full pt-4 pr-4" v-if="view === 'chat'">
       <div class="gradient-border-wrapper">
@@ -19,24 +20,43 @@
         />
       </div>
     </div>
+    <div class="flex justify-between items-center mb-2">
+      <button
+        class="text-gray-400 hover:text-white transition-colors duration-300"
+        @click="changeView('settings')"
+      >
+        Settings
+      </button>
+      <button
+        class="text-gray-400 hover:text-white transition-colors duration-300"
+        @click="changeView('chat')"
+      >
+        Chat
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { defineEmits, ref, watch } from 'vue'
+import { defineEmits, ref, watch, onMounted, nextTick } from 'vue'
 import Chat from './Chat.vue'
+import Settings from './Settings.vue'
 import { useGeneralStore } from '../stores/generalStore'
+import { useSettingsStore } from '../stores/settingsStore'
 import { storeToRefs } from 'pinia'
+
 const generalStore = useGeneralStore()
+const settingsStore = useSettingsStore()
 
 const sidebarContentElement = ref<null | HTMLElement>(null)
 const view = ref('chat')
 const emit = defineEmits(['processRequest'])
-const { chatHistory, openSidebar, chatInput, storeMessage } = storeToRefs(generalStore)
+const { chatHistory, openSidebar, chatInput, storeMessage } =
+  storeToRefs(generalStore)
 const changeView = (newView: string) => {
   view.value = newView
   if (newView === 'chat') {
-    scrollChat()
+    scrollChatToBottom()
   }
 }
 let debounceTimeout = ref<number | null>(null)
@@ -54,15 +74,59 @@ const chatInputHandle = async () => {
     }, debounceDelay)
   }
 }
-watch(chatHistory.value, () => {
-  scrollChat()
-})
+watch(
+  chatHistory,
+  () => {
+    if (view.value === 'chat') {
+      scrollChatToBottom()
+    }
+  },
+  { deep: true }
+)
 
-const scrollChat = () => {
+const scrollChatToBottom = () => {
   if (!sidebarContentElement.value) return
   sidebarContentElement.value.scrollTo({
     top: sidebarContentElement.value.scrollHeight,
     behavior: 'smooth',
   })
 }
+
+const changeSidebarView = async (newView: 'chat' | 'settings') => {
+  view.value = newView
+  if (newView === 'chat') {
+    await nextTick(() => scrollChatToBottom())
+  }
+  generalStore.forceOpenSettings = false
+}
+
+onMounted(async () => {
+  if (generalStore.forceOpenSettings) {
+    changeSidebarView('settings')
+  }
+  if (!settingsStore.initialLoadAttempted) {
+    await settingsStore.loadSettings()
+  }
+
+  if (!generalStore.openSidebar) generalStore.openSidebar = true
+  changeSidebarView('settings')
+
+  watch(
+    () => settingsStore.successMessage,
+    newMessage => {
+      if (
+        newMessage &&
+        settingsStore.areEssentialSettingsProvided &&
+        view.value === 'settings'
+      ) {
+        setTimeout(() => {
+          if (settingsStore.successMessage) {
+            changeSidebarView('chat')
+            settingsStore.successMessage = null
+          }
+        }, 1500)
+      }
+    }
+  )
+})
 </script>

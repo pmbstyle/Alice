@@ -39,6 +39,8 @@ export const useGeneralStore = defineStore('general', () => {
 
   const storeMessage = ref<boolean>(false)
 
+  const forceOpenSettings = ref<boolean>(false)
+
   const setProvider = (providerName: string) => {
     provider.value = providerName || 'openai'
   }
@@ -138,5 +140,6 @@ export const useGeneralStore = defineStore('general', () => {
     setProvider,
     setAudioState,
     queueAudioForPlayback,
+    forceOpenSettings,
   }
 })

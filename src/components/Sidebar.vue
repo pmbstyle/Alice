@@ -205,7 +205,7 @@ onMounted(async () => {
     generalStore.openSidebar = true
     resizeWindow(true)
     changeSidebarView('settings')
-    generalStore.statusMessage = 'Configuration needed'
+    generalStore.setAudioState('CONFIG')
   } else if (needsInit) {
     resizeWindow(true)
     changeSidebarView('chat')

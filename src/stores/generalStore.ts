@@ -8,6 +8,7 @@ export type AudioState =
   | 'PROCESSING_AUDIO'
   | 'WAITING_FOR_RESPONSE'
   | 'SPEAKING'
+  | 'CONFIG'
 
 export const useGeneralStore = defineStore('general', () => {
   const audioState = ref<AudioState>('IDLE')
@@ -68,6 +69,9 @@ export const useGeneralStore = defineStore('general', () => {
       case 'SPEAKING':
         statusMessage.value = 'Speaking...'
         break
+      case 'CONFIG':
+        statusMessage.value = 'Setting up...'
+        break
       default:
         statusMessage.value = 'Unknown state'
         break
@@ -86,6 +90,9 @@ export const useGeneralStore = defineStore('general', () => {
           case 'PROCESSING_AUDIO':
           case 'WAITING_FOR_RESPONSE':
             targetVideoType = 'PROCESSING'
+            break
+          case 'CONFIG':
+            targetVideoType = 'CONFIG'
             break
           case 'LISTENING':
           case 'IDLE':

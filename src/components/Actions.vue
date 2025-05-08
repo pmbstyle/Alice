@@ -145,7 +145,9 @@ const micAriaLabel = computed(() => {
 
 const openSettings = () => {
   generalStore.forceOpenSettings = true
-  toggleChat()
+  if (!openSidebar.value) {
+    toggleChat()
+  }
 }
 
 const closeWindow = () => {

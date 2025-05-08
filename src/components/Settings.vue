@@ -1,6 +1,13 @@
 <template>
   <div class="settings-panel p-4 h-full overflow-y-auto text-white">
     <h2 class="text-2xl font-semibold mb-4 text-center">Alice Settings</h2>
+    <button
+      @click="closeSettingsView"
+      class="p-2 rounded-full hover:bg-gray-700/50 transition-colors focus:outline-none"
+      title="Back to Chat"
+    >
+      <img :src="chatIcon" alt="Chat" class="w-5 h-5" />
+    </button>
 
     <div v-if="settingsStore.isLoading" class="text-center">
       Loading settings...
@@ -11,7 +18,6 @@
       v-else
       class="space-y-8"
     >
-      <!-- OpenAI -->
       <fieldset class="border p-4 rounded-lg border-gray-600">
         <legend class="text-xl font-semibold px-2">OpenAI</legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
@@ -56,7 +62,6 @@
         </div>
       </fieldset>
 
-      <!-- Groq -->
       <fieldset class="border p-4 rounded-lg border-gray-600">
         <legend class="text-xl font-semibold px-2">
           Groq (Speech-to-Text)
@@ -72,7 +77,6 @@
         </div>
       </fieldset>
 
-      <!-- Pinecone -->
       <fieldset class="border p-4 rounded-lg border-gray-600">
         <legend class="text-xl font-semibold px-2">
           Pinecone (Vector Memory)
@@ -123,7 +127,6 @@
         </div>
       </fieldset>
 
-      <!-- Supabase -->
       <fieldset class="border p-4 rounded-lg border-gray-600">
         <legend class="text-xl font-semibold px-2">
           Supabase (Long-term Memory)
@@ -152,7 +155,6 @@
         </div>
       </fieldset>
 
-      <!-- Function Calling Tools (Optional) -->
       <fieldset class="border p-4 rounded-lg border-gray-600">
         <legend class="text-xl font-semibold px-2">Tool APIs (Optional)</legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
@@ -262,33 +264,46 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
-import { useSettingsStore, AliceSettings } from '../stores/settingsStore';
-import { useGeneralStore } from '../stores/generalStore';
+import { ref, watch, onMounted, defineEmits } from 'vue'
+import { useSettingsStore, AliceSettings } from '../stores/settingsStore'
+import { chatIcon } from '../utils/assetsImport'
 
-const settingsStore = useSettingsStore();
-const generalStore = useGeneralStore();
+const emit = defineEmits(['view-change'])
 
-const currentSettings = ref<AliceSettings>({ ...settingsStore.settings });
+const settingsStore = useSettingsStore()
 
-const handleSettingsSavedSuccessfully = () => {
-  // This could be used to signal the sidebar to switch view
+const currentSettings = ref<AliceSettings>({ ...settingsStore.settings })
+
+const closeSettingsView = () => {
+  emit('view-change', 'chat')
+}
 
 onMounted(async () => {
   if (!settingsStore.initialLoadAttempted) {
-    await settingsStore.loadSettings();
+    await settingsStore.loadSettings()
   }
 
-  currentSettings.value = { ...settingsStore.config };
-});
+  currentSettings.value = { ...settingsStore.config }
+})
 
-watch(() => settingsStore.config, (newConfig) => {
-  currentSettings.value = { ...newConfig };
-}, { deep: true });
+watch(
+  () => settingsStore.config,
+  newConfig => {
+    currentSettings.value = { ...newConfig }
+  },
+  { deep: true }
+)
 
-watch(currentSettings, (newValues) => {
+watch(
+  currentSettings,
+  newValues => {
     for (const key in newValues) {
-        settingsStore.updateSetting(key as keyof AliceSettings, newValues[key as keyof AliceSettings]);
+      settingsStore.updateSetting(
+        key as keyof AliceSettings,
+        newValues[key as keyof AliceSettings]
+      )
     }
-}, {deep: true});
+  },
+  { deep: true }
+)
 </script>

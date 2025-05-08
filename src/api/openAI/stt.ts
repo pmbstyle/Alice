@@ -1,11 +1,20 @@
 import Groq from 'groq-sdk'
 import { toFile } from 'openai/uploads'
+import { useSettingsStore } from '../../stores/settingsStore'
 
-const groq = new Groq({
-  apiKey: import.meta.env.VITE_GROQ_API_KEY,
-  dangerouslyAllowBrowser: true,
-})
+function getGroqClient() {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_GROQ_API_KEY && useSettingsStore().isProduction) {
+    console.error('Groq API Key is not configured in production.')
+  }
+  return new Groq({
+    apiKey: settings.VITE_GROQ_API_KEY,
+    dangerouslyAllowBrowser: true,
+  })
+}
+
 export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
+  const groq = getGroqClient()
   const convertedFile = await toFile(audioBuffer, 'audio.wav')
   const transcription = await groq.audio.transcriptions.create({
     file: convertedFile,

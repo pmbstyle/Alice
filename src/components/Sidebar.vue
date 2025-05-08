@@ -4,32 +4,23 @@
     :class="{ open: openSidebar }"
   >
     <div
-      v-if="openSidebar"
-      class="sidebar-header p-2 flex justify-end items-center border-b border-gray-700 shadow-sm"
-    >
-      <button
-        v-if="view === 'settings'"
-        @click="changeSidebarView('chat')"
-        class="p-2 rounded-full hover:bg-gray-700/50 transition-colors focus:outline-none"
-        title="Back to Chat"
-      >
-        <img :src="chatIcon" alt="Chat" class="w-5 h-5" />
-      </button>
-    </div>
-
-    <div
       class="sidebar-content w-full flex-1 overflow-y-auto flex flex-col relative"
       ref="sidebarContentElement"
     >
-      <Chat @processRequest="$emit('processRequest')" v-if="view === 'chat'" />
+      <Chat
+        @processRequest="$emit('processRequest')"
+        v-if="sideBarView === 'chat'"
+      />
       <Settings
-        v-else-if="view === 'settings'"
+        v-if="sideBarView === 'settings'"
         @view-change="changeSidebarView"
       />
 
       <div
         v-if="
-          view === 'chat' && !isConversationReady && !settingsStore.isLoading
+          sideBarView === 'chat' &&
+          !isConversationReady &&
+          !settingsStore.isLoading
         "
         class="absolute inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center text-center p-4 z-10"
       >
@@ -67,7 +58,7 @@
       </div>
     </div>
 
-    <div class="w-full pt-4 pr-4" v-if="view === 'chat'">
+    <div class="w-full pt-4 pr-4" v-if="sideBarView === 'chat'">
       <div
         class="gradient-border-wrapper"
         :class="{ 'opacity-50': !isConversationReady }"
@@ -102,7 +93,6 @@ import { useGeneralStore } from '../stores/generalStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useConversationStore } from '../stores/openAIStore'
 import { storeToRefs } from 'pinia'
-import { chatIcon } from '../utils/assetsImport'
 
 const generalStore = useGeneralStore()
 const settingsStore = useSettingsStore()
@@ -112,13 +102,8 @@ const sidebarContentElement = ref<null | HTMLElement>(null)
 const view = ref<'chat' | 'settings'>('chat')
 const emit = defineEmits(['processRequest'])
 
-const {
-  openSidebar,
-  chatInput,
-  storeMessage,
-  forceOpenSettings,
-  statusMessage,
-} = storeToRefs(generalStore)
+const { openSidebar, chatInput, storeMessage, sideBarView } =
+  storeToRefs(generalStore)
 const { chatHistory } = storeToRefs(generalStore)
 const { isInitialized: conversationIsInitialized } =
   storeToRefs(conversationStore)
@@ -126,15 +111,9 @@ const { isInitialized: conversationIsInitialized } =
 const isConversationReady = computed(() => conversationIsInitialized.value)
 
 const changeSidebarView = async (newView: 'chat' | 'settings') => {
-  console.log(`Sidebar: Changing view to ${newView}`)
-  view.value = newView
+  sideBarView.value = newView
   if (newView === 'chat') {
     await nextTick(() => scrollChatToBottom())
-  }
-  if (newView === 'chat' && forceOpenSettings.value) {
-    if (settingsStore.areEssentialSettingsProvided) {
-      generalStore.forceOpenSettings = false
-    }
   }
 }
 
@@ -157,7 +136,7 @@ const chatInputHandle = async () => {
 watch(
   chatHistory,
   () => {
-    if (view.value === 'chat') {
+    if (sideBarView.value === 'chat') {
       scrollChatToBottom()
     }
   },
@@ -176,7 +155,7 @@ const scrollChatToBottom = () => {
 
 const retryInitialization = async () => {
   if (!conversationStore.isInitialized) {
-    generalStore.statusMessage = 'Retrying initialization...'
+    generalStore.statusMessage = 'Retrying init...'
     await conversationStore.initialize()
     if (
       !conversationStore.isInitialized &&
@@ -190,8 +169,16 @@ const retryInitialization = async () => {
   }
 }
 
+const resizeWindow = async (open: boolean) => {
+  const targetWidth = open ? 1200 : 500
+  const targetHeight = 500
+  ;(window as any).electron.resize({
+    width: targetWidth,
+    height: targetHeight,
+  })
+}
+
 onMounted(async () => {
-  console.log('[Sidebar] Mounted. Checking settings and AI store state.')
   if (!settingsStore.initialLoadAttempted) {
     console.log('[Sidebar] Settings not loaded yet, awaiting load...')
     await settingsStore.loadSettings()
@@ -215,50 +202,25 @@ onMounted(async () => {
 
   if (needsSettings) {
     console.log('[Sidebar] Needs essential settings.')
-    if (!openSidebar.value) generalStore.openSidebar = true
+    generalStore.openSidebar = true
+    resizeWindow(true)
     changeSidebarView('settings')
-    generalStore.statusMessage = 'Configuration needed.'
-    const targetWidth = openSidebar.value ? 1200 : 500
-    const targetHeight = 500
-    console.log(`Resizing window to: ${targetWidth}x${targetHeight}`)
-    ;(window as any).electron.resize({
-      width: targetWidth,
-      height: targetHeight,
-    })
-  } else if (forceOpenSettings.value) {
-    console.log('[Sidebar] Forced to settings view.')
-    if (!openSidebar.value) generalStore.openSidebar = true
-    changeSidebarView('settings')
+    generalStore.statusMessage = 'Configuration needed'
   } else if (needsInit) {
-    console.warn(
-      '[Sidebar] AI Store not initialized, showing chat but input should be disabled.'
-    )
+    resizeWindow(true)
     changeSidebarView('chat')
     if (!generalStore.statusMessage.includes('Error')) {
       generalStore.statusMessage = 'Initializing AI...'
     }
   } else if (conversationStore.isInitialized) {
-    console.log('[Sidebar] Settings OK, AI initialized. Showing chat.')
     changeSidebarView('chat')
-    if (
-      generalStore.statusMessage === 'Initializing AI...' ||
-      generalStore.statusMessage.includes('Error:')
-    ) {
-      generalStore.statusMessage = 'Stand by'
-    }
+    generalStore.statusMessage = 'Stand by'
   } else {
     console.log(
       '[Sidebar] Defaulting to chat view (Dev mode or unexpected state).'
     )
+    resizeWindow(true)
     changeSidebarView('chat')
-  }
-})
-
-watch(forceOpenSettings, shouldForce => {
-  if (shouldForce && view.value !== 'settings') {
-    console.log('[Sidebar] forceOpenSettings triggered.')
-    if (!openSidebar.value) generalStore.openSidebar = true
-    changeSidebarView('settings')
   }
 })
 
@@ -268,7 +230,7 @@ watch(
     if (
       newMessage &&
       settingsStore.areEssentialSettingsProvided &&
-      view.value === 'settings'
+      sideBarView.value === 'settings'
     ) {
       if (conversationStore.isInitialized) {
         console.log(
@@ -288,18 +250,4 @@ watch(
     }
   }
 )
-
-watch(openSidebar, isOpen => {
-  if (
-    !isOpen &&
-    view.value === 'settings' &&
-    settingsStore.areEssentialSettingsProvided &&
-    !forceOpenSettings.value
-  ) {
-    console.log(
-      '[Sidebar] Closed while in settings view (and settings are OK), resetting view to chat for next open.'
-    )
-    changeSidebarView('chat')
-  }
-})
 </script>

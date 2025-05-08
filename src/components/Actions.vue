@@ -21,7 +21,7 @@
         v-if="!isMinimized"
         :src="chatIcon"
         class="indicator"
-        @click="toggleChat"
+        @click="changeSidebarView('chat')"
         data-tip="Toggle Chat Panel"
         aria-label="Toggle Chat Panel"
       />
@@ -85,7 +85,7 @@
           tabindex="0"
           class="dropdown-content menu bg-base-200 bg-opacity-80 rounded-box z-[1] w-36 p-2 shadow"
         >
-          <li><a @click="openSettings">Settings</a></li>
+          <li><a @click="changeSidebarView('settings')">Settings</a></li>
           <li><a @click="closeWindow">Close app</a></li>
         </ul>
       </div>
@@ -127,8 +127,13 @@ const props = defineProps({
 const emit = defineEmits(['takeScreenShot', 'togglePlaying', 'toggleRecording'])
 
 const generalStore = useGeneralStore()
-const { isMinimized, statusMessage, openSidebar, takingScreenShot } =
-  storeToRefs(generalStore)
+const {
+  isMinimized,
+  statusMessage,
+  openSidebar,
+  takingScreenShot,
+  sideBarView,
+} = storeToRefs(generalStore)
 
 const micIconSrc = computed(() => {
   return props.audioState === 'LISTENING' ||
@@ -143,26 +148,29 @@ const micAriaLabel = computed(() => {
     : 'Start Microphone'
 })
 
-const openSettings = () => {
-  generalStore.forceOpenSettings = true
-  if (!openSidebar.value) {
-    toggleChat()
-  }
-}
-
 const closeWindow = () => {
   if (props.isElectron) {
     ;(window as any).electron.closeApp()
   }
 }
 
-const toggleChat = async () => {
+const changeSidebarView = (view: 'chat' | 'settings') => {
+  if (sideBarView.value === view && openSidebar.value) {
+    toggleSidebar()
+  } else if (sideBarView.value !== view || !openSidebar.value) {
+    sideBarView.value = view
+    if (!openSidebar.value) {
+      toggleSidebar()
+    }
+  }
+}
+
+const toggleSidebar = async () => {
   openSidebar.value = !openSidebar.value
   if (props.isElectron) {
     await nextTick()
     const targetWidth = openSidebar.value ? 1200 : 500
     const targetHeight = 500
-    console.log(`Resizing window to: ${targetWidth}x${targetHeight}`)
     ;(window as any).electron.resize({
       width: targetWidth,
       height: targetHeight,
@@ -178,7 +186,8 @@ const toggleMinimize = async () => {
     await nextTick()
 
     if (willMinimize && openSidebar.value) {
-      await toggleChat()
+      // Replace the missing toggleChat with the correct toggleSidebar
+      toggleSidebar()
       setTimeout(() => {
         console.log('Minimizing window after closing sidebar.')
         ;(window as any).electron.mini({ minimize: true })

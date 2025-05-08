@@ -48,6 +48,38 @@ const defaultSettings: AliceSettings = {
   VITE_QB_PASSWORD: '',
 }
 
+const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
+  VITE_OPENAI_API_KEY: 'OpenAI API Key',
+  VITE_OPENAI_ORGANIZATION: 'OpenAI Organization ID',
+  VITE_OPENAI_PROJECT: 'OpenAI Project ID',
+  VITE_OPENAI_ASSISTANT_ID: 'OpenAI Assistant ID',
+  VITE_GROQ_API_KEY: 'Groq API Key',
+  VITE_PINECONE_API_KEY: 'Pinecone API Key',
+  VITE_PINECONE_BASE_URL: 'Pinecone Base URL (Control Plane)',
+  VITE_PINECONE_ENV: 'Pinecone Environment (Index Host Suffix)',
+  VITE_PINECONE_INDEX: 'Pinecone Index Name',
+  VITE_SUPABASE_URL: 'Supabase Project URL',
+  VITE_SUPABASE_KEY: 'Supabase Anon Public Key',
+  VITE_TAVILY_API_KEY: 'Tavily API Key',
+  VITE_OPENWEATHERMAP_API_KEY: 'OpenWeatherMap API Key',
+  VITE_JACKETT_API_KEY: 'Jackett API Key',
+  VITE_JACKETT_URL: 'Jackett URL',
+  VITE_QB_URL: 'qBittorrent URL',
+  VITE_QB_USERNAME: 'qBittorrent Username',
+  VITE_QB_PASSWORD: 'qBittorrent Password',
+}
+
+const ESSENTIAL_SETTINGS_KEYS: (keyof AliceSettings)[] = [
+  'VITE_OPENAI_API_KEY',
+  'VITE_OPENAI_ASSISTANT_ID',
+  'VITE_GROQ_API_KEY',
+  'VITE_PINECONE_API_KEY',
+  'VITE_PINECONE_ENV',
+  'VITE_PINECONE_INDEX',
+  'VITE_SUPABASE_URL',
+  'VITE_SUPABASE_KEY',
+]
+
 export const useSettingsStore = defineStore('settings', {
   state: () => ({
     settings: { ...defaultSettings } as AliceSettings,
@@ -61,18 +93,7 @@ export const useSettingsStore = defineStore('settings', {
     isProduction: (): boolean => import.meta.env.PROD,
     areEssentialSettingsProvided(state): boolean {
       if (!this.isProduction) return true
-
-      const essentialKeys: (keyof AliceSettings)[] = [
-        'VITE_OPENAI_API_KEY',
-        'VITE_OPENAI_ASSISTANT_ID',
-        'VITE_GROQ_API_KEY',
-        'VITE_PINECONE_API_KEY',
-        'VITE_PINECONE_ENV',
-        'VITE_PINECONE_INDEX',
-        'VITE_SUPABASE_URL',
-        'VITE_SUPABASE_KEY',
-      ]
-      return essentialKeys.every(key => !!state.settings[key]?.trim())
+      return ESSENTIAL_SETTINGS_KEYS.every(key => !!state.settings[key]?.trim())
     },
     config(state): Readonly<AliceSettings> {
       if (!this.isProduction) {
@@ -154,21 +175,13 @@ export const useSettingsStore = defineStore('settings', {
       const currentConfigForTest = this.config
 
       if (this.isProduction) {
-        const essentialProdKeys: (keyof AliceSettings)[] = [
-          'VITE_OPENAI_API_KEY',
-          'VITE_OPENAI_ASSISTANT_ID',
-          'VITE_GROQ_API_KEY',
-          'VITE_PINECONE_API_KEY',
-          'VITE_PINECONE_ENV',
-          'VITE_PINECONE_INDEX',
-          'VITE_SUPABASE_URL',
-          'VITE_SUPABASE_KEY',
-        ]
-        const missingProdKey = essentialProdKeys.find(
+        const missingProdKey = ESSENTIAL_SETTINGS_KEYS.find(
           key => !currentConfigForTest[key]?.trim()
         )
         if (missingProdKey) {
-          this.error = `Essential setting '${missingProdKey}' is missing. Please fill all required fields.`
+          const friendlyName =
+            settingKeyToLabelMap[missingProdKey] || missingProdKey
+          this.error = `Essential setting '${friendlyName}' is missing. Please fill all required fields marked with *`
           generalStore.statusMessage = 'Settings incomplete.'
           this.isSaving = false
           return
@@ -281,9 +294,9 @@ export const useSettingsStore = defineStore('settings', {
       } else {
         let settingsPersisted = false
         if (this.isProduction) {
-          const saveResult = await window.settingsAPI.saveSettings(
-            this.settings
-          )
+          const plainSettings = { ...this.settings }
+          const saveResult =
+            await window.settingsAPI.saveSettings(plainSettings)
           if (saveResult.success) {
             this.successMessage = 'Settings saved and validated successfully!'
             settingsPersisted = true
@@ -323,9 +336,17 @@ export const useSettingsStore = defineStore('settings', {
                   'Settings potentially saved/validated, but AI services failed to initialize.'
             }
           } else {
+            const firstMissingEssential = ESSENTIAL_SETTINGS_KEYS.find(
+              key => !this.settings[key]?.trim()
+            )
+            const friendlyNameForFallback = firstMissingEssential
+              ? settingKeyToLabelMap[firstMissingEssential] ||
+                firstMissingEssential
+              : 'An essential setting'
+
             this.error =
               (this.error ? this.error + '; ' : '') +
-              'Essential settings appear to be missing after validation and save attempt.'
+              `${friendlyNameForFallback} appears to be missing after validation and save attempt. Please check all required fields.`
             generalStore.statusMessage =
               'Settings incomplete for AI initialization.'
           }

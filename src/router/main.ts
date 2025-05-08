@@ -1,7 +1,7 @@
-import { createRouter, createWebHistory } from 'vue-router';
-import { useSettingsStore } from '../stores/settingsStore';
-import { useGeneralStore } from '../stores/generalStore';
-import MainComponent from '../components/Main.vue';
+import { createRouter, createWebHistory } from 'vue-router'
+import { useSettingsStore } from '../stores/settingsStore'
+import { useGeneralStore } from '../stores/generalStore'
+import MainComponent from '../components/Main.vue'
 
 const routes = [
   {
@@ -13,30 +13,36 @@ const routes = [
     path: '/:pathMatch(.*)*',
     redirect: '/',
   },
-];
+]
 
 const router = createRouter({
-  history: createWebHistory(import.meta.env.BASE_URL === '/vite-gh-pages/' ? '/' : import.meta.env.BASE_URL || '/'),
+  history: createWebHistory(
+    import.meta.env.BASE_URL === '/vite-gh-pages/'
+      ? '/'
+      : import.meta.env.BASE_URL || '/'
+  ),
   routes,
-});
+})
 
 router.beforeEach(async (to, from, next) => {
-  const settingsStore = useSettingsStore();
-  const generalStore = useGeneralStore();
+  const settingsStore = useSettingsStore()
+  const generalStore = useGeneralStore()
 
   if (!settingsStore.initialLoadAttempted) {
-    await settingsStore.loadSettings();
+    await settingsStore.loadSettings()
   }
 
-  if (to.name === 'Main' && settingsStore.isProduction && !settingsStore.areEssentialSettingsProvided) {
-    console.log("Router: Essential settings missing in production. Signaling sidebar to show settings.");
-    generalStore.forceOpenSettings = true;
-  } else {
-    if (generalStore.forceOpenSettings) {
-         generalStore.forceOpenSettings = false;
-    }
+  if (
+    to.name === 'Main' &&
+    settingsStore.isProduction &&
+    !settingsStore.areEssentialSettingsProvided
+  ) {
+    console.log(
+      'Router: Essential settings missing in production. Signaling sidebar to show settings.'
+    )
+    generalStore.sideBarView = 'settings'
   }
-  next();
-});
+  next()
+})
 
-export default router;
+export default router

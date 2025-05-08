@@ -1,13 +1,6 @@
 <template>
   <div class="settings-panel p-4 h-full overflow-y-auto text-white">
-    <h2 class="text-2xl font-semibold mb-4 text-center">Alice Settings</h2>
-    <button
-      @click="closeSettingsView"
-      class="p-2 rounded-full hover:bg-gray-700/50 transition-colors focus:outline-none"
-      title="Back to Chat"
-    >
-      <img :src="chatIcon" alt="Chat" class="w-5 h-5" />
-    </button>
+    <h2 class="text-2xl font-semibold mb-4 text-center">Settings</h2>
 
     <div v-if="settingsStore.isLoading" class="text-center">
       Loading settings...
@@ -27,7 +20,7 @@
               id="openai-key"
               type="password"
               v-model="currentSettings.VITE_OPENAI_API_KEY"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -36,7 +29,7 @@
               id="openai-org"
               type="text"
               v-model="currentSettings.VITE_OPENAI_ORGANIZATION"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -45,7 +38,7 @@
               id="openai-project"
               type="text"
               v-model="currentSettings.VITE_OPENAI_PROJECT"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -56,7 +49,7 @@
               id="openai-assistant"
               type="text"
               v-model="currentSettings.VITE_OPENAI_ASSISTANT_ID"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
         </div>
@@ -72,7 +65,7 @@
             id="groq-key"
             type="password"
             v-model="currentSettings.VITE_GROQ_API_KEY"
-            class="input-field"
+            class="input focus:outline-none"
           />
         </div>
       </fieldset>
@@ -88,7 +81,7 @@
               id="pinecone-key"
               type="password"
               v-model="currentSettings.VITE_PINECONE_API_KEY"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -100,7 +93,7 @@
               type="text"
               v-model="currentSettings.VITE_PINECONE_BASE_URL"
               placeholder="e.g., https://api.pinecone.io"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -112,7 +105,7 @@
               type="text"
               v-model="currentSettings.VITE_PINECONE_ENV"
               placeholder="e.g., us-west1-gcp"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -121,7 +114,7 @@
               id="pinecone-index"
               type="text"
               v-model="currentSettings.VITE_PINECONE_INDEX"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
         </div>
@@ -138,7 +131,7 @@
               id="supabase-url"
               type="text"
               v-model="currentSettings.VITE_SUPABASE_URL"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -149,7 +142,7 @@
               id="supabase-key"
               type="password"
               v-model="currentSettings.VITE_SUPABASE_KEY"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
         </div>
@@ -166,7 +159,7 @@
               id="tavily-key"
               type="password"
               v-model="currentSettings.VITE_TAVILY_API_KEY"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -177,7 +170,7 @@
               id="openweather-key"
               type="password"
               v-model="currentSettings.VITE_OPENWEATHERMAP_API_KEY"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -188,7 +181,7 @@
               id="jackett-url"
               type="text"
               v-model="currentSettings.VITE_JACKETT_URL"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -197,7 +190,7 @@
               id="jackett-key"
               type="password"
               v-model="currentSettings.VITE_JACKETT_API_KEY"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -206,7 +199,7 @@
               id="qb-url"
               type="text"
               v-model="currentSettings.VITE_QB_URL"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -215,7 +208,7 @@
               id="qb-user"
               type="text"
               v-model="currentSettings.VITE_QB_USERNAME"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
           <div>
@@ -224,7 +217,7 @@
               id="qb-pass"
               type="password"
               v-model="currentSettings.VITE_QB_PASSWORD"
-              class="input-field"
+              class="input focus:outline-none"
             />
           </div>
         </div>
@@ -234,7 +227,7 @@
         <button
           type="submit"
           :disabled="settingsStore.isSaving"
-          class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-150 ease-in-out disabled:opacity-50"
+          class="btn btn-primary btn-active"
         >
           {{
             settingsStore.isSaving
@@ -246,13 +239,13 @@
 
       <div
         v-if="settingsStore.error"
-        class="mt-4 p-3 bg-red-700 border border-red-900 text-white rounded-md text-center"
+        class="mt-4 p-3 bg-red-700 border border-red-900 text-sm text-white rounded-md text-center"
       >
         Error: {{ settingsStore.error }}
       </div>
       <div
         v-if="settingsStore.successMessage"
-        class="mt-4 p-3 bg-green-700 border-green-900 text-white rounded-md text-center"
+        class="mt-4 p-3 bg-green-700 border-green-900 text-sm text-white rounded-md text-center"
       >
         {{ settingsStore.successMessage }}
       </div>
@@ -260,23 +253,23 @@
     <p class="text-xs text-gray-400 mt-4 text-center">
       * Essential for core functionality.
     </p>
+    <p class="text-xs text-gray-400 mt-4 text-center">
+      Alice v{{ appVersion }}
+    </p>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, onMounted, defineEmits } from 'vue'
 import { useSettingsStore, AliceSettings } from '../stores/settingsStore'
-import { chatIcon } from '../utils/assetsImport'
+
+const appVersion = ref(import.meta.env.VITE_APP_VERSION || '')
 
 const emit = defineEmits(['view-change'])
 
 const settingsStore = useSettingsStore()
 
 const currentSettings = ref<AliceSettings>({ ...settingsStore.settings })
-
-const closeSettingsView = () => {
-  emit('view-change', 'chat')
-}
 
 onMounted(async () => {
   if (!settingsStore.initialLoadAttempted) {

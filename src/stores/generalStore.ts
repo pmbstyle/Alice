@@ -38,7 +38,7 @@ export const useGeneralStore = defineStore('general', () => {
   const audioQueue = ref<Response[]>([])
 
   const storeMessage = ref<boolean>(false)
-
+  const sideBarView = ref<string>('')
   const forceOpenSettings = ref<boolean>(false)
 
   const setProvider = (providerName: string) => {
@@ -141,5 +141,6 @@ export const useGeneralStore = defineStore('general', () => {
     setAudioState,
     queueAudioForPlayback,
     forceOpenSettings,
+    sideBarView,
   }
 })

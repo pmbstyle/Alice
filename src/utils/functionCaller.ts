@@ -1,8 +1,10 @@
 import axios from 'axios'
-import { saveMemory, deleteMemory, getRecentMemories } from '../api/supabase/client'
-
-const TAVILY_API_KEY = import.meta.env.VITE_TAVILY_API_KEY
-const OPENWEATHERMAP_API_KEY = import.meta.env.VITE_OPENWEATHERMAP_API_KEY
+import {
+  saveMemory,
+  deleteMemory,
+  getRecentMemories,
+} from '../api/supabase/client'
+import { useSettingsStore } from '../stores/settingsStore'
 
 interface WebSearchArgs {
   query: string
@@ -92,12 +94,18 @@ async function recall_memories(args: GetRecentMemoriesArgs) {
     const { data, error } = await getRecentMemories(20, args.memoryType)
     if (error) {
       console.error('Error fetching memories:', error)
-      return { success: false, error: error.message || 'Error fetching memories.' }
+      return {
+        success: false,
+        error: error.message || 'Error fetching memories.',
+      }
     }
     console.log('Memories fetched:', data)
     return { success: true, data }
   } catch (error: any) {
-    return { success: false, error: error.message || 'Error fetching memories.' }
+    return {
+      success: false,
+      error: error.message || 'Error fetching memories.',
+    }
   }
 }
 
@@ -107,6 +115,8 @@ async function recall_memories(args: GetRecentMemoriesArgs) {
 async function perform_web_search(
   args: WebSearchArgs
 ): Promise<FunctionResult> {
+  const settings = useSettingsStore().config
+  const TAVILY_API_KEY = settings.VITE_TAVILY_API_KEY
   if (!TAVILY_API_KEY) {
     return { success: false, error: 'Tavily API key is not configured.' }
   }
@@ -156,6 +166,9 @@ async function perform_web_search(
 async function get_website_context(
   args: Crawl4AiArgs
 ): Promise<FunctionResult> {
+  const settings = useSettingsStore().config
+  const TAVILY_API_KEY = settings.VITE_TAVILY_API_KEY
+
   if (!TAVILY_API_KEY) {
     return {
       success: false,
@@ -230,6 +243,9 @@ async function get_website_context(
 async function get_weather_forecast(
   args: WeatherArgs
 ): Promise<FunctionResult> {
+  const settings = useSettingsStore().config
+  const OPENWEATHERMAP_API_KEY = settings.VITE_OPENWEATHERMAP_API_KEY
+
   if (!OPENWEATHERMAP_API_KEY) {
     return {
       success: false,
@@ -473,8 +489,9 @@ async function manage_clipboard(args: {
 async function search_torrents(
   args: TorrentSearchArgs
 ): Promise<FunctionResult> {
-  const JACKETT_API_KEY = import.meta.env.VITE_JACKETT_API_KEY
-  const JACKETT_URL = import.meta.env.VITE_JACKETT_URL
+  const settings = useSettingsStore().config
+  const JACKETT_API_KEY = settings.VITE_JACKETT_API_KEY
+  const JACKETT_URL = settings.VITE_JACKETT_URL
 
   if (!JACKETT_API_KEY || !JACKETT_URL || !args.query) {
     return { success: false, error: 'Missing Jackett configuration or query.' }
@@ -550,10 +567,11 @@ function getMagnetLink(item: Element): string {
 async function add_torrent_to_qb(
   args: AddTorrentArgs
 ): Promise<FunctionResult> {
+  const settings = useSettingsStore().config
   const isDev = import.meta.env.DEV
-  const QB_BASE_URL = isDev ? '' : import.meta.env.VITE_QB_URL
-  const QB_USERNAME = import.meta.env.VITE_QB_USERNAME
-  const QB_PASSWORD = import.meta.env.VITE_QB_PASSWORD
+  const QB_BASE_URL = isDev ? '' : settings.VITE_QB_URL
+  const QB_USERNAME = settings.VITE_QB_USERNAME
+  const QB_PASSWORD = settings.VITE_QB_PASSWORD
 
   if (!QB_USERNAME || !QB_PASSWORD) {
     return { success: false, error: 'qBittorrent credentials not configured.' }

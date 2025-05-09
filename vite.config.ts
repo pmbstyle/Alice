@@ -82,9 +82,8 @@ export default defineConfig(({ mode, command }) => {
     ],
     css: {
       postcss: {
-        plugins: [
-        ]
-      }
+        plugins: [],
+      },
     },
     server: (() => {
       if (process.env.VSCODE_DEBUG) {
@@ -116,6 +115,7 @@ export default defineConfig(({ mode, command }) => {
     define: {
       global: {},
       __APP_MODE__: JSON.stringify(process.env.ELECTRON ? 'electron' : 'web'),
+      'import.meta.env.VITE_APP_VERSION': JSON.stringify(pkg.version),
     },
   }
 })

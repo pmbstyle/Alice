@@ -8,6 +8,7 @@ import {
   desktopCapturer,
   clipboard,
 } from 'electron'
+import { loadSettings, saveSettings, AppSettings } from './settingsManager'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -96,6 +97,11 @@ async function createWindow() {
       }
     }
   })
+
+  ipcMain.handle('get-renderer-dist-path', async () => {
+    return RENDERER_DIST
+  })
+  
   ipcMain.handle('screenshot', async (event, arg) => {
     const source = await desktopCapturer.getSources({
       types: ['screen'],
@@ -127,6 +133,19 @@ async function createWindow() {
 
   ipcMain.handle('get-screenshot', () => {
     return screenshotDataURL
+  })
+
+  ipcMain.handle('settings:load', async () => {
+    return await loadSettings()
+  })
+
+  ipcMain.handle('settings:save', async (event, settings: AppSettings) => {
+    try {
+      await saveSettings(settings)
+      return { success: true }
+    } catch (error) {
+      return { success: false, error: error.message }
+    }
   })
 
   ipcMain.on('close-app', () => {
@@ -291,7 +310,11 @@ app.on('ready', () => {
   )
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  const initialSettings = await loadSettings()
+  if (initialSettings) {
+    console.log('Initial settings loaded in main process:', initialSettings)
+  }
   createWindow()
   createOverlayWindow()
 })

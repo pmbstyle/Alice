@@ -1,6 +1,7 @@
 import videoSpeaking from '../assets/videos/speaking.mp4'
 import videoStandBy from '../assets/videos/standby.mp4'
 import videoProcessing from '../assets/videos/thinking.mp4'
+import videoConfig from '../assets/videos/config.mp4'
 
 const setVideo = (type: string) => {
   switch (type) {
@@ -10,6 +11,8 @@ const setVideo = (type: string) => {
       return videoStandBy
     case 'PROCESSING':
       return videoProcessing
+    case 'CONFIG':
+      return videoConfig
     default:
       return videoStandBy
   }

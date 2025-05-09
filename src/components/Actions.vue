@@ -5,7 +5,7 @@
         :src="micIconSrc"
         class="indicator"
         :class="{ mini: isMinimized }"
-        @click="emit('toggleRecording')"
+        @click="!isConfigState ? emit('toggleRecording') : null"
         data-tip="Toggle Microphone"
         :aria-label="micAriaLabel"
       />
@@ -13,7 +13,7 @@
         :src="props.isTTSEnabled ? speakerIcon : speakerIconInactive"
         class="indicator"
         :class="{ mini: isMinimized }"
-        @click="emit('togglePlaying')"
+        @click="!isConfigState ? emit('togglePlaying') : null"
         data-tip="Toggle Speech Output"
         aria-label="Toggle Speech Output"
       />
@@ -21,7 +21,7 @@
         v-if="!isMinimized"
         :src="chatIcon"
         class="indicator"
-        @click="toggleChat"
+        @click="!isConfigState ? changeSidebarView('chat') : null"
         data-tip="Toggle Chat Panel"
         aria-label="Toggle Chat Panel"
       />
@@ -44,7 +44,7 @@
         data-tip="Take Screenshot"
         aria-label="Take Screenshot"
         :class="{ 'btn-sm': isMinimized }"
-        @click="emit('takeScreenShot')"
+        @click="!isConfigState ? emit('takeScreenShot') : null"
         :disabled="takingScreenShot"
       >
         <img
@@ -59,7 +59,7 @@
         :data-tip="isMinimized ? 'Maximize' : 'Minimize'"
         :aria-label="isMinimized ? 'Maximize Window' : 'Minimize Window'"
         :class="{ 'btn-sm': isMinimized }"
-        @click="toggleMinimize"
+        @click="!isConfigState ? toggleMinimize() : null"
       >
         <img
           :src="isMinimized ? maxiIcon : miniIcon"
@@ -85,7 +85,7 @@
           tabindex="0"
           class="dropdown-content menu bg-base-200 bg-opacity-80 rounded-box z-[1] w-36 p-2 shadow"
         >
-          <!-- <li><a>Settings</a></li> -->
+          <li><a @click="!isConfigState ? changeSidebarView('settings') : null">Settings</a></li>
           <li><a @click="closeWindow">Close app</a></li>
         </ul>
       </div>
@@ -127,8 +127,13 @@ const props = defineProps({
 const emit = defineEmits(['takeScreenShot', 'togglePlaying', 'toggleRecording'])
 
 const generalStore = useGeneralStore()
-const { isMinimized, statusMessage, openSidebar, takingScreenShot } =
-  storeToRefs(generalStore)
+const {
+  isMinimized,
+  statusMessage,
+  openSidebar,
+  takingScreenShot,
+  sideBarView,
+} = storeToRefs(generalStore)
 
 const micIconSrc = computed(() => {
   return props.audioState === 'LISTENING' ||
@@ -149,13 +154,23 @@ const closeWindow = () => {
   }
 }
 
-const toggleChat = async () => {
+const changeSidebarView = (view: 'chat' | 'settings') => {
+  if (sideBarView.value === view && openSidebar.value) {
+    toggleSidebar()
+  } else if (sideBarView.value !== view || !openSidebar.value) {
+    sideBarView.value = view
+    if (!openSidebar.value) {
+      toggleSidebar()
+    }
+  }
+}
+
+const toggleSidebar = async () => {
   openSidebar.value = !openSidebar.value
   if (props.isElectron) {
     await nextTick()
     const targetWidth = openSidebar.value ? 1200 : 500
     const targetHeight = 500
-    console.log(`Resizing window to: ${targetWidth}x${targetHeight}`)
     ;(window as any).electron.resize({
       width: targetWidth,
       height: targetHeight,
@@ -171,7 +186,8 @@ const toggleMinimize = async () => {
     await nextTick()
 
     if (willMinimize && openSidebar.value) {
-      await toggleChat()
+      toggleSidebar()
+      openSidebar.value = false
       setTimeout(() => {
         console.log('Minimizing window after closing sidebar.')
         ;(window as any).electron.mini({ minimize: true })
@@ -182,4 +198,9 @@ const toggleMinimize = async () => {
     }
   }
 }
+
+const isConfigState = computed(() => {
+  return generalStore.audioState === 'CONFIG'
+
+})
 </script>

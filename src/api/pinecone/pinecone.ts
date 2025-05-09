@@ -1,10 +1,25 @@
 import { Pinecone } from '@pinecone-database/pinecone'
+import { useSettingsStore } from '../../stores/settingsStore'
 
-const pinecone = new Pinecone({
-  apiKey: import.meta.env.VITE_PINECONE_API_KEY,
-})
+function getPineconeClient() {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_PINECONE_API_KEY && useSettingsStore().isProduction) {
+    console.error('Pinecone API Key is not configured in production.')
+  }
+  return new Pinecone({
+    apiKey: settings.VITE_PINECONE_API_KEY,
+  })
+}
 
-const index = pinecone.Index(import.meta.env.VITE_PINECONE_INDEX)
+function getPineconeIndex() {
+  const pinecone = getPineconeClient()
+  const settings = useSettingsStore().config
+  if (!settings.VITE_PINECONE_INDEX && useSettingsStore().isProduction) {
+    console.error('Pinecone Index name is not configured in production.')
+    throw new Error('Pinecone Index name not configured.')
+  }
+  return pinecone.Index(settings.VITE_PINECONE_INDEX)
+}
 
 export const setIndex = async (
   conversationId: string,
@@ -12,6 +27,7 @@ export const setIndex = async (
   content: any,
   embedding: any
 ) => {
+  const index = getPineconeIndex()
   await index.upsert([
     {
       id: `${conversationId}-${role}-${Date.now()}`,
@@ -25,6 +41,7 @@ export const setIndex = async (
 }
 
 export const getRelatedMessages = async (topK = 8, embedding: any) => {
+  const index = getPineconeIndex()
   const results = await index.query({
     vector: embedding,
     topK,

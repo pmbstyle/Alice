@@ -8,6 +8,7 @@ export type AudioState =
   | 'PROCESSING_AUDIO'
   | 'WAITING_FOR_RESPONSE'
   | 'SPEAKING'
+  | 'CONFIG'
 
 export const useGeneralStore = defineStore('general', () => {
   const audioState = ref<AudioState>('IDLE')
@@ -38,6 +39,8 @@ export const useGeneralStore = defineStore('general', () => {
   const audioQueue = ref<Response[]>([])
 
   const storeMessage = ref<boolean>(false)
+  const sideBarView = ref<string>('')
+  const forceOpenSettings = ref<boolean>(false)
 
   const setProvider = (providerName: string) => {
     provider.value = providerName || 'openai'
@@ -66,6 +69,9 @@ export const useGeneralStore = defineStore('general', () => {
       case 'SPEAKING':
         statusMessage.value = 'Speaking...'
         break
+      case 'CONFIG':
+        statusMessage.value = 'Setting up...'
+        break
       default:
         statusMessage.value = 'Unknown state'
         break
@@ -84,6 +90,9 @@ export const useGeneralStore = defineStore('general', () => {
           case 'PROCESSING_AUDIO':
           case 'WAITING_FOR_RESPONSE':
             targetVideoType = 'PROCESSING'
+            break
+          case 'CONFIG':
+            targetVideoType = 'CONFIG'
             break
           case 'LISTENING':
           case 'IDLE':
@@ -138,5 +147,7 @@ export const useGeneralStore = defineStore('general', () => {
     setProvider,
     setAudioState,
     queueAudioForPlayback,
+    forceOpenSettings,
+    sideBarView,
   }
 })

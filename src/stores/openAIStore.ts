@@ -13,34 +13,78 @@ import {
 } from '../api/openAI/assistant'
 import { transcribeAudio } from '../api/openAI/stt'
 import { useGeneralStore } from './generalStore'
+import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
 
 export const useConversationStore = defineStore('conversation', () => {
   const generalStore = useGeneralStore()
+  const settingsStore = useSettingsStore()
   const { setAudioState, queueAudioForPlayback } = generalStore
-  const { isRecordingRequested, audioState, chatHistory, messages } =
+  const { isRecordingRequested, audioState, chatHistory } =
     storeToRefs(generalStore)
 
   const assistant = ref<string>('')
   const thread = ref<string>('')
+  const isInitialized = ref<boolean>(false)
 
-  const initialize = async () => {
+  const initialize = async (): Promise<boolean> => {
+    if (isInitialized.value) {
+      console.log('OpenAI Store already initialized.')
+      return true
+    }
+
+    if (!settingsStore.initialLoadAttempted) {
+      await settingsStore.loadSettings()
+    }
+
+    if (
+      settingsStore.isProduction &&
+      !settingsStore.areEssentialSettingsProvided
+    ) {
+      generalStore.statusMessage = 'Error: Essential settings not configured.'
+      console.error(
+        'OpenAI Store Initialization aborted: Essential settings missing.'
+      )
+      isInitialized.value = false
+      return false
+    }
+
+    if (!settingsStore.config.VITE_OPENAI_ASSISTANT_ID) {
+      generalStore.statusMessage = 'Error: OpenAI Assistant ID not configured.'
+      console.error(
+        'OpenAI Store Initialization aborted: Assistant ID missing.'
+      )
+      isInitialized.value = false
+      return false
+    }
+
     try {
+      console.log('Initializing OpenAI Store...')
       const data = await getAssistantData()
       assistant.value = data.id
       console.log('Assistant ID loaded:', assistant.value)
       if (assistant.value) {
         await createNewThread()
+        isInitialized.value = true
+        generalStore.statusMessage = 'Stand by'
+        console.log('OpenAI Store initialized successfully.')
+        return true
       } else {
-        console.error('Assistant ID not loaded, cannot create thread.')
-        generalStore.statusMessage = 'Error: Assistant setup failed'
+        console.error(
+          'Assistant ID not loaded after getAssistantData, cannot create thread.'
+        )
+        generalStore.statusMessage =
+          'Error: Assistant setup failed (ID missing).'
+        isInitialized.value = false
+        return false
       }
-    } catch (error) {
-      console.error('Failed to initialize OpenAI Store:', error)
-      generalStore.statusMessage = 'Error: Assistant setup failed'
+    } catch (error: any) {
+      console.error('Failed to initialize OpenAI Store:', error.message)
+      generalStore.statusMessage = `Error: Assistant setup failed (${error.message})`
+      isInitialized.value = false
+      return false
     }
   }
-  initialize()
 
   const createNewThread = async () => {
     try {
@@ -55,6 +99,10 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   const getMessages = async (last: boolean = false) => {
+    if (!isInitialized.value) {
+      console.warn('OpenAI store not initialized. Cannot get messages.')
+      return
+    }
     if (!thread.value) {
       console.warn('Cannot get messages, thread ID not available.')
       return
@@ -67,8 +115,13 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   const sendMessageToThread = async (message: any, store: boolean = true) => {
+    if (!isInitialized.value) {
+      console.warn('OpenAI store not initialized. Cannot send message.')
+      return false
+    }
     if (!thread.value || !assistant.value) {
       console.warn('Cannot send message, thread or assistant ID not available.')
+
       return false
     }
     try {
@@ -82,6 +135,12 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   const chat = async (memories: any) => {
+    if (!isInitialized.value) {
+      generalStore.statusMessage = 'Error: Chat not ready (AI not initialized).'
+      setAudioState('IDLE')
+      console.warn('OpenAI store not initialized. Cannot start chat.')
+      return
+    }
     if (!thread.value || !assistant.value) {
       console.error('Chat aborted: Thread or Assistant ID missing.')
       generalStore.statusMessage = 'Error: Chat not initialized'
@@ -480,6 +539,8 @@ export const useConversationStore = defineStore('conversation', () => {
   return {
     assistant,
     thread,
+    isInitialized,
+    initialize,
     createNewThread,
     sendMessageToThread,
     chat,

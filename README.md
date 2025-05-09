@@ -35,6 +35,14 @@ Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) th
    - Read/write clipboard content
    - Add torrents to the download client
 
+## Download
+
+**Get the latest version of Alice for your operating system:**
+
+[**➡️ Download Latest Release**](https://github.com/pmbstyle/Alice/releases/latest) (Windows, MacOS, Linux)
+
+
+
 ## Technologies Used
 
 - [Vue.js](https://vuejs.org/) (Frontend framework)
@@ -52,7 +60,7 @@ Tools:
 - [Jackett](https://github.com/Jackett/Jackett) (Torrent search aggregation)
 - [qBittorrent](https://www.qbittorrent.org/) (Torrent client for downloads)
 
-## Getting Started
+## Getting Started With Development
 
 1. Clone the repository:  
    `git clone https://github.com/pmbstyle/Alice.git`

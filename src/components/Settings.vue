@@ -11,11 +11,20 @@
       v-else
       class="space-y-8"
     >
-      <fieldset class="border p-4 rounded-lg border-gray-600">
-        <legend class="text-xl font-semibold px-2">OpenAI</legend>
+      <fieldset
+        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+      >
+        <legend class="fieldset-legend">
+          OpenAI (Assistant API)
+          <a href="https://platform.openai.com" target="_blank">
+            <span class="badge badge-sm badge-soft whitespace-nowrap">
+              Get <img :src="newTabIcon" class="size-3" />
+            </span>
+          </a>
+        </legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
           <div>
-            <label for="openai-key" class="block mb-1">API Key*</label>
+            <label for="openai-key" class="block mb-1">API Key *</label>
             <input
               id="openai-key"
               type="password"
@@ -24,7 +33,7 @@
             />
           </div>
           <div>
-            <label for="openai-org" class="block mb-1">Organization ID</label>
+            <label for="openai-org" class="block mb-1">Organization ID *</label>
             <input
               id="openai-org"
               type="text"
@@ -33,7 +42,7 @@
             />
           </div>
           <div>
-            <label for="openai-project" class="block mb-1">Project ID</label>
+            <label for="openai-project" class="block mb-1">Project ID *</label>
             <input
               id="openai-project"
               type="text"
@@ -43,7 +52,7 @@
           </div>
           <div>
             <label for="openai-assistant" class="block mb-1"
-              >Assistant ID*</label
+              >Assistant ID *</label
             >
             <input
               id="openai-assistant"
@@ -55,12 +64,19 @@
         </div>
       </fieldset>
 
-      <fieldset class="border p-4 rounded-lg border-gray-600">
-        <legend class="text-xl font-semibold px-2">
+      <fieldset
+        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+      >
+        <legend class="fieldset-legend">
           Groq (Speech-to-Text)
+          <a href="https://console.groq.com/" target="_blank">
+            <span class="badge badge-sm badge-soft whitespace-nowrap">
+              Get <img :src="newTabIcon" class="size-3" />
+            </span>
+          </a>
         </legend>
         <div class="p-2">
-          <label for="groq-key" class="block mb-1">API Key*</label>
+          <label for="groq-key" class="block mb-1">API Key *</label>
           <input
             id="groq-key"
             type="password"
@@ -70,13 +86,20 @@
         </div>
       </fieldset>
 
-      <fieldset class="border p-4 rounded-lg border-gray-600">
-        <legend class="text-xl font-semibold px-2">
+      <fieldset
+        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+      >
+        <legend class="fieldset-legend">
           Pinecone (Vector Memory)
+          <a href="https://www.pinecone.io/" target="_blank">
+            <span class="badge badge-sm badge-soft whitespace-nowrap">
+              Get <img :src="newTabIcon" class="size-3" />
+            </span>
+          </a>
         </legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
           <div>
-            <label for="pinecone-key" class="block mb-1">API Key*</label>
+            <label for="pinecone-key" class="block mb-1">API Key *</label>
             <input
               id="pinecone-key"
               type="password"
@@ -86,7 +109,7 @@
           </div>
           <div>
             <label for="pinecone-url" class="block mb-1"
-              >Base URL (Control Plane)*</label
+              >Base URL (Control Plane) *</label
             >
             <input
               id="pinecone-url"
@@ -98,7 +121,7 @@
           </div>
           <div>
             <label for="pinecone-env" class="block mb-1"
-              >Environment (Index Host Suffix)*</label
+              >Environment (Index Host Suffix) *</label
             >
             <input
               id="pinecone-env"
@@ -109,7 +132,7 @@
             />
           </div>
           <div>
-            <label for="pinecone-index" class="block mb-1">Index Name*</label>
+            <label for="pinecone-index" class="block mb-1">Index Name *</label>
             <input
               id="pinecone-index"
               type="text"
@@ -120,13 +143,20 @@
         </div>
       </fieldset>
 
-      <fieldset class="border p-4 rounded-lg border-gray-600">
-        <legend class="text-xl font-semibold px-2">
+      <fieldset
+        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+      >
+        <legend class="fieldset-legend">
           Supabase (Long-term Memory)
+          <a href="https://supabase.com/" target="_blank">
+            <span class="badge badge-sm badge-soft whitespace-nowrap">
+              Get <img :src="newTabIcon" class="size-3" />
+            </span>
+          </a>
         </legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
           <div>
-            <label for="supabase-url" class="block mb-1">Project URL*</label>
+            <label for="supabase-url" class="block mb-1">Project URL *</label>
             <input
               id="supabase-url"
               type="text"
@@ -135,9 +165,7 @@
             />
           </div>
           <div>
-            <label for="supabase-key" class="block mb-1"
-              >Public Key*</label
-            >
+            <label for="supabase-key" class="block mb-1">Public Key*</label>
             <input
               id="supabase-key"
               type="password"
@@ -148,8 +176,20 @@
         </div>
       </fieldset>
 
-      <fieldset class="border p-4 rounded-lg border-gray-600">
-        <legend class="text-xl font-semibold px-2">Tool APIs (Optional)</legend>
+      <fieldset
+        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+      >
+        <legend class="fieldset-legend">
+          Tool APIs (Optional)
+          <a
+            href="https://github.com/pmbstyle/Alice/blob/main/docs/toolsInstructions.md"
+            target="_blank"
+          >
+            <span class="badge badge-sm badge-soft whitespace-nowrap">
+              Info <img :src="newTabIcon" class="size-3" />
+            </span>
+          </a>
+        </legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
           <div>
             <label for="tavily-key" class="block mb-1"
@@ -237,24 +277,55 @@
         </button>
       </div>
 
-      <div
-        v-if="settingsStore.error"
-        class="mt-4 p-3 bg-red-700 border border-red-900 text-sm text-white rounded-md text-center"
-      >
-        Error: {{ settingsStore.error }}
+      <div role="alert" class="alert alert-error" v-if="settingsStore.error">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-6 w-6 shrink-0 stroke-current"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <span>{{ settingsStore.error }}</span>
       </div>
+
       <div
+        role="alert"
+        class="alert alert-success"
         v-if="settingsStore.successMessage"
-        class="mt-4 p-3 bg-green-700 border-green-900 text-sm text-white rounded-md text-center"
       >
-        {{ settingsStore.successMessage }}
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          class="h-6 w-6 shrink-0 stroke-current"
+          fill="none"
+          viewBox="0 0 24 24"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+          />
+        </svg>
+        <span>{{ settingsStore.successMessage }}</span>
       </div>
     </form>
     <p class="text-xs text-gray-400 mt-4 text-center">
       * Essential for core functionality.
     </p>
     <p class="text-xs text-gray-400 mt-4 text-center">
-      Alice v{{ appVersion }}
+      Alice v{{ appVersion }}. Built with ❤️ by
+      <a
+        href="https://github.com/pmbstyle/Alice"
+        target="_blank"
+        class="link link-hover"
+        >pmbstyle</a
+      >
     </p>
   </div>
 </template>
@@ -262,6 +333,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, defineEmits } from 'vue'
 import { useSettingsStore, AliceSettings } from '../stores/settingsStore'
+import { newTabIcon } from '../utils/assetsImport'
 
 const appVersion = ref(import.meta.env.VITE_APP_VERSION || '')
 

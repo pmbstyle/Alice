@@ -8,6 +8,7 @@ import miniIcon from '../assets/images/mini.svg'
 import maxiIcon from '../assets/images/maxi.svg'
 import cameraIcon from '../assets/images/camera.svg'
 import hamburgerIcon from '../assets/images/hamburger.svg'
+import newTabIcon from '../assets/images/new-tab.svg'
 
 export {
   bg,
@@ -20,4 +21,5 @@ export {
   maxiIcon,
   cameraIcon,
   hamburgerIcon,
+  newTabIcon,
 }

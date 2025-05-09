@@ -42,8 +42,8 @@ jobs:
         run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
         shell: bash
 
-      - name: Build Release Files
-        run: npm run build
+      - name: Build Release Files (without auto-publishing)
+        run: npm run build -- --publish never
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -52,26 +52,20 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ env.APP_VERSION }}"
-          # Ensure PRODUCT_NAME matches 'productName' in electron-builder.json5
-          PRODUCT_NAME="Alice app"
+          PRODUCT_NAME="Alice app" # Ensure this matches 'productName' in electron-builder.json5
 
           ARTIFACT_FILENAME=""
           ARTIFACT_FILEPATH=""
 
           if [ "${{ matrix.os }}" == "macos-latest" ]; then
-            # From electron-builder.json5: artifactName: '${productName}-Mac-${version}-Installer.${ext}' -> .dmg
             ARTIFACT_FILENAME="$PRODUCT_NAME-Mac-$VERSION-Installer.dmg"
-            ARTIFACT_FILEPATH="release/$VERSION/$ARTIFACT_FILENAME"
           elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-            # From electron-builder.json5: artifactName: '${productName}-Windows-${version}-Setup.${ext}' -> .exe for nsis
             ARTIFACT_FILENAME="$PRODUCT_NAME-Windows-$VERSION-Setup.exe"
-            ARTIFACT_FILEPATH="release/$VERSION/$ARTIFACT_FILENAME"
           elif [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            # From electron-builder.json5: artifactName: '${productName}-Linux-${version}.${ext}' -> .AppImage
             ARTIFACT_FILENAME="$PRODUCT_NAME-Linux-$VERSION.AppImage"
-            ARTIFACT_FILEPATH="release/$VERSION/$ARTIFACT_FILENAME"
           fi
 
+          ARTIFACT_FILEPATH="release/$VERSION/$ARTIFACT_FILENAME"
           echo "ARTIFACT_NAME=${ARTIFACT_FILENAME}" >> $GITHUB_ENV
           echo "ARTIFACT_PATH=${ARTIFACT_FILEPATH}" >> $GITHUB_ENV
 
@@ -80,7 +74,11 @@ jobs:
         run: |
           echo "Expecting artifact name: ${{ env.ARTIFACT_NAME }}"
           echo "Expecting artifact at path: ${{ env.ARTIFACT_PATH }}"
-          ls -l "${{ env.ARTIFACT_PATH }}"
+          ls -lR release/ # List contents of release directory for debugging
+          if [ ! -f "${{ env.ARTIFACT_PATH }}" ]; then
+            echo "::error::Artifact file not found at ${{ env.ARTIFACT_PATH }}"
+            exit 1
+          fi
 
       - name: Upload Release Asset for ${{ matrix.os }}
         uses: actions/upload-artifact@v4
@@ -98,7 +96,7 @@ jobs:
       contents: write
 
     steps:
-      - name: Checkout code (needed for release notes generation)
+      - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0

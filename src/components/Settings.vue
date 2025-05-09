@@ -104,7 +104,7 @@
               id="pinecone-env"
               type="text"
               v-model="currentSettings.VITE_PINECONE_ENV"
-              placeholder="e.g., us-west1-gcp"
+              placeholder="e.g., us-east-1"
               class="input focus:outline-none"
             />
           </div>
@@ -136,7 +136,7 @@
           </div>
           <div>
             <label for="supabase-key" class="block mb-1"
-              >Anon Public Key*</label
+              >Public Key*</label
             >
             <input
               id="supabase-key"

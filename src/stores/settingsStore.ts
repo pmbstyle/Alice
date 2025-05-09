@@ -323,6 +323,7 @@ export const useSettingsStore = defineStore('settings', {
               console.log(
                 '[SettingsStore] Conversation store initialized/re-initialized after settings save.'
               )
+              generalStore.setAudioState('IDLE')
             } else {
               const initErrorMsg = generalStore.statusMessage.includes('Error:')
                 ? generalStore.statusMessage

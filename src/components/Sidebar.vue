@@ -164,7 +164,7 @@ const retryInitialization = async () => {
       generalStore.statusMessage =
         'Retry failed. Please check settings or console.'
     } else if (conversationStore.isInitialized) {
-      generalStore.statusMessage = 'Stand by'
+      generalStore.setAudioState('IDLE')
     }
   }
 }
@@ -214,7 +214,7 @@ onMounted(async () => {
     }
   } else if (conversationStore.isInitialized) {
     changeSidebarView('chat')
-    generalStore.statusMessage = 'Stand by'
+    generalStore.setAudioState('IDLE')
   } else {
     console.log(
       '[Sidebar] Defaulting to chat view (Dev mode or unexpected state).'

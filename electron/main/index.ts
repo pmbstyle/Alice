@@ -97,6 +97,11 @@ async function createWindow() {
       }
     }
   })
+
+  ipcMain.handle('get-renderer-dist-path', async () => {
+    return RENDERER_DIST
+  })
+  
   ipcMain.handle('screenshot', async (event, arg) => {
     const source = await desktopCapturer.getSources({
       types: ['screen'],

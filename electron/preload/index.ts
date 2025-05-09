@@ -41,6 +41,10 @@ contextBridge.exposeInMainWorld('settingsAPI', {
     ipcRenderer.invoke('settings:save', settings),
 })
 
+contextBridge.exposeInMainWorld('electronPaths', {
+  getRendererDistPath: () => ipcRenderer.invoke('get-renderer-dist-path'),
+})
+
 // --------- Preload scripts loading ---------
 function domReady(
   condition: DocumentReadyState[] = ['complete', 'interactive']

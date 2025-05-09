@@ -99,7 +99,6 @@ const settingsStore = useSettingsStore()
 const conversationStore = useConversationStore()
 
 const sidebarContentElement = ref<null | HTMLElement>(null)
-const view = ref<'chat' | 'settings'>('chat')
 const emit = defineEmits(['processRequest'])
 
 const { openSidebar, chatInput, storeMessage, sideBarView } =
@@ -157,25 +156,18 @@ const retryInitialization = async () => {
   if (!conversationStore.isInitialized) {
     generalStore.statusMessage = 'Retrying init...'
     await conversationStore.initialize()
-    if (
-      !conversationStore.isInitialized &&
-      !generalStore.statusMessage.includes('Error:')
-    ) {
-      generalStore.statusMessage =
-        'Retry failed. Please check settings or console.'
-    } else if (conversationStore.isInitialized) {
-      generalStore.setAudioState('IDLE')
-    }
   }
 }
 
 const resizeWindow = async (open: boolean) => {
   const targetWidth = open ? 1200 : 500
   const targetHeight = 500
-  ;(window as any).electron.resize({
-    width: targetWidth,
-    height: targetHeight,
-  })
+  if (window.electron?.resize) {
+    window.electron.resize({
+      width: targetWidth,
+      height: targetHeight,
+    })
+  }
 }
 
 onMounted(async () => {
@@ -184,67 +176,95 @@ onMounted(async () => {
     await settingsStore.loadSettings()
   }
 
-  if (
-    settingsStore.areEssentialSettingsProvided &&
-    !conversationStore.isInitialized
-  ) {
-    console.log(
-      '[Sidebar] Settings seem OK, attempting ConversationStore init.'
-    )
-    await conversationStore.initialize()
-  }
-
-  const needsSettings =
+  const needsSettingsConfig =
     settingsStore.isProduction && !settingsStore.areEssentialSettingsProvided
-  const needsInit =
-    settingsStore.areEssentialSettingsProvided &&
-    !conversationStore.isInitialized
+  const canInitializeAI = settingsStore.areEssentialSettingsProvided
+  const aiNeedsInitialization =
+    canInitializeAI && !conversationStore.isInitialized
 
-  if (needsSettings) {
-    console.log('[Sidebar] Needs essential settings.')
+  if (needsSettingsConfig) {
+    console.log('[Sidebar] Needs essential settings configuration.')
     generalStore.openSidebar = true
     resizeWindow(true)
     changeSidebarView('settings')
     generalStore.setAudioState('CONFIG')
-  } else if (needsInit) {
-    resizeWindow(true)
+  } else if (aiNeedsInitialization) {
+    console.log('[Sidebar] Settings OK, attempting AI ConversationStore init.')
+    generalStore.statusMessage = 'Initializing AI...'
     changeSidebarView('chat')
-    if (!generalStore.statusMessage.includes('Error')) {
-      generalStore.statusMessage = 'Initializing AI...'
+    if (!generalStore.openSidebar) {
+      generalStore.openSidebar = true
+      resizeWindow(true)
+    }
+
+    const initSuccess = await conversationStore.initialize()
+    if (initSuccess) {
+      console.log('[Sidebar] AI initialized successfully on mount.')
+      if (
+        generalStore.audioState === 'CONFIG' ||
+        generalStore.statusMessage.startsWith('Initializing AI')
+      ) {
+        if (generalStore.isRecordingRequested) {
+          generalStore.setAudioState('LISTENING')
+        } else {
+          generalStore.setAudioState('IDLE')
+        }
+      }
+    } else {
+      console.log('[Sidebar] AI initialization failed on mount.')
     }
   } else if (conversationStore.isInitialized) {
+    console.log('[Sidebar] AI already initialized on mount.')
     changeSidebarView('chat')
-    generalStore.setAudioState('IDLE')
+    if (generalStore.audioState === 'CONFIG') {
+      if (generalStore.isRecordingRequested) {
+        generalStore.setAudioState('LISTENING')
+      } else {
+        generalStore.setAudioState('IDLE')
+      }
+    } else if (
+      generalStore.audioState !== 'LISTENING' &&
+      generalStore.audioState !== 'SPEAKING' &&
+      generalStore.audioState !== 'PROCESSING_AUDIO' &&
+      generalStore.audioState !== 'WAITING_FOR_RESPONSE' &&
+      !generalStore.isRecordingRequested
+    ) {
+      generalStore.setAudioState('IDLE')
+    }
   } else {
-    console.log(
-      '[Sidebar] Defaulting to chat view (Dev mode or unexpected state).'
+    console.warn(
+      '[Sidebar] Unexpected state on mount. Defaulting to chat view.'
     )
-    resizeWindow(true)
     changeSidebarView('chat')
+    if (generalStore.audioState === 'CONFIG') generalStore.setAudioState('IDLE')
   }
 })
 
 watch(
   () => settingsStore.successMessage,
   async newMessage => {
-    if (
-      newMessage &&
-      settingsStore.areEssentialSettingsProvided &&
-      sideBarView.value === 'settings'
-    ) {
+    if (newMessage && sideBarView.value === 'settings') {
       if (conversationStore.isInitialized) {
         console.log(
-          '[Sidebar] Settings saved successfully and AI initialized, switching to chat view soon.'
+          '[Sidebar] Settings saved & AI (re)initialized. Switching to chat view in 1.5s.'
         )
+        settingsStore.successMessage = null
+
         setTimeout(() => {
-          if (settingsStore.successMessage) {
-            changeSidebarView('chat')
-            settingsStore.successMessage = null
+          changeSidebarView('chat')
+          if (generalStore.audioState === 'CONFIG') {
+            if (generalStore.isRecordingRequested) {
+              generalStore.setAudioState('LISTENING')
+            } else {
+              generalStore.setAudioState('IDLE')
+            }
           }
         }, 1500)
       } else {
         console.warn(
-          '[Sidebar] Settings saved, but AI store initialization failed. Staying on settings page.'
+          '[Sidebar] Settings saved (message: "',
+          newMessage,
+          '"), but AI store initialization failed. Staying on settings page.'
         )
       }
     }

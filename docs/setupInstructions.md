@@ -8,7 +8,7 @@
 
 	- Define the assistant's name
 	- Add assistant system prompt, use [example](https://github.com/pmbstyle/Alice/blob/main/docs/systemPrompt.md) as reference
-	- Select `gpt-4.1-mini`
+	- Select `gpt-4.1-mini` or any other model that suits you best
 	- Keep response format `text`
 	- Set temperature to `0.5` and Top P `1`
 	- Define needed [tools](https://github.com/pmbstyle/Alice/blob/main/docs/toolsInstructions.md) using this document (optional)

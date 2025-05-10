@@ -1,6 +1,6 @@
 {
   "name": "electron-vue-vite",
-  "version": "0.9.0",
+  "version": "0.9.1-beta.1",
   "main": "dist-electron/main/index.js",
   "description": "Alice app",
   "author": "pmb",

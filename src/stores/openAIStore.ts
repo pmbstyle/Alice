@@ -10,22 +10,40 @@ import {
   retrieveRelevantMemories,
   ttsStream,
   submitToolOutputs,
+  listAssistantsAPI,
+  createAssistantAPI,
+  retrieveAssistantAPI,
+  updateAssistantAPI,
+  deleteAssistantAPI,
+  listModelsAPI,
+  type LocalAssistantCreateParams,
+  type LocalAssistantUpdateParams,
 } from '../api/openAI/assistant'
 import { transcribeAudio } from '../api/openAI/stt'
 import { useGeneralStore } from './generalStore'
 import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
 
+interface LocalModelStore {
+  id: string
+}
+
+interface LocalAssistantStore {
+  id: string
+  name: string | null
+  model: string
+}
+
 export const useConversationStore = defineStore('conversation', () => {
   const generalStore = useGeneralStore()
   const settingsStore = useSettingsStore()
-  const { setAudioState, queueAudioForPlayback } = generalStore
-  const { isRecordingRequested, audioState, chatHistory } =
-    storeToRefs(generalStore)
+  const { setAudioState } = generalStore
+  const { isRecordingRequested, audioState } = storeToRefs(generalStore)
 
   const assistant = ref<string>('')
   const thread = ref<string>('')
   const isInitialized = ref<boolean>(false)
+  const availableModels = ref<LocalModelStore[]>([])
 
   const initialize = async (): Promise<boolean> => {
     if (isInitialized.value) {
@@ -36,6 +54,8 @@ export const useConversationStore = defineStore('conversation', () => {
     if (!settingsStore.initialLoadAttempted) {
       await settingsStore.loadSettings()
     }
+
+    const currentAssistantId = settingsStore.config.VITE_OPENAI_ASSISTANT_ID
 
     if (
       settingsStore.isProduction &&
@@ -49,32 +69,37 @@ export const useConversationStore = defineStore('conversation', () => {
       return false
     }
 
-    if (!settingsStore.config.VITE_OPENAI_ASSISTANT_ID) {
-      generalStore.statusMessage = 'Error: OpenAI Assistant ID not configured.'
-      console.error(
-        'OpenAI Store Initialization aborted: Assistant ID missing.'
+    if (!currentAssistantId) {
+      generalStore.statusMessage =
+        'Assistant not configured. Please select or create one in settings.'
+      console.warn(
+        'OpenAI Store Initialization deferred: Assistant ID missing.'
       )
       isInitialized.value = false
       return false
     }
 
     try {
-      console.log('Initializing OpenAI Store...')
-      const data = await getAssistantData()
-      assistant.value = data.id
-      console.log('Assistant ID loaded:', assistant.value)
+      console.log(
+        'Initializing OpenAI Store with Assistant ID:',
+        currentAssistantId
+      )
+      const assistantData = await retrieveAssistantAPI(currentAssistantId)
+      assistant.value = assistantData.id
+      console.log('Active Assistant ID loaded and verified:', assistant.value)
+
       if (assistant.value) {
         await createNewThread()
         isInitialized.value = true
         generalStore.statusMessage = 'Stand by'
-        console.log('OpenAI Store initialized successfully.')
+        console.log('OpenAI Store initialized successfully for chat.')
         return true
       } else {
         console.error(
-          'Assistant ID not loaded after getAssistantData, cannot create thread.'
+          'Assistant ID not loaded after retrieveAssistantAPI, cannot create thread.'
         )
         generalStore.statusMessage =
-          'Error: Assistant setup failed (ID missing).'
+          'Error: Assistant setup failed (ID missing after verification).'
         isInitialized.value = false
         return false
       }
@@ -82,6 +107,7 @@ export const useConversationStore = defineStore('conversation', () => {
       console.error('Failed to initialize OpenAI Store:', error.message)
       generalStore.statusMessage = `Error: Assistant setup failed (${error.message})`
       isInitialized.value = false
+      assistant.value = ''
       return false
     }
   }
@@ -91,41 +117,39 @@ export const useConversationStore = defineStore('conversation', () => {
       thread.value = await createThread()
       console.log('New OpenAI thread created:', thread.value)
       generalStore.chatHistory = []
-      generalStore.messages = []
     } catch (error) {
       console.error('Failed to create new thread:', error)
       generalStore.statusMessage = 'Error: Could not create chat thread'
     }
   }
 
-  const getMessages = async (last: boolean = false) => {
-    if (!isInitialized.value) {
-      console.warn('OpenAI store not initialized. Cannot get messages.')
-      return
-    }
-    if (!thread.value) {
-      console.warn('Cannot get messages, thread ID not available.')
+  const getMessages = async (last = false) => {
+    if (!isInitialized.value || !thread.value) {
+      console.warn(
+        'OpenAI store not ready for getMessages (not initialized or no thread).'
+      )
       return
     }
     try {
-      generalStore.messages = await listMessages(thread.value, last)
+      await listMessages(thread.value, last)
+      console.log('Messages listed from thread.')
     } catch (error) {
       console.error('Failed to list messages:', error)
     }
   }
 
-  const sendMessageToThread = async (message: any, store: boolean = true) => {
-    if (!isInitialized.value) {
-      console.warn('OpenAI store not initialized. Cannot send message.')
-      return false
-    }
-    if (!thread.value || !assistant.value) {
-      console.warn('Cannot send message, thread or assistant ID not available.')
-
+  const sendMessageToThread = async (message: any, store = true) => {
+    if (!isInitialized.value || !thread.value || !assistant.value) {
+      console.warn('OpenAI store not ready for sendMessageToThread.')
       return false
     }
     try {
-      await sendMessage(thread.value, message, assistant.value, store)
+      await sendMessage(
+        thread.value,
+        message as OpenAI.Beta.Threads.Messages.MessageCreateParams,
+        assistant.value,
+        store
+      )
       return true
     } catch (error) {
       console.error('Failed to send message:', error)
@@ -135,16 +159,13 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   const chat = async (memories: any) => {
-    if (!isInitialized.value) {
-      generalStore.statusMessage = 'Error: Chat not ready (AI not initialized).'
+    if (!isInitialized.value || !thread.value || !assistant.value) {
+      generalStore.statusMessage =
+        'Error: Chat not ready (AI not fully initialized).'
       setAudioState('IDLE')
-      console.warn('OpenAI store not initialized. Cannot start chat.')
-      return
-    }
-    if (!thread.value || !assistant.value) {
-      console.error('Chat aborted: Thread or Assistant ID missing.')
-      generalStore.statusMessage = 'Error: Chat not initialized'
-      setAudioState('IDLE')
+      console.warn(
+        'OpenAI store not initialized or assistant/thread missing. Cannot start chat.'
+      )
       return
     }
 
@@ -154,10 +175,9 @@ export const useConversationStore = defineStore('conversation', () => {
     let messageId: string | null = null
     let assistantResponseStarted = false
 
-    async function processChunk(chunk) {
+    async function processChunk(chunk: any) {
       if (
-        (chunk.event === 'thread.message.created' ||
-          chunk.event === 'thread.message.createddata') &&
+        chunk.event === 'thread.message.created' &&
         chunk.data.assistant_id === assistant.value &&
         !assistantResponseStarted
       ) {
@@ -169,13 +189,11 @@ export const useConversationStore = defineStore('conversation', () => {
             role: 'assistant',
             content: [{ type: 'text', text: { value: '', annotations: [] } }],
           })
-          console.log('Assistant message placeholder added, ID:', messageId)
         }
       }
 
       if (
-        (chunk.event === 'thread.message.delta' ||
-          chunk.event === 'thread.message.deltadata') &&
+        chunk.event === 'thread.message.delta' &&
         chunk.data.delta?.content?.[0]?.type === 'text' &&
         messageId
       ) {
@@ -189,18 +207,12 @@ export const useConversationStore = defineStore('conversation', () => {
           generalStore.chatHistory[
             existingMessageIndex
           ].content[0].text.value += textChunk
-        } else {
-          console.warn(
-            "Received text delta but couldn't find message placeholder with ID:",
-            messageId
-          )
         }
 
         if (textChunk.match(/[.!?]\s*$/) || textChunk.endsWith('\n')) {
           if (currentSentence.trim()) {
-            const queued = generalStore.queueAudioForPlayback(
-              await ttsStream(currentSentence.trim())
-            )
+            const ttsResponse = await ttsStream(currentSentence.trim())
+            const queued = generalStore.queueAudioForPlayback(ttsResponse)
             if (queued && audioState.value !== 'SPEAKING') {
               setAudioState('SPEAKING')
             }
@@ -211,7 +223,8 @@ export const useConversationStore = defineStore('conversation', () => {
     }
 
     async function handleToolCalls(runId: string, toolCalls: any[]) {
-      const toolOutputs = []
+      const toolOutputs: OpenAI.Beta.Threads.Runs.RunSubmitToolOutputsParams.ToolOutput[] =
+        []
 
       for (const toolCall of toolCalls) {
         if (toolCall.type === 'function') {
@@ -231,9 +244,8 @@ export const useConversationStore = defineStore('conversation', () => {
           })
 
           try {
-            const queued = generalStore.queueAudioForPlayback(
-              await ttsStream(toolStatusMessage)
-            )
+            const ttsResponse = await ttsStream(toolStatusMessage)
+            const queued = generalStore.queueAudioForPlayback(ttsResponse)
             if (queued && audioState.value !== 'SPEAKING') {
               setAudioState('SPEAKING')
             }
@@ -242,20 +254,16 @@ export const useConversationStore = defineStore('conversation', () => {
           }
 
           try {
-            console.log(
-              `Executing tool: ${functionName} with args: ${functionArgs}`
-            )
             const result = await executeFunction(functionName, functionArgs)
-            console.log(`Tool ${functionName} result:`, result)
             toolOutputs.push({
               tool_call_id: toolCall.id,
               output: result,
             })
           } catch (error: any) {
-            console.error(`Error executing function ${functionName}:`, error)
+            const errorMessage = `Error: ${error.message || 'Function execution failed'}`
             toolOutputs.push({
               tool_call_id: toolCall.id,
-              output: `Error: ${error.message || 'Function execution failed'}`,
+              output: errorMessage,
             })
             generalStore.chatHistory.unshift({
               id: 'error-' + Date.now(),
@@ -264,7 +272,7 @@ export const useConversationStore = defineStore('conversation', () => {
                 {
                   type: 'text',
                   text: {
-                    value: `Error using tool: ${functionName}`,
+                    value: `Error using tool: ${functionName}. Details: ${errorMessage}`,
                     annotations: [],
                   },
                 },
@@ -275,7 +283,6 @@ export const useConversationStore = defineStore('conversation', () => {
       }
 
       if (toolOutputs.length > 0 && runId) {
-        console.log('Submitting tool outputs:', toolOutputs)
         try {
           const continuedRunStream = await submitToolOutputs(
             thread.value,
@@ -286,7 +293,7 @@ export const useConversationStore = defineStore('conversation', () => {
         } catch (error) {
           console.error('Error submitting tool outputs:', error)
           generalStore.statusMessage = 'Error: Tool submission failed'
-          setAudioState('IDLE')
+          setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
           generalStore.chatHistory.unshift({
             id: 'error-' + Date.now(),
             role: 'assistant',
@@ -301,53 +308,49 @@ export const useConversationStore = defineStore('conversation', () => {
             ],
           })
         }
-      } else if (toolOutputs.length === 0) {
-        console.log('No tool outputs to submit.')
+      } else if (toolOutputs.length === 0 && runId) {
+        if (
+          audioState.value === 'WAITING_FOR_RESPONSE' &&
+          generalStore.audioQueue.length === 0
+        ) {
+          setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+        }
       }
     }
 
-    async function processRunStream(runStream) {
-      let runId = null
-
+    async function processRunStream(
+      runStream: OpenAI.Beta.AssistantStreamManager<OpenAI.Beta.AssistantStreamEvent>
+    ) {
+      let runId: string | null = null
       try {
         for await (const chunk of runStream) {
           if (chunk.data?.id && chunk.event.startsWith('thread.run.')) {
             runId = chunk.data.id
           }
-
           await processChunk(chunk)
-
           if (
             chunk.event === 'thread.run.requires_action' &&
             chunk.data.required_action?.type === 'submit_tool_outputs' &&
             runId
           ) {
-            console.log('Run requires action (tool calls). Run ID:', runId)
             await handleToolCalls(
               runId,
               chunk.data.required_action.submit_tool_outputs.tool_calls
             )
             return
           }
-
           if (chunk.event === 'thread.run.failed') {
             console.error('Run failed:', chunk.data)
-            generalStore.statusMessage = 'Error: Assistant run failed'
+            generalStore.statusMessage = `Error: Assistant run failed. ${chunk.data?.last_error?.message || ''}`
             break
           }
           if (chunk.event === 'thread.run.completed') {
             console.log('Run completed successfully.')
           }
         }
-
         if (currentSentence.trim()) {
-          console.log(
-            'Processing remaining sentence fragment for TTS:',
-            currentSentence
-          )
-          const queued = generalStore.queueAudioForPlayback(
-            await ttsStream(currentSentence.trim())
-          )
+          const ttsResponse = await ttsStream(currentSentence.trim())
+          const queued = generalStore.queueAudioForPlayback(ttsResponse)
           if (queued && audioState.value !== 'SPEAKING') {
             setAudioState('SPEAKING')
           }
@@ -421,33 +424,28 @@ export const useConversationStore = defineStore('conversation', () => {
 
   const createOpenAIPrompt = async (
     newMessage: string | any,
-    store: boolean = true
-  ) => {
+    store = true
+  ): Promise<{
+    message: OpenAI.Beta.Threads.Messages.MessageCreateParams | null
+    history: any[]
+  }> => {
     let memoryMessages: any[] = []
-    let userMessage: any
+    let userMessagePayload: OpenAI.Beta.Threads.Messages.MessageCreateParams
 
     if (typeof newMessage === 'string') {
-      userMessage = {
+      userMessagePayload = {
         role: 'user',
-        content: [{ type: 'text', text: newMessage }],
+        content: newMessage,
       }
     } else if (
       typeof newMessage === 'object' &&
-      newMessage.role &&
-      newMessage.content
+      newMessage.role === 'user' &&
+      (typeof newMessage.content === 'string' ||
+        Array.isArray(newMessage.content))
     ) {
-      if (!Array.isArray(newMessage.content)) {
-        if (typeof newMessage.content === 'string') {
-          userMessage = {
-            role: newMessage.role,
-            content: [{ type: 'text', text: newMessage.content }],
-          }
-        } else {
-          console.error('Invalid message content format:', newMessage.content)
-          return { message: null, history: [] }
-        }
-      } else {
-        userMessage = newMessage
+      userMessagePayload = {
+        role: 'user',
+        content: newMessage.content,
       }
     } else {
       console.error(
@@ -457,37 +455,34 @@ export const useConversationStore = defineStore('conversation', () => {
       return { message: null, history: [] }
     }
 
-    if (store && userMessage) {
-      const textContent = userMessage.content
-        .filter(item => item.type === 'text' && item.text)
-        .map(item =>
-          typeof item.text === 'string' ? item.text : item.text.value || ''
-        )
-        .join(' ')
+    if (store) {
+      let textContentForMemory = ''
+      if (typeof userMessagePayload.content === 'string') {
+        textContentForMemory = userMessagePayload.content
+      } else if (Array.isArray(userMessagePayload.content)) {
+        textContentForMemory = userMessagePayload.content
+          .filter((part: any) => part.type === 'text')
+          .map((part: any) => part.text)
+          .join(' ')
+      }
 
-      if (textContent.trim()) {
+      if (textContentForMemory.trim()) {
         try {
-          const relevantMemories = await retrieveRelevantMemories(textContent)
+          const relevantMemories =
+            await retrieveRelevantMemories(textContentForMemory)
           memoryMessages = relevantMemories
             .filter(memory => memory)
             .map(memory => ({
-              role: 'assistant',
-              content: [
-                {
-                  type: 'text',
-                  text: `[Thought from past conversation: ${memory}]`,
-                },
-              ],
+              role: 'system',
+              content: `[Thought from past conversation: ${memory}]`,
             }))
-          console.log('Retrieved relevant memories:', memoryMessages.length)
         } catch (error) {
           console.error('Failed to retrieve relevant memories:', error)
         }
       }
     }
-
     return {
-      message: userMessage,
+      message: userMessagePayload,
       history: memoryMessages,
     }
   }
@@ -498,7 +493,6 @@ export const useConversationStore = defineStore('conversation', () => {
     if (!screenshotDataURI) return null
     try {
       const fileId = await uploadScreenshot(screenshotDataURI)
-      console.log('Screenshot uploaded, File ID:', fileId)
       return fileId
     } catch (error) {
       console.error('Error uploading screenshot:', error)
@@ -536,10 +530,148 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
+  async function fetchAssistants(): Promise<LocalAssistantStore[]> {
+    try {
+      const assistantsPage = await listAssistantsAPI({ limit: 100 })
+      return assistantsPage.data.map(a => ({
+        id: a.id,
+        name: a.name,
+        model: a.model,
+      }))
+    } catch (error) {
+      console.error('Failed to fetch assistants:', error)
+      generalStore.statusMessage = 'Error: Could not fetch your assistants.'
+      return []
+    }
+  }
+
+  async function createNewAssistant(
+    params: LocalAssistantCreateParams
+  ): Promise<LocalAssistantStore | null> {
+    try {
+      const newAssistant = await createAssistantAPI(params)
+      console.log('Assistant created:', newAssistant)
+      return {
+        id: newAssistant.id,
+        name: newAssistant.name,
+        model: newAssistant.model,
+      }
+    } catch (error: any) {
+      console.error('Failed to create assistant:', error)
+      generalStore.statusMessage = `Error: Could not create new assistant. ${error.message}`
+      return null
+    }
+  }
+
+  async function fetchAssistantDetails(
+    assistantId: string
+  ): Promise<any | null> {
+    try {
+      const detailedAssistant = await retrieveAssistantAPI(assistantId)
+      return detailedAssistant
+    } catch (error: any) {
+      console.error('Failed to fetch assistant details:', error)
+      generalStore.statusMessage = `Error: Could not fetch details for assistant ${assistantId}. ${error.message}`
+      return null
+    }
+  }
+
+  async function updateExistingAssistant(
+    assistantId: string,
+    params: LocalAssistantUpdateParams
+  ): Promise<LocalAssistantStore | null> {
+    try {
+      const updatedAssistant = await updateAssistantAPI(assistantId, params)
+      console.log('Assistant updated:', updatedAssistant)
+      return {
+        id: updatedAssistant.id,
+        name: updatedAssistant.name,
+        model: updatedAssistant.model,
+      }
+    } catch (error: any) {
+      console.error('Failed to update assistant:', error)
+      generalStore.statusMessage = `Error: Could not update assistant ${assistantId}. ${error.message}`
+      return null
+    }
+  }
+
+  async function deleteExistingAssistant(
+    assistantId: string
+  ): Promise<boolean> {
+    try {
+      await deleteAssistantAPI(assistantId)
+      console.log('Assistant deleted:', assistantId)
+      if (assistant.value === assistantId) {
+        assistant.value = ''
+        isInitialized.value = false
+        thread.value = ''
+        generalStore.chatHistory = []
+        if (
+          settingsStore.isProduction &&
+          settingsStore.settings.VITE_OPENAI_ASSISTANT_ID === assistantId
+        ) {
+          settingsStore.updateSetting('VITE_OPENAI_ASSISTANT_ID', '')
+        }
+      }
+      return true
+    } catch (error: any) {
+      console.error('Failed to delete assistant:', error)
+      generalStore.statusMessage = `Error: Could not delete assistant ${assistantId}. ${error.message}`
+      return false
+    }
+  }
+
+  async function fetchModels() {
+    try {
+      const modelsData = await listModelsAPI()
+      availableModels.value = modelsData
+        .filter(model => model.id.startsWith('gpt-'))
+        .map(m => ({ id: m.id }))
+      console.log('Available models fetched:', availableModels.value.length)
+    } catch (error) {
+      console.error('Failed to fetch models:', error)
+      generalStore.statusMessage = 'Error: Could not fetch AI models.'
+      availableModels.value = []
+    }
+  }
+
+  async function setActiveAssistant(newAssistantId: string): Promise<boolean> {
+    if (assistant.value === newAssistantId && isInitialized.value) {
+      return true
+    }
+    generalStore.statusMessage = `Setting active assistant to ${newAssistantId}...`
+    isInitialized.value = false
+    thread.value = ''
+    generalStore.chatHistory = []
+
+    try {
+      const assistantData = await retrieveAssistantAPI(newAssistantId)
+      assistant.value = assistantData.id
+      if (settingsStore.isProduction) {
+        settingsStore.updateSetting('VITE_OPENAI_ASSISTANT_ID', newAssistantId)
+        await window.settingsAPI.saveSettings(settingsStore.settings)
+      }
+      await createNewThread()
+      isInitialized.value = true
+      generalStore.statusMessage = 'Ready for chat'
+      return true
+    } catch (error: any) {
+      console.error(
+        `Failed to switch to assistant ${newAssistantId}:`,
+        error.message
+      )
+      generalStore.statusMessage = `Error: Could not switch to assistant. ${error.message}`
+      assistant.value = ''
+      isInitialized.value = false
+      return false
+    }
+  }
+
   return {
     assistant,
     thread,
     isInitialized,
+    availableModels,
     initialize,
     createNewThread,
     sendMessageToThread,
@@ -548,5 +680,12 @@ export const useConversationStore = defineStore('conversation', () => {
     createOpenAIPrompt,
     uploadScreenshotToOpenAI,
     getMessages,
+    fetchAssistants,
+    createNewAssistant,
+    fetchAssistantDetails,
+    updateExistingAssistant,
+    deleteExistingAssistant,
+    fetchModels,
+    setActiveAssistant,
   }
 })

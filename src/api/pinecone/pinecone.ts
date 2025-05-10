@@ -15,8 +15,9 @@ function getPineconeIndex() {
   const pinecone = getPineconeClient()
   const settings = useSettingsStore().config
   if (!settings.VITE_PINECONE_INDEX && useSettingsStore().isProduction) {
-    console.error('Pinecone Index name is not configured in production.')
-    throw new Error('Pinecone Index name not configured.')
+    const errorMessage = 'Pinecone Index name is not configured in production.'
+    console.error(errorMessage)
+    throw new Error(errorMessage)
   }
   return pinecone.Index(settings.VITE_PINECONE_INDEX)
 }
@@ -24,8 +25,8 @@ function getPineconeIndex() {
 export const setIndex = async (
   conversationId: string,
   role: string,
-  content: any,
-  embedding: any
+  textContent: string,
+  embedding: number[]
 ) => {
   const index = getPineconeIndex()
   await index.upsert([
@@ -34,19 +35,28 @@ export const setIndex = async (
       values: embedding,
       metadata: {
         role: role,
-        content: JSON.stringify(content.content[0].text.value),
+        content: textContent,
       },
     },
   ])
+  console.log(
+    `[Pinecone] Indexed message for conversation ${conversationId}, role ${role}.`
+  )
 }
 
-export const getRelatedMessages = async (topK = 8, embedding: any) => {
+export const getRelatedMessages = async (
+  topK = 8,
+  embedding: number[]
+): Promise<(string | undefined)[]> => {
   const index = getPineconeIndex()
   const results = await index.query({
     vector: embedding,
     topK,
-    includeValues: true,
+    includeValues: false,
     includeMetadata: true,
   })
-  return results.matches.map(match => match?.metadata?.content)
+
+  return results.matches.map(
+    match => match.metadata?.content as string | undefined
+  )
 }

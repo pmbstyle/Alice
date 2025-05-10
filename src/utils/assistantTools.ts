@@ -1,77 +1,11 @@
-export const assistantTools = [
-  {
-    type: 'function',
-    function: {
-      name: 'save_memory',
-      description:
-        'Save a memory about User for future reference.',
-      parameters: {
-        type: 'object',
-        properties: {
-          content: {
-            type: 'string',
-            description:
-              'The memory content to store.',
-          },
-          memoryType: {
-            type: 'string',
-            description:
-              'The type of memory. Default is "general". This can be used to categorize memories.',
-            default: 'general',
-          },
-        },
-        required: ['content'],
-      },
-    },
-  },
-
-  {
-    type: 'function',
-    function: {
-      name: 'delete_memory',
-      description:
-        'Deletes a memory from the database.',
-      parameters: {
-        type: 'object',
-        properties: {
-          id: {
-            type: 'number',
-            description:
-              'The ID of the memory to delete.',
-          },
-        },
-        required: ['id'],
-      },
-    },
-  },
-
-  {
-    type: 'function',
-    function: {
-      name: 'get_recent_memories',
-      description:
-        'Get a list of recent memories.',
-      parameters: {
-        type: 'object',
-        properties: {
-          limit: {
-            type: 'number',
-            description:
-              'The maximum number of memories to retrieve. Default is 20.',
-            default: 20,
-          },
-        },
-        required: [],
-      },
-    },
-  },
-
+export const PREDEFINED_OPENAI_TOOLS = [
   {
     type: 'function',
     function: {
       name: 'perform_web_search',
       description:
-        'Searches the web for information on a given query. Use this for current events, general knowledge questions, or topics not covered by other tools.',
+        "Searches the web for information on a given query. Use this for current events, general knowledge questions, or topics not covered by other tools. Use this tool for browsing the web and when you don't know something or need additional context or data.",
+      strict: false,
       parameters: {
         type: 'object',
         properties: {
@@ -85,33 +19,33 @@ export const assistantTools = [
       },
     },
   },
-
   {
     type: 'function',
     function: {
       name: 'get_weather_forecast',
       description:
-        'Fetches the current weather forecast. CRITICAL: This function REQUIRES a location parameter. Verify the user provided a city name. If a location is mentioned or known, you MUST include it in the "location" parameter within the arguments JSON when calling this function. If no location is specified by the user or known from context, DO NOT call this function; instead, ask the user "For which location would you like the weather forecast?".',
+        'Fetches the current weather forecast for a specific location. Use this toll if you know the location and want to get only current weather.',
+      strict: false,
       parameters: {
         type: 'object',
         properties: {
           location: {
             type: 'string',
             description:
-              'REQUIRED. The city name (e.g., "London", "Paris, FR", "Tokyo"). Must be included in the arguments object.',
+              'The city name (e.g., "London", "Paris, FR", "Tokyo"). Include state or country if ambiguous.',
           },
         },
         required: ['location'],
       },
     },
   },
-
   {
     type: 'function',
     function: {
       name: 'get_current_datetime',
       description:
-        'Call this function whenever discussing current events, recent developments, or when time-sensitive information is needed. ALWAYS use this function when referring to events after 2022, current year, or "now". This function returns the current date, time, and other temporal information needed to provide accurate, up-to-date responses.',
+        "Call this function whenever discussing current events, recent developments, or when time-sensitive information is needed. ALWAYS use this function when referring to events after 2022, current year, or 'now'. This function returns the current date, time, and other temporal information needed to provide accurate, up-to-date responses.",
+      strict: true,
       parameters: {
         type: 'object',
         properties: {
@@ -119,7 +53,7 @@ export const assistantTools = [
             type: 'string',
             enum: ['full', 'date_only', 'time_only', 'year_only'],
             description:
-              'The format of the datetime information to return. Default is "full" if not specified.',
+              "The format of the datetime information to return. 'full', 'date_only', 'time_only' or 'year_only' are your options. Default is 'full' if not specified.",
           },
         },
         additionalProperties: false,
@@ -127,20 +61,20 @@ export const assistantTools = [
       },
     },
   },
-
   {
     type: 'function',
     function: {
       name: 'open_path',
       description:
-        "Opens a specified file, folder, or application on the user's computer using the default operating system handler, or opens a URL in the default web browser. Use for launching apps, documents, folders, or websites mentioned by the user.",
+        "Opens a specified file, folder, or application on the user's computer using the default operating system handler, or opens a URL in the default web browser. Use for launching apps, documents, folders, or websites mentioned by the user. User name in his system is 'pmb'",
+      strict: false,
       parameters: {
         type: 'object',
         properties: {
           target: {
             type: 'string',
             description:
-              'The target to open. Can be an absolute file path (e.g., "/Users/me/file.txt"), a folder path (e.g., "C:\\Users\\me\\Documents"), an application name understood by the OS (e.g., "Calculator", "Safari"), or a full URL (e.g., "https://www.google.com").',
+              "The target to open. Can be an absolute file path (e.g., '/Users/pmb/file.txt'), a folder path (e.g., 'C:\\Users\\pmb\\Documents'), or a full URL (e.g., 'https://www.google.com'). User is using Windows 11, when you need to open an application define a path to it in this OS. Use this tool to open web search result url for user command.",
           },
         },
         required: ['target'],
@@ -153,6 +87,7 @@ export const assistantTools = [
       name: 'manage_clipboard',
       description:
         'Manages the system clipboard. Can read the current text content from the clipboard or write new text content to it. Useful for transferring text between Alice and other applications.',
+      strict: false,
       parameters: {
         type: 'object',
         properties: {
@@ -160,12 +95,12 @@ export const assistantTools = [
             type: 'string',
             enum: ['read', 'write'],
             description:
-              'Specifies the operation to perform: "read" to get text from the clipboard, "write" to put text onto the clipboard.',
+              "Specifies the operation to perform: 'read' to get text from the clipboard, 'write' to put text onto the clipboard.",
           },
           content: {
             type: 'string',
             description:
-              'The text content to write to the clipboard. Required only when the action is "write". Ignored for "read".',
+              "The text content to write to the clipboard. Required only when the action is 'write'. Ignored for 'read'.",
           },
         },
         required: ['action'],
@@ -177,13 +112,15 @@ export const assistantTools = [
     function: {
       name: 'get_website_context',
       description:
-        'Fetches the content of a website. Useful for retrieving information from websites mentioned by the user.',
+        'Extracts the main content from a specified URL. Use this tool to get the text content from a webpage, allowing Alice to analyze, summarize, or answer questions about information found online.',
+      strict: false,
       parameters: {
         type: 'object',
         properties: {
           url: {
             type: 'string',
-            description: 'The URL of the website to fetch.',
+            description:
+              'The full URL of the webpage to extract content from (e.g., https://www.example.com/article).',
           },
         },
         required: ['url'],
@@ -195,13 +132,15 @@ export const assistantTools = [
     function: {
       name: 'search_torrents',
       description:
-        'Searches for torrents using Jackett. Use this when the user asks to find or download a specific movie, show, or file.',
+        'Searches for torrents using Jackett. Use this tool when the user asks to find or download a specific movie, TV show, or file.',
+      strict: false,
       parameters: {
         type: 'object',
         properties: {
           query: {
             type: 'string',
-            description: 'The name of the movie, show, or file to search for.',
+            description:
+              'The name of the movie, show, or content to search for.',
           },
         },
         required: ['query'],
@@ -213,16 +152,83 @@ export const assistantTools = [
     function: {
       name: 'add_torrent_to_qb',
       description:
-        'Adds a torrent to qBittorrent using a magnet link. Use this when the user selects or confirms a torrent to download.',
+        'Adds a torrent to qBittorrent using a magnet link. Use this tool when the user selects or confirms a torrent to download.',
+      strict: false,
       parameters: {
         type: 'object',
         properties: {
           magnet: {
             type: 'string',
-            description: 'The magnet link of the torrent to add.',
+            description:
+              'The magnet link of the torrent to be added to the download queue.',
           },
         },
         required: ['magnet'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'save_memory',
+      description:
+        "Store a long-term memory about the user. The memory should be a short, clear description that you can recall later to better understand and assist the user. For example: 'The user enjoys hiking in the mountains.' Categorize the memory by type (e.g., 'personal', 'work', 'hobby').",
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          content: {
+            type: 'string',
+            description:
+              'The memory content to store. It should be a brief but meaningful description of the fact or event.',
+          },
+          memoryType: {
+            type: 'string',
+            description:
+              "The type of memory, like 'personal', 'work', 'hobby'. Default is 'general'.",
+          },
+        },
+        required: ['content', 'memoryType'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_memory',
+      description:
+        'Forget a long-term memory about the user by permanently deleting it from storage. Use this if the memory is no longer valid or the user asks you to forget it.',
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          id: {
+            type: 'string',
+            description:
+              'The unique ID of the memory to delete. This ID identifies exactly which memory should be removed.',
+          },
+        },
+        required: ['id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recall_memories',
+      description:
+        'Retrieve recent long-term memories stored about the user. Use this to remind yourself of important facts, preferences, or past events related to him.',
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          memoryType: {
+            type: 'string',
+            description:
+              "You can slect type of memory you want to recall, like 'personal', 'project', 'mood', 'general'. Anything you saved as memoryType.",
+          },
+        },
+        required: [],
       },
     },
   },

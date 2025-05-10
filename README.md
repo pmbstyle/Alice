@@ -41,6 +41,8 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
 
 [**➡️ Download Latest Release**](https://github.com/pmbstyle/Alice/releases/latest) (Windows, MacOS, Linux)
 
+Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupInstructions.md) to create all needed API references and set up your assistant.
+
 
 
 ## Technologies Used

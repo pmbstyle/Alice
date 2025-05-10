@@ -2,7 +2,7 @@
 
 Say 'Hi' to Alice 👋
 
-Alice is a Vue.js/Vite/Electron.js application (OpenAI/Groq/Pinecone wrapper) that provides an interactive AI assistant with voice recognition, text-to-speech, and image recognition capabilities. It utilizes OpenAI's GPT-4.1-mini language model and various APIs for natural language processing, speech recognition, function calling, and vision tasks.
+Alice is an open-source AI assistant that offers voice interaction, text-to-speech, and image recognition. It wraps around powerful language and vision APIs to provide natural conversations, perform helpful tasks, and respond to visual inputs with context-aware intelligence.
 
 <p align="center">
   <img src="https://github.com/pmbstyle/Alice/blob/main/animation.gif?raw=true" alt="Alice Animation">
@@ -67,14 +67,11 @@ Tools:
 2. Install dependencies:  
    `npm install`
 3. Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupInstructions.md) to create all needed API references and set up your environment variables in a `.env` file.  
-   Note: You can use the example `.env.example` file as a reference.
+   **Note: You can use the example `.env.example` file as a reference.**
 4. Run the development server:  
    `npm run dev`
-5. Build the Electron app:  
+   
+## Build for production
+1. Build the Electron app:  
    `npm run build`
-6. Install the app from the `release` folder.
-7. Enjoy your personal AI companion! 🧠💬
-
----
-
-Feel free to open an issue or contact me directly if you need help setting Alice up!
+2. Install the app from the `release` folder.

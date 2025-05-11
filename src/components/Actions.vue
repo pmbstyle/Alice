@@ -240,6 +240,9 @@ const changeSidebarView = (view: 'chat' | 'settings') => {
   } else if (sideBarView.value !== view || !openSidebar.value) {
     sideBarView.value = view
     if (!openSidebar.value) {
+      if(isMinimized.value) {
+        toggleMinimize()
+      }
       toggleSidebar()
     }
   }

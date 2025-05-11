@@ -1,7 +1,6 @@
 # Tools setup instruction
 
-In your OpenAI assistant tab, click Add functions. Here is [a list](https://github.com/pmbstyle/Alice/blob/main/docs/functions.json) of available functions in OpenAI format.
-Add the needed function one by one as a JSON object.
+To activate all tools, you need to get your API credentials for each tool.
 
 **Get your API credentials**
 

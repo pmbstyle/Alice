@@ -250,6 +250,7 @@ import { useSettingsStore, type AliceSettings } from '../stores/settingsStore'
 import { useConversationStore } from '../stores/openAIStore'
 import { useGeneralStore } from '../stores/generalStore'
 import { PREDEFINED_OPENAI_TOOLS } from '../utils/assistantTools'
+import defaultSystemPrompt from '../../docs/systemPrompt.md?raw'
 import type {
   LocalAssistantCreateParams,
   LocalAssistantUpdateParams,
@@ -301,6 +302,14 @@ const toolDependencies: Record<string, (keyof AliceSettings)[]> = {
   search_torrents: ['VITE_JACKETT_API_KEY', 'VITE_JACKETT_URL'],
   add_torrent_to_qb: ['VITE_QB_URL', 'VITE_QB_USERNAME', 'VITE_QB_PASSWORD'],
 }
+
+const defaultFormStateValues = () => ({
+  name: 'Alice Assistant',
+  instructions: defaultSystemPrompt,
+  model: 'gpt-4.1-mini',
+  temperature: 0.5,
+  top_p: 1.0,
+})
 
 function isToolConfigured(toolName: string): boolean {
   const currentSettings = settingsStore.config
@@ -354,7 +363,7 @@ async function loadModels() {
 function handleCreateNew() {
   isEditing.value = false
   editingAssistantId.value = null
-  currentAssistantForm.value = defaultFormState()
+  currentAssistantForm.value = defaultFormStateValues()
   selectedPredefinedToolNames.value = []
   formError.value = null
   showForm.value = true

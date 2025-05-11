@@ -36,3 +36,44 @@
   -webkit-user-select: none;
   -webkit-app-region: drag;
 }
+
+.status-message-container {
+  width: 50%;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.status-message-text {
+  display: inline-block;
+  white-space: nowrap;
+}
+
+.status-message-container .status-message-text.scrolling-text {
+  animation-name: scrollLeftAnimation;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+  position: absolute;
+  left: 50%;
+}
+
+@keyframes scrollLeftAnimation {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-100%);
+  }
+}
+
+.status-message-container .status-message-text:not(.scrolling-text) {
+  position: relative;
+  left: auto;
+  transform: none;
+  animation: none !important;
+  display: inline;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 100%;
+}

@@ -27,10 +27,29 @@
       />
     </div>
     <div
-      class="text-center dragable select-none"
-      :class="{ 'text-xs': isMinimized }"
+      class="status-message-container dragable select-none overflow-hidden whitespace-nowrap relative"
+      :class="{
+        'text-xs': isMinimized,
+        'h-4': isMinimized,
+        'h-6': !isMinimized,
+      }"
     >
-      {{ statusMessage }}
+      <span
+        :id="statusMessageId"
+        class="status-message-text absolute"
+        :class="{ 'scrolling-text': shouldScrollStatusMessage }"
+        :style="statusMessageStyle"
+      >
+        {{ statusMessage }}
+      </span>
+      <span
+        v-if="shouldScrollStatusMessage"
+        class="status-message-text absolute scrolling-text"
+        :style="statusMessageStyle"
+        aria-hidden="true"
+      >
+        {{ statusMessage }}
+      </span>
     </div>
   </div>
 
@@ -85,7 +104,11 @@
           tabindex="0"
           class="dropdown-content menu bg-base-200 bg-opacity-80 rounded-box z-[1] w-36 p-2 shadow"
         >
-          <li><a @click="!isConfigState ? changeSidebarView('settings') : null">Settings</a></li>
+          <li>
+            <a @click="!isConfigState ? changeSidebarView('settings') : null"
+              >Settings</a
+            >
+          </li>
           <li><a @click="closeWindow">Close app</a></li>
         </ul>
       </div>
@@ -94,7 +117,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineEmits, defineProps, nextTick } from 'vue'
+import {
+  computed,
+  defineEmits,
+  defineProps,
+  nextTick,
+  ref,
+  watch,
+  onMounted,
+} from 'vue'
 import { useGeneralStore, AudioState } from '../stores/generalStore'
 import { storeToRefs } from 'pinia'
 import {
@@ -134,6 +165,55 @@ const {
   takingScreenShot,
   sideBarView,
 } = storeToRefs(generalStore)
+
+const statusMessageId = ref(
+  `status-msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+)
+
+const scrollSpeedFactor = 0.1
+const scrollAnimationDuration = ref('10s')
+
+const shouldScrollStatusMessage = computed(() => {
+  return statusMessage.value.length > 20
+})
+
+const statusMessageStyle = computed(() => {
+  if (shouldScrollStatusMessage.value) {
+    return {
+      'animation-duration': scrollAnimationDuration.value,
+    }
+  }
+  return {}
+})
+
+const calculateScrollDuration = () => {
+  nextTick(() => {
+    const textEl = document.getElementById(statusMessageId.value)
+    if (textEl && shouldScrollStatusMessage.value) {
+      const textWidth = textEl.offsetWidth
+      if (textWidth > 0) {
+        const duration = textWidth * scrollSpeedFactor
+        scrollAnimationDuration.value = `${Math.max(3, duration).toFixed(2)}s`
+      } else {
+        scrollAnimationDuration.value = `${(statusMessage.value.length * 0.3 * scrollSpeedFactor * 20).toFixed(2)}s`
+      }
+    } else if (!shouldScrollStatusMessage.value) {
+      scrollAnimationDuration.value = '0s'
+    }
+  })
+}
+
+watch(
+  statusMessage,
+  () => {
+    calculateScrollDuration()
+  },
+  { immediate: true }
+)
+
+watch(isMinimized, () => {
+  calculateScrollDuration()
+})
 
 const micIconSrc = computed(() => {
   return props.audioState === 'LISTENING' ||
@@ -201,6 +281,9 @@ const toggleMinimize = async () => {
 
 const isConfigState = computed(() => {
   return generalStore.audioState === 'CONFIG'
+})
 
+onMounted(() => {
+  calculateScrollDuration()
 })
 </script>

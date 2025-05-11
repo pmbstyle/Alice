@@ -42,12 +42,20 @@ export const useConversationStore = defineStore('conversation', () => {
 
   const assistant = ref<string>('')
   const thread = ref<string>('')
+  const creatingThread = ref<boolean>(false)
   const isInitialized = ref<boolean>(false)
   const availableModels = ref<LocalModelStore[]>([])
 
   const initialize = async (): Promise<boolean> => {
-    if (isInitialized.value) {
-      console.log('OpenAI Store already initialized.')
+    const targetAssistantId = settingsStore.config.VITE_OPENAI_ASSISTANT_ID
+    if (
+      isInitialized.value &&
+      assistant.value === targetAssistantId &&
+      thread.value
+    ) {
+      console.log(
+        `OpenAI Store already initialized for assistant ${targetAssistantId}. Skipping full re-init.`
+      )
       return true
     }
 
@@ -55,41 +63,53 @@ export const useConversationStore = defineStore('conversation', () => {
       await settingsStore.loadSettings()
     }
 
-    const currentAssistantId = settingsStore.config.VITE_OPENAI_ASSISTANT_ID
+    const currentTargetAssistantId =
+      settingsStore.config.VITE_OPENAI_ASSISTANT_ID
 
     if (
       settingsStore.isProduction &&
       !settingsStore.areEssentialSettingsProvided
     ) {
-      generalStore.statusMessage = 'Error: Essential settings not configured.'
+      generalStore.statusMessage =
+        'Error: Essential settings (including Assistant ID) not configured.'
       console.error(
         'OpenAI Store Initialization aborted: Essential settings missing.'
       )
       isInitialized.value = false
+      assistant.value = ''
+      thread.value = ''
       return false
     }
 
-    if (!currentAssistantId) {
+    if (!currentTargetAssistantId) {
       generalStore.statusMessage =
         'Assistant not configured. Please select or create one in settings.'
       console.warn(
         'OpenAI Store Initialization deferred: Assistant ID missing.'
       )
       isInitialized.value = false
+      assistant.value = ''
+      thread.value = ''
       return false
     }
 
     try {
       console.log(
         'Initializing OpenAI Store with Assistant ID:',
-        currentAssistantId
+        currentTargetAssistantId
       )
-      const assistantData = await retrieveAssistantAPI(currentAssistantId)
+      const assistantData = await retrieveAssistantAPI(currentTargetAssistantId)
       assistant.value = assistantData.id
       console.log('Active Assistant ID loaded and verified:', assistant.value)
 
       if (assistant.value) {
-        await createNewThread()
+        if (!thread.value || isInitialized.value === false) {
+          await createNewThread()
+        } else {
+          console.log(
+            `[OpenAIStore Initialize] Thread ${thread.value} already exists for assistant ${assistant.value}. Re-using.`
+          )
+        }
         isInitialized.value = true
         generalStore.statusMessage = 'Stand by'
         console.log('OpenAI Store initialized successfully for chat.')
@@ -101,6 +121,8 @@ export const useConversationStore = defineStore('conversation', () => {
         generalStore.statusMessage =
           'Error: Assistant setup failed (ID missing after verification).'
         isInitialized.value = false
+        assistant.value = ''
+        thread.value = ''
         return false
       }
     } catch (error: any) {
@@ -108,11 +130,14 @@ export const useConversationStore = defineStore('conversation', () => {
       generalStore.statusMessage = `Error: Assistant setup failed (${error.message})`
       isInitialized.value = false
       assistant.value = ''
+      thread.value = ''
       return false
     }
   }
 
   const createNewThread = async () => {
+    if (creatingThread.value) return
+    creatingThread.value = true
     try {
       thread.value = await createThread()
       console.log('New OpenAI thread created:', thread.value)
@@ -120,6 +145,8 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch (error) {
       console.error('Failed to create new thread:', error)
       generalStore.statusMessage = 'Error: Could not create chat thread'
+    } finally {
+      creatingThread.value = false
     }
   }
 
@@ -636,24 +663,39 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function setActiveAssistant(newAssistantId: string): Promise<boolean> {
-    if (assistant.value === newAssistantId && isInitialized.value) {
+    if (
+      assistant.value === newAssistantId &&
+      isInitialized.value &&
+      thread.value
+    ) {
+      console.log(
+        `Assistant ${newAssistantId} is already active and initialized with thread ${thread.value}.`
+      )
       return true
     }
+
     generalStore.statusMessage = `Setting active assistant to ${newAssistantId}...`
+    console.log(`Attempting to set active assistant to ${newAssistantId}`)
+
     isInitialized.value = false
     thread.value = ''
     generalStore.chatHistory = []
+    assistant.value = ''
 
     try {
       const assistantData = await retrieveAssistantAPI(newAssistantId)
       assistant.value = assistantData.id
+
       if (settingsStore.isProduction) {
         settingsStore.updateSetting('VITE_OPENAI_ASSISTANT_ID', newAssistantId)
-        await window.settingsAPI.saveSettings(settingsStore.settings)
       }
+
       await createNewThread()
       isInitialized.value = true
-      generalStore.statusMessage = 'Ready for chat'
+      generalStore.statusMessage = 'Assistant changed. Ready for chat.'
+      console.log(
+        `Switched to assistant ${newAssistantId}. New thread: ${thread.value}`
+      )
       return true
     } catch (error: any) {
       console.error(
@@ -661,7 +703,6 @@ export const useConversationStore = defineStore('conversation', () => {
         error.message
       )
       generalStore.statusMessage = `Error: Could not switch to assistant. ${error.message}`
-      assistant.value = ''
       isInitialized.value = false
       return false
     }

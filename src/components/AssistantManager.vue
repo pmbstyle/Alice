@@ -446,23 +446,20 @@ async function handleSelect(assistantId: string, assistantName: string) {
         generalStore.statusMessage = `Assistant "${assistantName}" is now active.`
         settingsStore.successMessage = `Assistant "${assistantName}" is now active.`
       } else {
-        generalStore.statusMessage = `Error: Failed to save selection for "${assistantName}".`
+        generalStore.statusMessage = `Failed to save selection for "${assistantName}". ${settingsStore.error || ''}`
         formError.value = `Failed to save selection for "${assistantName}". ${settingsStore.error || ''}`
       }
     } else {
-      generalStore.statusMessage = `Error: Could not switch to assistant "${assistantName}". ${generalStore.statusMessage.replace('Error: ', '')}`
+      generalStore.statusMessage = 'Assistant switch failed'
       formError.value = `Could not switch to assistant "${assistantName}". ${generalStore.statusMessage.replace('Error: ', '')}`
     }
   } else {
     // Development mode
     // Temporary override for chat in dev:
     await openAIStore.setActiveAssistant(assistantId)
-    generalStore.statusMessage = `Dev: "${assistantName}" loaded for session. .env assistant still primary.`
+    generalStore.statusMessage = `Assistant "${assistantName}" is now active.`
 
-    generalStore.statusMessage = `Dev: Viewing assistant "${assistantName}". Active assistant for chat is from .env.`
-    settingsStore.successMessage = `Dev: Viewing assistant "${assistantName}". Active assistant for chat is from .env file.`
-
-    openAIStore.assistant = assistantId // This would be a temporary override for current session
+    openAIStore.assistant = assistantId
     await openAIStore.createNewThread()
     openAIStore.isInitialized = true
   }

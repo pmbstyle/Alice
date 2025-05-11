@@ -228,7 +228,7 @@ export const useSettingsStore = defineStore('settings', {
 
       if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
         this.error = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing for testing.`
-        generalStore.statusMessage = 'Settings incomplete for API tests.'
+        generalStore.statusMessage = 'Settings incomplete for API tests'
         this.isSaving = false
         return
       }
@@ -245,11 +245,6 @@ export const useSettingsStore = defineStore('settings', {
         this.error = `OpenAI API connection test failed: ${e.message}. Check your OpenAI API Key, Organization ID, and Project ID.`
         this.coreOpenAISettingsValid = false
       }
-
-      // Placeholder for other service tests (Groq, Pinecone, Supabase)
-      // For brevity, we'll assume they are implicitly tested or skip their explicit test here
-      // unless a failure in OpenAI test should prevent saving.
-      // const otherServicesTestSuccess = await this.testOtherServices(currentConfigForTest);
 
       if (openAIServiceTestSuccess) {
         let settingsPersisted = false

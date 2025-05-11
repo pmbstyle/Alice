@@ -244,7 +244,7 @@ watch(
   () => settingsStore.successMessage,
   async newMessage => {
     if (newMessage && sideBarView.value === 'settings') {
-      if (conversationStore.isInitialized) {
+      if (conversationStore.isInitialized && settingsStore.areEssentialSettingsProvided) {
         console.log(
           '[Sidebar] Settings saved & AI (re)initialized. Switching to chat view in 1.5s.'
         )

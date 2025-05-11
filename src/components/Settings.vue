@@ -315,7 +315,7 @@
           v-if="settingsStore.coreOpenAISettingsValid"
           type="button"
           @click="showAssistantManager = true"
-          class="btn btn-accent w-full md:w-auto ml-0 md:ml-2"
+          class="btn btn-accent btn-active w-full md:w-auto ml-0 md:ml-2"
         >
           Manage Assistants →
         </button>

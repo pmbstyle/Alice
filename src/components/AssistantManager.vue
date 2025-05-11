@@ -30,7 +30,7 @@
       <div
         v-for="assistant in assistantsList"
         :key="assistant.id"
-        class="p-4 rounded-lg shadow bg-base-300/70 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
+        class="p-4 rounded-lg ring-1 shadow bg-base-300/70 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3"
         :class="{
           'ring-2 ring-primary shadow-primary/50': isActiveAssistant(
             assistant.id
@@ -49,14 +49,14 @@
             @click="
               handleSelect(assistant.id, assistant.name || 'Unnamed Assistant')
             "
-            class="btn btn-sm btn-primary"
+            class="btn btn-sm btn-active btn-primary"
             :disabled="isSavingSelection"
           >
             {{ isActiveAssistant(assistant.id) ? 'Selected' : 'Select' }}
           </button>
           <button
             @click="handleEdit(assistant)"
-            class="btn btn-sm btn-secondary"
+            class="btn btn-sm btn-active btn-secondary"
           >
             Edit
           </button>
@@ -64,7 +64,7 @@
             @click="
               handleDelete(assistant.id, assistant.name || 'Unnamed Assistant')
             "
-            class="btn btn-sm btn-error btn-outline"
+            class="btn btn-sm btn-error btn-outline btn-active"
             :disabled="isDeleting"
           >
             Delete
@@ -73,7 +73,7 @@
       </div>
       <button
         @click="handleCreateNew"
-        class="btn btn-primary mt-4 w-full sm:w-auto"
+        class="btn btn-primary btn-active mt-4 w-full sm:w-auto"
       >
         Create New Assistant
       </button>
@@ -226,7 +226,7 @@
         <div class="flex gap-3 pt-4">
           <button
             type="submit"
-            class="btn btn-primary"
+            class="btn btn-primary btn-active"
             :disabled="isSavingForm"
           >
             <span
@@ -235,7 +235,7 @@
             ></span>
             {{ isEditing ? 'Save Changes' : 'Create Assistant' }}
           </button>
-          <button type="button" @click="cancelForm" class="btn btn-ghost">
+          <button type="button" @click="cancelForm" class="btn btn-warning btn-active">
             Cancel
           </button>
         </div>

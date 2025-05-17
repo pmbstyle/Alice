@@ -109,6 +109,11 @@
               >Settings</a
             >
           </li>
+          <li>
+            <a @click="!isConfigState ? changeSidebarView('memories') : null"
+              >Memories</a
+            >
+          </li>
           <li><a @click="closeWindow">Close app</a></li>
         </ul>
       </div>
@@ -234,13 +239,13 @@ const closeWindow = () => {
   }
 }
 
-const changeSidebarView = (view: 'chat' | 'settings') => {
+const changeSidebarView = (view: 'chat' | 'settings' | 'memories') => {
   if (sideBarView.value === view && openSidebar.value) {
     toggleSidebar()
   } else if (sideBarView.value !== view || !openSidebar.value) {
     sideBarView.value = view
     if (!openSidebar.value) {
-      if(isMinimized.value) {
+      if (isMinimized.value) {
         toggleMinimize()
       }
       toggleSidebar()

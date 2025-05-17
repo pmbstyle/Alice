@@ -15,6 +15,7 @@
         v-if="sideBarView === 'settings'"
         @view-change="changeSidebarView"
       />
+      <MemoryManagerComponent v-if="sideBarView === 'memories'" />
 
       <div
         v-if="
@@ -89,6 +90,7 @@
 import { defineEmits, ref, watch, onMounted, nextTick, computed } from 'vue'
 import Chat from './Chat.vue'
 import Settings from './Settings.vue'
+import MemoryManagerComponent from './MemoryManager.vue'
 import { useGeneralStore } from '../stores/generalStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useConversationStore } from '../stores/openAIStore'
@@ -244,7 +246,10 @@ watch(
   () => settingsStore.successMessage,
   async newMessage => {
     if (newMessage && sideBarView.value === 'settings') {
-      if (conversationStore.isInitialized && settingsStore.areEssentialSettingsProvided) {
+      if (
+        conversationStore.isInitialized &&
+        settingsStore.areEssentialSettingsProvided
+      ) {
         console.log(
           '[Sidebar] Settings saved & AI (re)initialized. Switching to chat view in 1.5s.'
         )

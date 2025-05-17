@@ -9,6 +9,13 @@ import {
   clipboard,
 } from 'electron'
 import { loadSettings, saveSettings, AppSettings } from './settingsManager'
+import {
+  saveMemoryLocal,
+  getRecentMemoriesLocal,
+  updateMemoryLocal,
+  deleteMemoryLocal,
+  deleteAllMemoriesLocal,
+} from './memoryManager'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -98,10 +105,86 @@ async function createWindow() {
     }
   })
 
+  ipcMain.handle(
+    'memory:save',
+    async (
+      event,
+      { content, memoryType }: { content: string; memoryType?: string }
+    ) => {
+      try {
+        const savedMemory = await saveMemoryLocal(content, memoryType)
+        return { success: true, data: savedMemory }
+      } catch (error) {
+        console.error('IPC memory:save error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'memory:get',
+    async (
+      event,
+      { limit, memoryType }: { limit?: number; memoryType?: string }
+    ) => {
+      try {
+        const memories = await getRecentMemoriesLocal(limit, memoryType)
+        return { success: true, data: memories }
+      } catch (error) {
+        console.error('IPC memory:get error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle('memory:delete', async (event, { id }: { id: string }) => {
+    try {
+      const success = await deleteMemoryLocal(id)
+      return { success }
+    } catch (error) {
+      console.error('IPC memory:delete error:', error)
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle(
+    'memory:update',
+    async (
+      event,
+      {
+        id,
+        content,
+        memoryType,
+      }: { id: string; content: string; memoryType: string }
+    ) => {
+      try {
+        const updatedMemory = await updateMemoryLocal(id, content, memoryType)
+        if (updatedMemory) {
+          return { success: true, data: updatedMemory }
+        } else {
+          return { success: false, error: 'Memory not found for update.' }
+        }
+      } catch (error) {
+        console.error('IPC memory:update error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle('memory:delete-all', async () => {
+    try {
+      await deleteAllMemoriesLocal()
+      return { success: true }
+    } catch (error) {
+      console.error('IPC memory:delete-all error:', error)
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
   ipcMain.handle('get-renderer-dist-path', async () => {
     return RENDERER_DIST
   })
-  
+
   ipcMain.handle('screenshot', async (event, arg) => {
     const source = await desktopCapturer.getSources({
       types: ['screen'],

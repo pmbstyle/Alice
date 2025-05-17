@@ -1,9 +1,4 @@
 import axios from 'axios'
-import {
-  saveMemory,
-  deleteMemory,
-  getRecentMemories,
-} from '../api/supabase/client'
 import { useSettingsStore } from '../stores/settingsStore'
 
 interface WebSearchArgs {
@@ -47,60 +42,69 @@ interface GetRecentMemoriesArgs {
 }
 
 interface DeleteMemoryArgs {
-  id: number
+  id: string
 }
 
-/**
- * Saves a memory to the database.
- */
 async function save_memory(args: SaveMemoryArgs) {
   if (!args.content) {
     return { success: false, error: 'Content is required.' }
   }
-
   try {
-    const { data, error } = await saveMemory(args.content, args.memoryType)
-    if (error) {
-      return { success: false, error: 'Error saving memory.' }
-    }
-    console.log('Memory saved:', data)
-    return { success: true, data }
-  } catch (error: any) {
-    return { success: false, error: error.message }
-  }
-}
-
-/**
- * Deletes a memory from the database.
- */
-async function delete_memory(args: DeleteMemoryArgs) {
-  try {
-    const { data, error } = await deleteMemory(args.id)
-    if (error) {
-      return { success: false, error: 'Error deleting memory.' }
-    }
-    console.log('Memory deleted:', data)
-    return { success: true, data }
-  } catch (error: any) {
-    return { success: false, error: error.message }
-  }
-}
-
-/**
- * Get the list of recent memories from the database.
- */
-async function recall_memories(args: GetRecentMemoriesArgs) {
-  try {
-    const { data, error } = await getRecentMemories(20, args.memoryType)
-    if (error) {
-      console.error('Error fetching memories:', error)
+    const result = await window.ipcRenderer.invoke('memory:save', {
+      content: args.content,
+      memoryType: args.memoryType,
+    })
+    if (result.success) {
+      console.log('Memory saved via IPC:', result.data)
+      return { success: true, data: result.data }
+    } else {
       return {
         success: false,
-        error: error.message || 'Error fetching memories.',
+        error: result.error || 'Error saving memory via IPC.',
       }
     }
-    console.log('Memories fetched:', data)
-    return { success: true, data }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+async function delete_memory(args: DeleteMemoryArgs) {
+  try {
+    const result = await window.ipcRenderer.invoke('memory:delete', {
+      id: args.id,
+    })
+    if (result.success) {
+      console.log('Memory deleted via IPC:', args.id)
+      return {
+        success: true,
+        data: { message: 'Memory deleted successfully.' },
+      }
+    } else {
+      return {
+        success: false,
+        error: result.error || 'Error deleting memory via IPC.',
+      }
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+async function recall_memories(args: GetRecentMemoriesArgs) {
+  try {
+    const result = await window.ipcRenderer.invoke('memory:get', {
+      limit: 20,
+      memoryType: args.memoryType,
+    })
+    if (result.success) {
+      console.log('Memories fetched via IPC:', result.data)
+      return { success: true, data: result.data }
+    } else {
+      return {
+        success: false,
+        error: result.error || 'Error fetching memories via IPC.',
+      }
+    }
   } catch (error: any) {
     return {
       success: false,

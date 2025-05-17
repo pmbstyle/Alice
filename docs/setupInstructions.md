@@ -19,13 +19,6 @@ Run in your terminal `xattr -cr /Applications/Alice\ app.app`
 - Paste DB region as `VITE_PINECONE_ENV` and index in settings
 - Create your API key and paste it into settings
 
-# Supabase setup
-
-- Go to [Supabase](https://supabase.com/) and set up free account
-- Create a new project
-- Create a new database and paste its URL in settings
-- Paste your API key in settings
-
 # OpenAI Assistant setup
 
 -  Save and test settings, then select `Manage assistants` option

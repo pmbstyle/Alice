@@ -18,7 +18,7 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   Capture screenshots and let Alice interpret them using OpenAI's Vision API.
 - **Memory system.**  
   - **Thoughts:** Past conversation fragments embedded in a Pinecone vector database for quick context inspiration.  
-  - **Memories:** Long-term structured facts stored in a Supabase database, retrievable on demand via memory tools.
+  - **Memories:** Long-term structured facts stored in a local database, retrievable on demand via memory tools.
 - **Animated assistant appearance.**
   Several video states (standby, thinking, speaking) are used to make interactions lively.
 - **Function calling.**  
@@ -58,7 +58,6 @@ Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupI
 - [OpenAI API](https://platform.openai.com/docs/api-reference/introduction) (GPT-4.1-mini, TTS, Vision)
 - [Groq API](https://console.groq.com/) (Whisper: speech-to-text)
 - [Pinecone](https://www.pinecone.io/) (Vector database for thought retrieval)
-- [Supabase](https://supabase.com/) (PostgreSQL cloud database for long-term memory storage)
 - [ChatGPT 4o](https://chat.openai.com) (Native image generation: Alice image)
 - [Kling 1.6 Pro (fal.ai)](https://fal.ai/) (Image-to-video animation: Alice's animated states)
 

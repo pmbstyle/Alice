@@ -13,8 +13,6 @@ export interface AliceSettings {
   VITE_PINECONE_BASE_URL: string
   VITE_PINECONE_ENV: string
   VITE_PINECONE_INDEX: string
-  VITE_SUPABASE_URL: string
-  VITE_SUPABASE_KEY: string
   VITE_TAVILY_API_KEY: string
   VITE_OPENWEATHERMAP_API_KEY: string
   VITE_JACKETT_API_KEY: string
@@ -34,8 +32,6 @@ const defaultSettings: AliceSettings = {
   VITE_PINECONE_BASE_URL: '',
   VITE_PINECONE_ENV: '',
   VITE_PINECONE_INDEX: '',
-  VITE_SUPABASE_URL: '',
-  VITE_SUPABASE_KEY: '',
   VITE_TAVILY_API_KEY: '',
   VITE_OPENWEATHERMAP_API_KEY: '',
   VITE_JACKETT_API_KEY: '',
@@ -55,8 +51,6 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_PINECONE_BASE_URL: 'Pinecone Base URL (Control Plane)',
   VITE_PINECONE_ENV: 'Pinecone Environment (Index Host Suffix)',
   VITE_PINECONE_INDEX: 'Pinecone Index Name',
-  VITE_SUPABASE_URL: 'Supabase Project URL',
-  VITE_SUPABASE_KEY: 'Supabase Anon Public Key',
   VITE_TAVILY_API_KEY: 'Tavily API Key',
   VITE_OPENWEATHERMAP_API_KEY: 'OpenWeatherMap API Key',
   VITE_JACKETT_API_KEY: 'Jackett API Key',
@@ -72,8 +66,6 @@ const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
   'VITE_PINECONE_API_KEY',
   'VITE_PINECONE_ENV',
   'VITE_PINECONE_INDEX',
-  'VITE_SUPABASE_URL',
-  'VITE_SUPABASE_KEY',
 ]
 
 export const useSettingsStore = defineStore('settings', {

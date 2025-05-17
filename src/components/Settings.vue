@@ -159,45 +159,6 @@
         class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
       >
         <legend class="fieldset-legend">
-          Supabase (Long-term Memory)
-          <a href="https://supabase.com/" target="_blank" class="ml-2">
-            <span class="badge badge-sm badge-soft whitespace-nowrap">
-              Get Keys
-              <img :src="newTabIcon" class="size-3 inline-block ml-1" />
-            </span>
-          </a>
-        </legend>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
-          <div>
-            <label for="supabase-url" class="block mb-1 text-sm"
-              >Project URL *</label
-            >
-            <input
-              id="supabase-url"
-              type="text"
-              v-model="currentSettings.VITE_SUPABASE_URL"
-              class="input focus:outline-none w-full"
-            />
-          </div>
-          <div>
-            <label for="supabase-key" class="block mb-1 text-sm"
-              >Public Anon Key *</label
-            >
-            <input
-              id="supabase-key"
-              type="password"
-              v-model="currentSettings.VITE_SUPABASE_KEY"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-            />
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset
-        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
-      >
-        <legend class="fieldset-legend">
           Tool APIs (Optional)
           <a
             href="https://github.com/pmbstyle/Alice/blob/main/docs/toolsInstructions.md"

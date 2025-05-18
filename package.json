@@ -23,6 +23,7 @@
     "dev": "vite",
     "build": "vite build && electron-builder",
     "build:web": "vite build",
+    "rebuild": "electron-rebuild -f -w better-sqlite3,hnswlib-node",
     "preview": "vite preview",
     "format": "prettier --write ."
   },
@@ -34,6 +35,7 @@
     "dotenv": "^16.4.5",
     "electron": "^30.1.0",
     "electron-builder": "^24.13.3",
+    "electron-rebuild": "^3.2.9",
     "openai": "^4.49.0",
     "pinia": "^3.0.2",
     "postcss": "^8.5.3",
@@ -49,6 +51,7 @@
   "dependencies": {
     "@ricky0123/vad-web": "^0.0.23",
     "@tailwindcss/vite": "^4.1.4",
+    "better-sqlite3": "^11.10.0",
     "fs": "^0.0.1-security",
     "groq-sdk": "^0.9.1",
     "hnswlib-node": "^3.0.0",

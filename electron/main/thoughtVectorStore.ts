@@ -3,14 +3,18 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import HnswlibNode from 'hnswlib-node'
 const { HierarchicalNSW } = HnswlibNode
+import Database from 'better-sqlite3'
 
 const VECTOR_DIMENSION = 1536
-const MAX_ELEMENTS = 10000
-const INDEX_FILE_NAME = 'alice-thoughts-hnsw.index'
-const METADATA_FILE_NAME = 'alice-thoughts-metadata.json'
+const MAX_ELEMENTS_HNSW = 10000
+const HNSW_INDEX_FILE_NAME = 'alice-thoughts-hnsw.index'
+const DB_FILE_NAME = 'alice-thoughts.sqlite'
 
-const indexFilePath = path.join(app.getPath('userData'), INDEX_FILE_NAME)
-const metadataFilePath = path.join(app.getPath('userData'), METADATA_FILE_NAME)
+const hnswIndexFilePath = path.join(
+  app.getPath('userData'),
+  HNSW_INDEX_FILE_NAME
+)
+const dbFilePath = path.join(app.getPath('userData'), DB_FILE_NAME)
 
 interface ThoughtMetadata {
   id: string
@@ -20,73 +24,215 @@ interface ThoughtMetadata {
   createdAt: string
 }
 
-let index: HierarchicalNSW | null = null
-let thoughtMetadata: ThoughtMetadata[] = []
+let hnswIndex: HierarchicalNSW | null = null
+let db: Database.Database | null = null
 let isStoreInitialized = false
 
-async function loadIndexAndMetadata() {
-  index = new HierarchicalNSW('cosine', VECTOR_DIMENSION)
+function initDB() {
+  db = new Database(dbFilePath, { verbose: console.log })
+  db.pragma('journal_mode = WAL')
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS thoughts (
+      hnsw_label INTEGER PRIMARY KEY, -- This label corresponds to HNSW's internal ID for the vector
+      thought_id TEXT UNIQUE NOT NULL, -- Your original unique ID for the thought
+      conversation_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      text_content TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      embedding BLOB -- Storing embedding BLOB allows rebuilding HNSW index if needed
+    );
+  `)
+  console.log(
+    '[ThoughtVectorStore DB] SQLite database initialized and table ensured.'
+  )
+}
+
+function insertThoughtMetadata(
+  label: number,
+  thoughtId: string,
+  conversationId: string,
+  role: string,
+  textContent: string,
+  createdAt: string,
+  embedding: number[]
+) {
+  if (!db) throw new Error('Database not initialized for inserting metadata.')
+  const stmt = db.prepare(`
+    INSERT INTO thoughts (hnsw_label, thought_id, conversation_id, role, text_content, created_at, embedding)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `)
+  const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer)
+  stmt.run(
+    label,
+    thoughtId,
+    conversationId,
+    role,
+    textContent,
+    createdAt,
+    embeddingBuffer
+  )
+}
+
+function getThoughtMetadataByLabels(labels: number[]): ThoughtMetadata[] {
+  if (!db) throw new Error('Database not initialized for fetching metadata.')
+  if (labels.length === 0) return []
+
+  const placeholders = labels.map(() => '?').join(',')
+  const stmt = db.prepare(`
+        SELECT thought_id, conversation_id, role, text_content, created_at
+        FROM thoughts
+        WHERE hnsw_label IN (${placeholders})
+        ORDER BY hnsw_label -- Optional: maintain order, or handle order based on HNSW result order
+    `)
+  const rows = stmt.all(...labels) as any[]
+  return rows.map(row => ({
+    id: row.thought_id,
+    conversationId: row.conversation_id,
+    role: row.role,
+    textContent: row.text_content,
+    createdAt: row.created_at,
+  }))
+}
+
+function getAllEmbeddingsWithLabelsFromDB(): {
+  label: number
+  embedding: number[]
+}[] {
+  if (!db) throw new Error('Database not initialized for fetching embeddings.')
+  const stmt = db.prepare(
+    'SELECT hnsw_label, embedding FROM thoughts ORDER BY hnsw_label'
+  )
+  const rows = stmt.all() as { hnsw_label: number; embedding: Buffer }[]
+  return rows.map(row => ({
+    label: row.hnsw_label,
+    embedding: Array.from(
+      new Float32Array(
+        row.embedding.buffer,
+        row.embedding.byteOffset,
+        row.embedding.byteLength / Float32Array.BYTES_PER_ELEMENT
+      )
+    ),
+  }))
+}
+
+async function loadIndexAndSyncWithDB() {
+  if (!db) initDB()
+  if (!db) throw new Error('Failed to initialize database for loading index.')
+
+  hnswIndex = new HierarchicalNSW('cosine', VECTOR_DIMENSION)
+
+  let numPointsInDB = 0
+  try {
+    const countResult = db
+      .prepare('SELECT COUNT(*) as count FROM thoughts')
+      .get() as { count: number }
+    numPointsInDB = countResult.count
+  } catch (e) {
+    console.error('[ThoughtVectorStore DB] Error counting thoughts in DB:', e)
+  }
+
+  console.log(`[ThoughtVectorStore LOAD] Points found in DB: ${numPointsInDB}`)
 
   try {
-    const metadataBuffer = await fs.readFile(metadataFilePath)
-    thoughtMetadata = JSON.parse(metadataBuffer.toString())
+    if (numPointsInDB > 0) {
+      console.log(
+        `[ThoughtVectorStore LOAD] Attempting to load HNSW index from ${hnswIndexFilePath}`
+      )
+      await hnswIndex.readIndex(hnswIndexFilePath)
+      console.log(
+        `[ThoughtVectorStore LOAD] HNSW index loaded. Current count: ${hnswIndex.getCurrentCount()}, Max elements: ${hnswIndex.getMaxElements()}`
+      )
 
-    if (thoughtMetadata.length > 0) {
-      try {
-        await index.readIndex(indexFilePath)
-        if (index.getMaxElements() < thoughtMetadata.length) {
-          console.warn(
-            '[ThoughtVectorStore] Index max elements less than metadata count. Re-initializing index for safety.'
-          )
-          index.initIndex(Math.max(MAX_ELEMENTS, thoughtMetadata.length + 1000))
-        } else if (index.getCurrentCount() !== thoughtMetadata.length) {
-          console.warn(
-            `[ThoughtVectorStore] Index count (${index.getCurrentCount()}) mismatch with metadata count (${thoughtMetadata.length}). This might indicate an issue. Rebuilding index might be necessary if errors occur.`
-          )
-        }
-      } catch (e) {
+      if (hnswIndex.getCurrentCount() !== numPointsInDB) {
         console.warn(
-          `[ThoughtVectorStore] Could not load HNSW index from ${indexFilePath}. It might be created fresh if metadata is empty or this is the first run. Error: ${(e as Error).message}`
+          `[ThoughtVectorStore LOAD] HNSW index count (${hnswIndex.getCurrentCount()}) mismatch with DB count (${numPointsInDB}). Rebuilding HNSW index from DB embeddings.`
         )
-        index.initIndex(MAX_ELEMENTS)
+        await rebuildHnswIndexFromDB()
+      }
+      if (hnswIndex.getMaxElements() < numPointsInDB) {
+        console.warn(
+          `[ThoughtVectorStore LOAD] HNSW index capacity is less than DB points. Resizing index.`
+        )
+        hnswIndex.resizeIndex(Math.max(MAX_ELEMENTS_HNSW, numPointsInDB + 1000))
       }
     } else {
-      index.initIndex(MAX_ELEMENTS)
+      console.log(
+        '[ThoughtVectorStore LOAD] No points in DB, initializing fresh HNSW index.'
+      )
+      hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
     }
-
-    console.log(
-      `[ThoughtVectorStore] Loaded ${thoughtMetadata.length} metadata items. Index current count: ${index.getCurrentCount()}`
-    )
   } catch (error) {
     console.warn(
-      `[ThoughtVectorStore] Metadata file not found or corrupt at ${metadataFilePath}. Initializing fresh store. Error: ${(error as Error).message}`
+      `[ThoughtVectorStore LOAD] Could not load HNSW index from file or issue during sync. Error: ${(error as Error).message}. Rebuilding index from DB if possible, or initializing fresh.`
     )
-    thoughtMetadata = []
-    index.initIndex(MAX_ELEMENTS)
+    if (numPointsInDB > 0) {
+      await rebuildHnswIndexFromDB()
+    } else {
+      hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
+    }
   }
   isStoreInitialized = true
 }
 
-async function saveIndexAndMetadata() {
-  if (!index) return
-  try {
-    const dir = path.dirname(indexFilePath)
-    await fs.mkdir(dir, { recursive: true })
-
-    await index.writeIndex(indexFilePath)
-    await fs.writeFile(
-      metadataFilePath,
-      JSON.stringify(thoughtMetadata, null, 2)
+async function rebuildHnswIndexFromDB() {
+  if (!db || !hnswIndex) {
+    console.error(
+      '[ThoughtVectorStore REBUILD] DB or HNSW Index not initialized. Cannot rebuild.'
     )
-    console.log('[ThoughtVectorStore] Index and metadata saved.')
+    return
+  }
+  console.log(
+    '[ThoughtVectorStore REBUILD] Starting HNSW index rebuild from database embeddings...'
+  )
+  hnswIndex.initIndex(
+    Math.max(
+      MAX_ELEMENTS_HNSW,
+      (
+        db.prepare('SELECT COUNT(*) as count FROM thoughts').get() as {
+          count: number
+        }
+      ).count + 1000
+    )
+  )
+
+  const allEmbeddings = getAllEmbeddingsWithLabelsFromDB()
+  if (allEmbeddings.length === 0) {
+    console.log(
+      '[ThoughtVectorStore REBUILD] No embeddings in DB to rebuild index from.'
+    )
+    return
+  }
+
+  for (const item of allEmbeddings) {
+    if (item.label >= hnswIndex.getMaxElements()) {
+      hnswIndex.resizeIndex(item.label + 1000)
+    }
+    hnswIndex.addPoint(item.embedding, item.label)
+  }
+  console.log(
+    `[ThoughtVectorStore REBUILD] HNSW index rebuilt with ${hnswIndex.getCurrentCount()} points.`
+  )
+  await saveHnswIndex()
+}
+
+async function saveHnswIndex() {
+  if (!hnswIndex) return
+  try {
+    const dir = path.dirname(hnswIndexFilePath)
+    await fs.mkdir(dir, { recursive: true })
+    await hnswIndex.writeIndex(hnswIndexFilePath)
+    console.log('[ThoughtVectorStore] HNSW Index saved.')
   } catch (error) {
-    console.error('[ThoughtVectorStore] Error saving index or metadata:', error)
+    console.error('[ThoughtVectorStore] Error saving HNSW index:', error)
   }
 }
 
 export async function initializeThoughtVectorStore(): Promise<void> {
   if (isStoreInitialized) return
-  await loadIndexAndMetadata()
+  initDB()
+  n
+  await loadIndexAndSyncWithDB()
 }
 
 export async function addThoughtVector(
@@ -95,49 +241,53 @@ export async function addThoughtVector(
   textContent: string,
   embedding: number[]
 ): Promise<void> {
-  if (!isStoreInitialized || !index) {
-    console.error(
-      '[ThoughtVectorStore] Store not initialized. Cannot add vector.'
-    )
+  if (!isStoreInitialized || !hnswIndex || !db) {
+    console.error('[ThoughtVectorStore ADD] Store not initialized properly.')
     await initializeThoughtVectorStore()
-    if (!isStoreInitialized || !index) {
-      n
-      throw new Error('Failed to initialize thought vector store.')
+    if (!isStoreInitialized || !hnswIndex || !db) {
+      throw new Error(
+        'Failed to initialize thought vector store for adding vector.'
+      )
     }
   }
 
   if (embedding.length !== VECTOR_DIMENSION) {
     throw new Error(
-      `[ThoughtVectorStore] Embedding dimension mismatch. Expected ${VECTOR_DIMENSION}, got ${embedding.length}`
+      `[ThoughtVectorStore ADD] Embedding dimension mismatch. Expected ${VECTOR_DIMENSION}, got ${embedding.length}`
     )
   }
 
-  const newThoughtId = `${conversationId}-${role}-${Date.now()}`
-  const label = thoughtMetadata.length
+  const thoughtId = `${conversationId}-${role}-${Date.now()}`
 
-  if (label >= index.getMaxElements()) {
+  const label = hnswIndex.getCurrentCount()
+
+  if (label >= hnswIndex.getMaxElements()) {
     console.warn(
-      `[ThoughtVectorStore] Index is full (max ${index.getMaxElements()}). Resizing.`
+      `[ThoughtVectorStore ADD] Index is full (max ${hnswIndex.getMaxElements()}). Resizing.`
     )
     const newMaxElements =
-      index.getMaxElements() +
-      Math.max(1000, Math.floor(index.getMaxElements() * 0.2))
-    index.resizeIndex(newMaxElements)
-    console.log(`[ThoughtVectorStore] Index resized to ${newMaxElements}`)
+      hnswIndex.getMaxElements() +
+      Math.max(1000, Math.floor(hnswIndex.getMaxElements() * 0.2))
+    hnswIndex.resizeIndex(newMaxElements)
+    console.log(`[ThoughtVectorStore ADD] Index resized to ${newMaxElements}`)
   }
 
-  thoughtMetadata.push({
-    id: newThoughtId,
-    conversationId,
-    role,
-    textContent,
-    createdAt: new Date().toISOString(),
-  })
-  index.addPoint(embedding, label)
+  db.transaction(() => {
+    insertThoughtMetadata(
+      label,
+      thoughtId,
+      conversationId,
+      role,
+      textContent,
+      new Date().toISOString(),
+      embedding
+    )
+    hnswIndex.addPoint(embedding, label)
+  })()
 
-  await saveIndexAndMetadata()
+  await saveHnswIndex()
   console.log(
-    `[ThoughtVectorStore] Added thought with label ${label}, ID ${newThoughtId}. Current count: ${index.getCurrentCount()}`
+    `[ThoughtVectorStore ADD] Added thought with HNSW label ${label}, ID ${thoughtId}. HNSW count: ${hnswIndex.getCurrentCount()}`
   )
 }
 
@@ -145,91 +295,89 @@ export async function searchSimilarThoughts(
   queryEmbedding: number[],
   topK: number
 ): Promise<ThoughtMetadata[]> {
-  console.log(
-    '[ThoughtVectorStore searchSimilarThoughts] Received query for search.'
-  )
-
-  if (!isStoreInitialized || !index || index.getCurrentCount() === 0) {
-    console.log(
-      '[ThoughtVectorStore searchSimilarThoughts] Store not initialized, empty, or index missing. Returning empty.'
-    )
+  console.log('[ThoughtVectorStore SEARCH] Received query.')
+  if (
+    !isStoreInitialized ||
+    !hnswIndex ||
+    !db ||
+    hnswIndex.getCurrentCount() === 0
+  ) {
+    console.log('[ThoughtVectorStore SEARCH] Store not ready or empty.')
     return []
   }
   if (queryEmbedding.length !== VECTOR_DIMENSION) {
-    const errMsg = `[ThoughtVectorStore searchSimilarThoughts] Query embedding dimension mismatch. Expected ${VECTOR_DIMENSION}, got ${queryEmbedding.length}`
-    console.error(errMsg)
+    console.error(
+      `[ThoughtVectorStore SEARCH] Query embedding dimension mismatch.`
+    )
     return []
   }
 
-  const numPointsInIndex = index.getCurrentCount()
+  const numPointsInIndex = hnswIndex.getCurrentCount()
   console.log(
-    `[ThoughtVectorStore searchSimilarThoughts] Searching in index with ${numPointsInIndex} points.`
+    `[ThoughtVectorStore SEARCH] Searching in HNSW index with ${numPointsInIndex} points.`
   )
   if (numPointsInIndex === 0) return []
 
-  const results = index.searchKnn(
+  const results = hnswIndex.searchKnn(
     queryEmbedding,
     Math.min(topK, numPointsInIndex)
   )
   console.log(
-    '[ThoughtVectorStore searchSimilarThoughts] HNSW searchKnn results:',
-    JSON.stringify(results, null, 2)
+    '[ThoughtVectorStore SEARCH] HNSW searchKnn results (labels):',
+    results.neighbors
   )
 
-  const similarThoughts: ThoughtMetadata[] = []
-  if (results && results.neighbors) {
-    for (const label of results.neighbors) {
-      const metadata = thoughtMetadata[label]
-      if (metadata) {
-        console.log(
-          `[ThoughtVectorStore searchSimilarThoughts] Found metadata for label ${label}: ${metadata.textContent.substring(0, 50)}...`
-        )
-        similarThoughts.push(metadata)
-      } else {
-        console.warn(
-          `[ThoughtVectorStore searchSimilarThoughts] No metadata found for search result label: ${label}. Total metadata items: ${thoughtMetadata.length}`
-        )
-      }
-    }
-  } else {
-    console.warn(
-      '[ThoughtVectorStore searchSimilarThoughts] HNSW searchKnn returned no results or no neighbors.'
-    )
+  if (!results || !results.neighbors || results.neighbors.length === 0) {
+    console.log('[ThoughtVectorStore SEARCH] HNSW returned no neighbors.')
+    return []
   }
+
+  const retrievedMetadata = getThoughtMetadataByLabels(results.neighbors)
   console.log(
-    `[ThoughtVectorStore searchSimilarThoughts] Returning ${similarThoughts.length} similar thoughts.`
+    `[ThoughtVectorStore SEARCH] Retrieved ${retrievedMetadata.length} metadata items from DB.`
   )
-  return similarThoughts
+
+  return retrievedMetadata
 }
 
 export async function deleteAllThoughtVectors(): Promise<void> {
-  if (!index) {
+  if (!isStoreInitialized || !hnswIndex || !db) {
+    console.warn(
+      '[ThoughtVectorStore DELETE ALL] Store not initialized. Attempting init.'
+    )
     await initializeThoughtVectorStore()
-    if (!index) return
+    if (!isStoreInitialized || !hnswIndex || !db) {
+      console.error(
+        '[ThoughtVectorStore DELETE ALL] Initialization failed. Cannot delete.'
+      )
+      return
+    }
   }
-  thoughtMetadata = []
-  index.clearPoints()
-  if (!index.isIndexInitialized()) {
-    index.initIndex(MAX_ELEMENTS)
+  console.log(
+    '[ThoughtVectorStore DELETE ALL] Deleting all thoughts from DB and HNSW index.'
+  )
+  db.prepare('DELETE FROM thoughts').run()
+  hnswIndex.clearPoints()
+  if (!hnswIndex.isIndexInitialized() || hnswIndex.getCurrentCount() > 0) {
+    hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
   }
-  await saveIndexAndMetadata()
-  console.log('[ThoughtVectorStore] All thought vectors and metadata deleted.')
+  await saveHnswIndex()
+  console.log(
+    '[ThoughtVectorStore DELETE ALL] All thought vectors and DB entries deleted.'
+  )
 }
 
 export async function ensureSaveOnQuit(): Promise<void> {
-  if (
-    isStoreInitialized &&
-    index &&
-    (index.getCurrentCount() > 0 || thoughtMetadata.length > 0)
-  ) {
-    console.log(
-      '[ThoughtVectorStore] ensureSaveOnQuit: Saving index and metadata...'
-    )
-    await saveIndexAndMetadata()
-    console.log('[ThoughtVectorStore] ensureSaveOnQuit: Save complete.')
+  if (isStoreInitialized && hnswIndex && hnswIndex.getCurrentCount() > 0) {
+    await saveHnswIndex()
+    console.log('[ThoughtVectorStore QUIT_SAVE] HNSW Index save complete.')
   } else {
     console.log(
-      '[ThoughtVectorStore] ensureSaveOnQuit: No data to save or store not initialized.'
+      '[ThoughtVectorStore QUIT_SAVE] No HNSW index data to save or store not initialized.'
     )
+  }
+  if (db) {
+    db.close()
+    console.log('[ThoughtVectorStore QUIT_SAVE] DB connection closed.')
   }
 }

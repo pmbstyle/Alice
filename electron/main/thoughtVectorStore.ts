@@ -34,13 +34,13 @@ function initDB() {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS thoughts (
-      hnsw_label INTEGER PRIMARY KEY, -- This label corresponds to HNSW's internal ID for the vector
-      thought_id TEXT UNIQUE NOT NULL, -- Your original unique ID for the thought
+      hnsw_label INTEGER PRIMARY KEY,
+      thought_id TEXT UNIQUE NOT NULL,
       conversation_id TEXT NOT NULL,
       role TEXT NOT NULL,
       text_content TEXT NOT NULL,
       created_at TEXT NOT NULL,
-      embedding BLOB -- Storing embedding BLOB allows rebuilding HNSW index if needed
+      embedding BLOB
     );
   `)
   console.log(
@@ -83,7 +83,7 @@ function getThoughtMetadataByLabels(labels: number[]): ThoughtMetadata[] {
         SELECT thought_id, conversation_id, role, text_content, created_at
         FROM thoughts
         WHERE hnsw_label IN (${placeholders})
-        ORDER BY hnsw_label -- Optional: maintain order, or handle order based on HNSW result order
+        ORDER BY hnsw_label
     `)
   const rows = stmt.all(...labels) as any[]
   return rows.map(row => ({
@@ -231,7 +231,6 @@ async function saveHnswIndex() {
 export async function initializeThoughtVectorStore(): Promise<void> {
   if (isStoreInitialized) return
   initDB()
-  n
   await loadIndexAndSyncWithDB()
 }
 

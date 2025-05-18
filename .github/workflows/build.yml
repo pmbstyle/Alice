@@ -35,8 +35,18 @@ jobs:
         with:
           node-version: 18
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11
+
       - name: Install Dependencies
         run: npm install
+
+      - name: Rebuild native modules for Electron
+        run: npm run rebuild
+        env:
+          DEBUG: "electron-rebuild"
 
       - name: Get app version from package.json
         id: get_version

@@ -16,6 +16,13 @@ import {
   deleteMemoryLocal,
   deleteAllMemoriesLocal,
 } from './memoryManager'
+import {
+  initializeThoughtVectorStore,
+  addThoughtVector,
+  searchSimilarThoughts,
+  deleteAllThoughtVectors,
+  ensureSaveOnQuit as ensureThoughtStoreSave,
+} from './thoughtVectorStore'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -46,6 +53,8 @@ let overlayWindow: BrowserWindow | null = null
 const preload = path.join(__dirname, '../preload/index.mjs')
 const indexHtml = path.join(RENDERER_DIST, 'index.html')
 let screenshotDataURL: string | null = null
+
+let isHandlingQuit = false
 
 async function createWindow() {
   win = new BrowserWindow({
@@ -102,6 +111,66 @@ async function createWindow() {
         win.setPosition(x, y)
         win.setSize(500, 500)
       }
+    }
+  })
+
+  ipcMain.handle(
+    'thoughtVector:add',
+    async (
+      event,
+      {
+        conversationId,
+        role,
+        textContent,
+        embedding,
+      }: {
+        conversationId: string
+        role: string
+        textContent: string
+        embedding: number[]
+      }
+    ) => {
+      try {
+        await addThoughtVector(conversationId, role, textContent, embedding)
+        return { success: true }
+      } catch (error) {
+        console.error('IPC thoughtVector:add error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'thoughtVector:search',
+    async (
+      event,
+      {
+        queryEmbedding,
+        topK,
+      }: {
+        queryEmbedding: number[]
+        topK: number
+      }
+    ) => {
+      try {
+        const thoughtsMetadatas: ThoughtMetadata[] =
+          await searchSimilarThoughts(queryEmbedding, topK)
+        const thoughtTexts = thoughtsMetadatas.map(t => t.textContent)
+        return { success: true, data: thoughtTexts }
+      } catch (error) {
+        console.error('[Main IPC thoughtVector:search] Error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle('thoughtVector:delete-all', async () => {
+    try {
+      await deleteAllThoughtVectors()
+      return { success: true }
+    } catch (error) {
+      console.error('IPC thoughtVector:delete-all error:', error)
+      return { success: false, error: (error as Error).message }
     }
   })
 
@@ -398,8 +467,41 @@ app.whenReady().then(async () => {
   if (initialSettings) {
     console.log('Initial settings loaded in main process:', initialSettings)
   }
+  try {
+    console.log(
+      '[Main App Ready] Attempting to initialize Thought Vector Store...'
+    )
+    await initializeThoughtVectorStore()
+    console.log(
+      '[Main App Ready] Thought Vector Store initialization complete.'
+    )
+  } catch (error) {
+    console.error(
+      '[Main App Ready] CRITICAL ERROR during Thought Vector Store initialization:',
+      error
+    )
+  }
   createWindow()
   createOverlayWindow()
+})
+
+app.on('before-quit', async event => {
+  if (isHandlingQuit) {
+    return
+  }
+  isHandlingQuit = true
+  console.log('[Main Index] Before quit: Performing cleanup...')
+  event.preventDefault()
+
+  try {
+    await ensureThoughtStoreSave()
+
+    console.log('[Main Index] All cleanup tasks complete. Quitting now.')
+  } catch (err) {
+    console.error('[Main Index] Error during before-quit cleanup:', err)
+  } finally {
+    app.exit()
+  }
 })
 
 app.on('window-all-closed', () => {

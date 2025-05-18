@@ -1,6 +1,5 @@
 import OpenAI from 'openai'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { setIndex, getRelatedMessages } from '../pinecone/pinecone'
 
 interface LocalOpenAIModel {
   id: string
@@ -217,17 +216,24 @@ export const uploadScreenshot = async (dataURI: string): Promise<string> => {
 export const runAssistant = async (
   threadId: string,
   assistantId: string,
-  history: any[] = []
+  thoughtsString: string = ''
 ): Promise<
   OpenAI.Beta.AssistantStreamManager<OpenAI.Beta.AssistantStreamEvent>
 > => {
   const openai = getOpenAIClient()
-  const h = JSON.stringify(history)
+
+  let thoughtsInstructionPart =
+    'No relevant thoughts from past conversation found for this query.'
+  if (thoughtsString && thoughtsString.trim() !== '') {
+    thoughtsInstructionPart = `Relevant thoughts from past conversation (use these to inform your answer if applicable):\n${thoughtsString}`
+  }
+
   const runParams: OpenAI.Beta.Threads.Runs.RunCreateParams = {
     assistant_id: assistantId,
     temperature: 0.5,
-    additional_instructions: `Current datetime: ${new Date().toLocaleString()}. Thoughts related to user question: ${h}.`,
+    additional_instructions: `Current datetime: ${new Date().toLocaleString()}. ${thoughtsInstructionPart}`,
   }
+  console.log('Running assistant with params:', runParams)
   return openai.beta.threads.runs.stream(threadId, runParams)
 }
 
@@ -316,16 +322,59 @@ const indexMessage = async (
     textContentForMetadata = message.content
   }
 
-  await setIndex(conversationId, role, textContentForMetadata, embedding)
+  try {
+    const result = await window.ipcRenderer.invoke('thoughtVector:add', {
+      conversationId,
+      role,
+      textContent: textContentForMetadata,
+      embedding,
+    })
+    if (result.success) {
+      console.log(
+        `[OpenAI/assistant] Indexed thought to local vector store for conversation ${conversationId}, role ${role}.`
+      )
+    } else {
+      console.error(
+        '[OpenAI/assistant] Failed to save thought to local vector store:',
+        result.error
+      )
+    }
+  } catch (error) {
+    console.error(
+      '[OpenAI/assistant] Error invoking thoughtVector:add IPC:',
+      error
+    )
+  }
 }
 
-export const retrieveRelevantMemories = async (
+export const retrieveRelevantThoughts = async (
   content: string,
-  topK = 5
+  topK = 3
 ): Promise<string[]> => {
-  const embedding = await embedText(content)
-  const results = await getRelatedMessages(topK, embedding)
-  return results.filter((item): item is string => typeof item === 'string')
+  const queryEmbedding = await embedText(content)
+
+  try {
+    const ipcResult = await window.ipcRenderer.invoke('thoughtVector:search', {
+      queryEmbedding,
+      topK,
+    })
+
+    if (ipcResult.success && Array.isArray(ipcResult.data)) {
+      return ipcResult.data as string[]
+    } else {
+      console.error(
+        '[ASSISTANT.TS retrieveRelevantThoughts] Failed to retrieve thoughts from local vector store or data format incorrect:',
+        ipcResult.error
+      )
+      return []
+    }
+  } catch (error) {
+    console.error(
+      '[ASSISTANT.TS retrieveRelevantThoughts] Error during IPC call for vector search:',
+      error
+    )
+    return []
+  }
 }
 
 export const ttsStream = async (text: string): Promise<Response> => {

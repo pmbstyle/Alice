@@ -12,13 +12,6 @@ Run in your terminal `xattr -cr /Applications/Alice\ app.app`
 - Go to [Groq cloud console](https://console.groq.com/home)  and set up your account
 - Get your API key from [API keys](https://console.groq.com/keys) section and paste it in settings
 
-# Pinecone setup
-
-- Go to [Pinecone](https://www.pinecone.io/) and set up your account
-- Create a new index in the database section and get its URL, paste it in the settings
-- Paste DB region as `VITE_PINECONE_ENV` and index in settings
-- Create your API key and paste it into settings
-
 # OpenAI Assistant setup
 
 -  Save and test settings, then select `Manage assistants` option

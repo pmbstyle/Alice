@@ -7,7 +7,7 @@ import {
   listMessages,
   sendMessage,
   runAssistant,
-  retrieveRelevantMemories,
+  retrieveRelevantThoughts,
   ttsStream,
   submitToolOutputs,
   listAssistantsAPI,
@@ -450,67 +450,88 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   const createOpenAIPrompt = async (
-    newMessage: string | any,
-    store = true
+    newMessage: string | any
   ): Promise<{
     message: OpenAI.Beta.Threads.Messages.MessageCreateParams | null
-    history: any[]
+    history: string
   }> => {
-    let memoryMessages: any[] = []
+    let thoughtsStringForPrompt = ''
     let userMessagePayload: OpenAI.Beta.Threads.Messages.MessageCreateParams
 
     if (typeof newMessage === 'string') {
-      userMessagePayload = {
-        role: 'user',
-        content: newMessage,
-      }
+      userMessagePayload = { role: 'user', content: newMessage }
     } else if (
       typeof newMessage === 'object' &&
       newMessage.role === 'user' &&
       (typeof newMessage.content === 'string' ||
         Array.isArray(newMessage.content))
     ) {
-      userMessagePayload = {
-        role: 'user',
-        content: newMessage.content,
-      }
+      userMessagePayload = { role: 'user', content: newMessage.content }
     } else {
       console.error(
-        'Invalid message format provided to createOpenAIPrompt:',
-        newMessage
+        '[OpenAIStore createOpenAIPrompt] Invalid message format provided to createOpenAIPrompt:',
+        JSON.stringify(newMessage, null, 2)
       )
       return { message: null, history: [] }
     }
 
-    if (store) {
-      let textContentForMemory = ''
-      if (typeof userMessagePayload.content === 'string') {
-        textContentForMemory = userMessagePayload.content
-      } else if (Array.isArray(userMessagePayload.content)) {
-        textContentForMemory = userMessagePayload.content
-          .filter((part: any) => part.type === 'text')
-          .map((part: any) => part.text)
-          .join(' ')
-      }
-
-      if (textContentForMemory.trim()) {
-        try {
-          const relevantMemories =
-            await retrieveRelevantMemories(textContentForMemory)
-          memoryMessages = relevantMemories
-            .filter(memory => memory)
-            .map(memory => ({
-              role: 'system',
-              content: `[Thought from past conversation: ${memory}]`,
-            }))
-        } catch (error) {
-          console.error('Failed to retrieve relevant memories:', error)
-        }
-      }
+    let textContentForThoughtRetrieval = ''
+    if (typeof userMessagePayload.content === 'string') {
+      textContentForThoughtRetrieval = userMessagePayload.content
+    } else if (Array.isArray(userMessagePayload.content)) {
+      textContentForThoughtRetrieval = userMessagePayload.content
+        .filter((part: any) => part.type === 'text')
+        .map((part: any, index: number) => {
+          let value = ''
+          if (part.text && typeof part.text === 'string') {
+            value = part.text
+          } else if (part.text && typeof part.text.value === 'string') {
+            value = part.text.value
+          } else {
+            console.warn(
+              `[OpenAIStore createOpenAIPrompt] part.text for part ${index} is not in an expected string format:`,
+              JSON.stringify(part.text)
+            )
+          }
+          return value
+        })
+        .join(' ')
     }
+
+    if (textContentForThoughtRetrieval.trim()) {
+      try {
+        let relevantThoughtTexts = await retrieveRelevantThoughts(
+          textContentForThoughtRetrieval
+        )
+
+        const currentQueryText = textContentForThoughtRetrieval
+          .toLowerCase()
+          .trim()
+        relevantThoughtTexts = relevantThoughtTexts.filter(thought => {
+          return thought.toLowerCase().trim() !== currentQueryText
+        })
+
+        if (relevantThoughtTexts.length > 0) {
+          thoughtsStringForPrompt = relevantThoughtTexts
+            .map(text => `- ${text}`)
+            .join('\n')
+        }
+      } catch (error) {
+        console.error(
+          '[OpenAIStore createOpenAIPrompt] Failed to retrieve relevant thoughts for prompt:',
+          error
+        )
+        thoughtsStringForPrompt = ''
+      }
+    } else {
+      console.warn(
+        '[OpenAIStore createOpenAIPrompt] textContentForThoughtRetrieval was empty or whitespace. Skipping thought retrieval.'
+      )
+    }
+
     return {
       message: userMessagePayload,
-      history: memoryMessages,
+      history: thoughtsStringForPrompt,
     }
   }
 

@@ -9,10 +9,6 @@ export interface AliceSettings {
   VITE_OPENAI_PROJECT: string
   VITE_OPENAI_ASSISTANT_ID: string
   VITE_GROQ_API_KEY: string
-  VITE_PINECONE_API_KEY: string
-  VITE_PINECONE_BASE_URL: string
-  VITE_PINECONE_ENV: string
-  VITE_PINECONE_INDEX: string
   VITE_TAVILY_API_KEY: string
   VITE_OPENWEATHERMAP_API_KEY: string
   VITE_JACKETT_API_KEY: string
@@ -28,10 +24,6 @@ const defaultSettings: AliceSettings = {
   VITE_OPENAI_PROJECT: '',
   VITE_OPENAI_ASSISTANT_ID: '',
   VITE_GROQ_API_KEY: '',
-  VITE_PINECONE_API_KEY: '',
-  VITE_PINECONE_BASE_URL: '',
-  VITE_PINECONE_ENV: '',
-  VITE_PINECONE_INDEX: '',
   VITE_TAVILY_API_KEY: '',
   VITE_OPENWEATHERMAP_API_KEY: '',
   VITE_JACKETT_API_KEY: '',
@@ -47,10 +39,6 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_OPENAI_PROJECT: 'OpenAI Project ID',
   VITE_OPENAI_ASSISTANT_ID: 'OpenAI Assistant ID (Selected)',
   VITE_GROQ_API_KEY: 'Groq API Key',
-  VITE_PINECONE_API_KEY: 'Pinecone API Key',
-  VITE_PINECONE_BASE_URL: 'Pinecone Base URL (Control Plane)',
-  VITE_PINECONE_ENV: 'Pinecone Environment (Index Host Suffix)',
-  VITE_PINECONE_INDEX: 'Pinecone Index Name',
   VITE_TAVILY_API_KEY: 'Tavily API Key',
   VITE_OPENWEATHERMAP_API_KEY: 'OpenWeatherMap API Key',
   VITE_JACKETT_API_KEY: 'Jackett API Key',
@@ -63,9 +51,6 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
 const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
   'VITE_OPENAI_API_KEY',
   'VITE_GROQ_API_KEY',
-  'VITE_PINECONE_API_KEY',
-  'VITE_PINECONE_ENV',
-  'VITE_PINECONE_INDEX',
 ]
 
 export const useSettingsStore = defineStore('settings', {

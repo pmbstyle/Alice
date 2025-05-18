@@ -96,69 +96,6 @@
         class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
       >
         <legend class="fieldset-legend">
-          Pinecone (Vector Memory)
-          <a href="https://www.pinecone.io/" target="_blank" class="ml-2">
-            <span class="badge badge-sm badge-soft whitespace-nowrap">
-              Get Keys
-              <img :src="newTabIcon" class="size-3 inline-block ml-1" />
-            </span>
-          </a>
-        </legend>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
-          <div>
-            <label for="pinecone-key" class="block mb-1 text-sm"
-              >API Key *</label
-            >
-            <input
-              id="pinecone-key"
-              type="password"
-              v-model="currentSettings.VITE_PINECONE_API_KEY"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-            />
-          </div>
-          <div>
-            <label for="pinecone-url" class="block mb-1 text-sm"
-              >Base URL (e.g., https://api.pinecone.io) *</label
-            >
-            <input
-              id="pinecone-url"
-              type="text"
-              v-model="currentSettings.VITE_PINECONE_BASE_URL"
-              placeholder="https://api.pinecone.io"
-              class="input focus:outline-none w-full"
-            />
-          </div>
-          <div>
-            <label for="pinecone-env" class="block mb-1 text-sm"
-              >Environment (e.g., us-east-1) *</label
-            >
-            <input
-              id="pinecone-env"
-              type="text"
-              v-model="currentSettings.VITE_PINECONE_ENV"
-              placeholder="us-east-1"
-              class="input focus:outline-none w-full"
-            />
-          </div>
-          <div>
-            <label for="pinecone-index" class="block mb-1 text-sm"
-              >Index Name *</label
-            >
-            <input
-              id="pinecone-index"
-              type="text"
-              v-model="currentSettings.VITE_PINECONE_INDEX"
-              class="input focus:outline-none w-full"
-            />
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset
-        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
-      >
-        <legend class="fieldset-legend">
           Tool APIs (Optional)
           <a
             href="https://github.com/pmbstyle/Alice/blob/main/docs/toolsInstructions.md"

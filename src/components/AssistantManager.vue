@@ -203,7 +203,7 @@
                       : tool.function.description
                   "
                 >
-                  {{ tool.function.name }}
+                  {{ betterToolName(tool.function.name) }}
                   <span
                     v-if="!isToolConfigured(tool.function.name)"
                     class="text-xs text-warning normal-case"
@@ -314,6 +314,30 @@ const defaultFormStateValues = () => ({
   temperature: 0.5,
   top_p: 1.0,
 })
+
+function betterToolName(name: string): string {
+  const nameMap: Record<string, string> = {
+    perform_web_search: 'Web Search',
+    get_website_context: 'Read Website Content',
+    get_weather_forecast: 'Weather Forecast',
+    get_current_datetime: 'Current Date & Time',
+    open_path: 'Open Apps and URLs',
+    manage_clipboard: 'Read/Write Clipboard',
+    search_torrents: 'Torrent Search',
+    add_torrent_to_qb: 'Add Torrent to Qbittorrent',
+    save_memory: 'Save Memory',
+    delete_memory: 'Delete Memory',
+    recall_memories: 'Recall Memories',
+    get_calendar_events: 'Get Calendar Events',
+    create_calendar_event: 'Create Calendar Event',
+    update_calendar_event: 'Update Calendar Event',
+    delete_calendar_event: 'Delete Calendar Event',
+    get_unread_emails: 'Get Unread Emails',
+    search_emails: 'Search Emails',
+    get_email_content: 'Get Email Content',
+  }
+  return nameMap[name] || name
+}
 
 function isToolConfigured(toolName: string): boolean {
   const currentSettings = settingsStore.config

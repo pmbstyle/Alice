@@ -374,4 +374,68 @@ export const PREDEFINED_OPENAI_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_unread_emails',
+      description:
+        "Fetches a list of recent unread emails from the user's Gmail. Provides subject, sender, and snippet for each.",
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          maxResults: {
+            type: 'integer',
+            description:
+              'The maximum number of unread emails to fetch. Defaults to 5 if not specified.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_emails',
+      description:
+        "Searches emails in the user's Gmail based on a query, date range, or other criteria. Provides subject, sender, and snippet.",
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          query: {
+            type: 'string',
+            description:
+              "The search query. Examples: 'from:boss@example.com', 'subject:project update', 'after:2024/01/15 before:2024/01/20', 'is:important'.",
+          },
+          maxResults: {
+            type: 'integer',
+            description:
+              'The maximum number of emails to return. Defaults to 10.',
+          },
+        },
+        required: ['query'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_email_content',
+      description:
+        "Fetches the detailed content of a specific email using its message ID. Use this after 'get_unread_emails' or 'search_emails' if the user wants to read a specific email.",
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          messageId: {
+            type: 'string',
+            description: 'The ID of the email message to fetch.',
+          },
+        },
+        required: ['messageId'],
+      },
+    },
+  },
 ]

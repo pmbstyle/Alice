@@ -45,6 +45,19 @@ interface DeleteMemoryArgs {
   id: string
 }
 
+interface GetUnreadEmailsArgs {
+  maxResults?: number
+}
+
+interface SearchEmailsArgs {
+  query: string
+  maxResults?: number
+}
+
+interface GetEmailContentArgs {
+  messageId: string
+}
+
 async function save_memory(args: SaveMemoryArgs) {
   if (!args.content) {
     return { success: false, error: 'Content is required.' }
@@ -697,6 +710,180 @@ async function delete_calendar_event(args: {
 }
 
 /**
+ * Helper function to process email details for AI
+ */
+
+function processEmailForAI(
+  emailData: any,
+  isRequestingFullContent: boolean = false
+) {
+  if (!emailData) return 'Email data not found.'
+  const headers = emailData.payload?.headers || []
+  const subject =
+    headers.find((h: any) => h.name === 'Subject')?.value || 'No Subject'
+  const from =
+    headers.find((h: any) => h.name === 'From')?.value || 'Unknown Sender'
+  const date =
+    headers.find((h: any) => h.name === 'Date')?.value || 'Unknown Date'
+
+  let mainContentOutput: string
+
+  if (isRequestingFullContent) {
+    mainContentOutput =
+      emailData.decodedPlainTextBody ||
+      emailData.snippet ||
+      'No detailed content available.'
+  } else {
+    mainContentOutput = emailData.snippet || 'No snippet available.'
+  }
+
+  const returnedObject: any = {
+    id: emailData.id,
+    threadId: emailData.threadId,
+    subject,
+    from,
+    date,
+  }
+
+  if (isRequestingFullContent) {
+    returnedObject.content = mainContentOutput
+  } else {
+    returnedObject.snippet =
+      mainContentOutput.substring(0, 250) +
+      (mainContentOutput.length > 250 ? '...' : '')
+  }
+
+  return returnedObject
+}
+
+/**
+ * Fetches unread emails from the user's Gmail account.
+ */
+
+async function get_unread_emails(
+  args: GetUnreadEmailsArgs
+): Promise<FunctionResult> {
+  try {
+    const listResult = await window.ipcRenderer.invoke(
+      'google-gmail:list-messages',
+      {
+        maxResults: args.maxResults || 5,
+        labelIds: ['UNREAD'],
+        q: 'is:unread',
+      }
+    )
+
+    if (
+      listResult.success &&
+      listResult.data &&
+      Array.isArray(listResult.data)
+    ) {
+      if (listResult.data.length === 0) {
+        return { success: true, data: 'No unread emails found.' }
+      }
+      const emailDetailsPromises = listResult.data.map(msg =>
+        window.ipcRenderer.invoke('google-gmail:get-message', {
+          id: msg.id,
+          format: 'metadata',
+        })
+      )
+      const emailDetailsResults = await Promise.all(emailDetailsPromises)
+      const processedEmails = emailDetailsResults
+        .filter(res => res.success && res.data)
+        .map(res => processEmailForAI(res.data, false))
+      return { success: true, data: processedEmails }
+    }
+    return {
+      success: false,
+      error: listResult.error || 'Failed to fetch unread emails.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Searches emails in the user's Gmail account based on a query.
+ */
+
+async function search_emails(args: SearchEmailsArgs): Promise<FunctionResult> {
+  if (!args.query) {
+    return { success: false, error: 'Search query is required.' }
+  }
+  try {
+    const listResult = await window.ipcRenderer.invoke(
+      'google-gmail:list-messages',
+      {
+        q: args.query,
+        maxResults: args.maxResults || 10,
+      }
+    )
+    if (
+      listResult.success &&
+      listResult.data &&
+      Array.isArray(listResult.data)
+    ) {
+      if (listResult.data.length === 0) {
+        return {
+          success: true,
+          data: `No emails found for query: "${args.query}"`,
+        }
+      }
+      const emailDetailsPromises = listResult.data.map(msg =>
+        window.ipcRenderer.invoke('google-gmail:get-message', {
+          id: msg.id,
+          format: 'metadata',
+        })
+      )
+      const emailDetailsResults = await Promise.all(emailDetailsPromises)
+      const processedEmails = emailDetailsResults
+        .filter(res => res.success && res.data)
+        .map(res => processEmailForAI(res.data, false))
+      return { success: true, data: processedEmails }
+    }
+    return {
+      success: false,
+      error:
+        listResult.error ||
+        `Failed to search emails for query: "${args.query}"`,
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Fetches the content of an email using its message ID.
+ */
+
+async function get_email_content(
+  args: GetEmailContentArgs
+): Promise<FunctionResult> {
+  if (!args.messageId) {
+    return {
+      success: false,
+      error: 'Message ID is required to get email content.',
+    }
+  }
+  try {
+    const result = await window.ipcRenderer.invoke('google-gmail:get-message', {
+      id: args.messageId,
+      format: 'full',
+    })
+    if (result.success && result.data) {
+      const processedData = processEmailForAI(result.data, true)
+      return { success: true, data: processedData }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to fetch email content.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
  * Helpers for parsing torrent data.
  */
 
@@ -802,6 +989,9 @@ const functionRegistry: {
   create_calendar_event,
   update_calendar_event,
   delete_calendar_event,
+  get_unread_emails,
+  search_emails,
+  get_email_content,
 }
 
 const functionSchemas = {
@@ -822,6 +1012,9 @@ const functionSchemas = {
   },
   update_calendar_event: { required: ['eventId'] },
   delete_calendar_event: { required: ['eventId'] },
+  get_unread_emails: { required: [] },
+  search_emails: { required: ['query'] },
+  get_email_content: { required: ['messageId'] },
 }
 
 /**

@@ -95,7 +95,7 @@
       <fieldset
         class="fieldset bg-gray-900/90 border-purple-500/50 rounded-box w-full border p-4"
       >
-        <legend class="fieldset-legend">Google Calendar Integration</legend>
+        <legend class="fieldset-legend">Google Services Integration</legend>
         <div class="p-2 space-y-4">
           <div
             v-if="
@@ -103,9 +103,6 @@
               !googleAuthStatus.authInProgress
             "
           >
-            <p class="text-sm mb-2">
-              Connect Alice to your Google Calendar to manage events.
-            </p>
             <button
               type="button"
               @click="connectGoogleCalendar"
@@ -115,7 +112,7 @@
               {{
                 googleAuthStatus.isLoading
                   ? 'Connecting...'
-                  : 'Connect Google Calendar'
+                  : 'Connect to Google Services'
               }}
             </button>
           </div>
@@ -132,15 +129,32 @@
             <span class="loading loading-dots loading-md"></span>
           </div>
           <div v-if="googleAuthStatus.isAuthenticated">
-            <p class="text-sm mb-2 text-success-content">
-              Successfully connected to Google Calendar.
-            </p>
+            <div
+              role="alert"
+              class="alert alert-success mb-4"
+              v-if="googleAuthStatus.isAuthenticated"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-6 w-6 shrink-0 stroke-current"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span>Successfully connected to Google Services</span>
+            </div>
             <button
               type="button"
               @click="disconnectGoogleCalendar"
               class="btn btn-warning btn-outline"
             >
-              Disconnect Google Calendar
+              Disconnect from Google Services
             </button>
           </div>
           <p
@@ -155,7 +169,7 @@
               !googleAuthStatus.isAuthenticated &&
               !googleAuthStatus.error
             "
-            class="text-xs text-info-content mt-1"
+            class="text-xs text-white mt-1"
           >
             {{ googleAuthStatus.message }}
           </p>

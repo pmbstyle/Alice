@@ -25,6 +25,7 @@ import {
 } from './thoughtVectorStore'
 import * as googleAuthManager from './googleAuthManager'
 import * as googleCalendarManager from './googleCalendarManager'
+import * as googleGmailManager from './googleGmailManager'
 import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import os from 'node:os'
@@ -670,7 +671,10 @@ ipcMain.handle('google-calendar:get-auth-url', async () => {
     const authUrl = oAuth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'consent',
-      scope: ['https://www.googleapis.com/auth/calendar'],
+      scope: [
+        'https://www.googleapis.com/auth/calendar',
+        'https://www.googleapis.com/auth/gmail.readonly',
+      ],
     })
     console.log('[IPC get-auth-url] Generated auth URL:', authUrl)
     shell.openExternal(authUrl)
@@ -716,6 +720,21 @@ async function withAuthenticatedCalendarClient<T>(
   return operation(authClient)
 }
 
+async function withAuthenticatedGmailClient<T>(
+  operation: (authClient: any) => Promise<T>
+): Promise<T | { success: false; error: string; unauthenticated?: boolean }> {
+  const authClient = await googleAuthManager.getAuthenticatedClient()
+  if (!authClient) {
+    return {
+      success: false,
+      error:
+        'User not authenticated with Google. Please authenticate in settings.',
+      unauthenticated: true,
+    }
+  }
+  return operation(authClient)
+}
+
 ipcMain.handle('google-calendar:list-events', async (event, args) => {
   return withAuthenticatedCalendarClient(authClient =>
     googleCalendarManager.listEvents(
@@ -753,6 +772,30 @@ ipcMain.handle('google-calendar:update-event', async (event, args) => {
 ipcMain.handle('google-calendar:delete-event', async (event, args) => {
   return withAuthenticatedCalendarClient(authClient =>
     googleCalendarManager.deleteEvent(authClient, args.calendarId, args.eventId)
+  )
+})
+
+ipcMain.handle('google-gmail:list-messages', async (event, args) => {
+  return withAuthenticatedGmailClient(authClient =>
+    googleGmailManager.listMessages({
+      authClient,
+      userId: args.userId,
+      maxResults: args.maxResults,
+      labelIds: args.labelIds,
+      q: args.q,
+      includeSpamTrash: args.includeSpamTrash,
+    })
+  )
+})
+
+ipcMain.handle('google-gmail:get-message', async (event, args) => {
+  return withAuthenticatedGmailClient(authClient =>
+    googleGmailManager.getMessage({
+      authClient,
+      userId: args.userId,
+      id: args.id,
+      format: args.format,
+    })
   )
 })
 

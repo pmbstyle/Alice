@@ -235,7 +235,11 @@
             ></span>
             {{ isEditing ? 'Save Changes' : 'Create Assistant' }}
           </button>
-          <button type="button" @click="cancelForm" class="btn btn-warning btn-active">
+          <button
+            type="button"
+            @click="cancelForm"
+            class="btn btn-warning btn-active"
+          >
             Cancel
           </button>
         </div>
@@ -274,6 +278,7 @@ interface ModelInList {
 const assistantsList = ref<AssistantInList[]>([])
 const modelsList = ref<ModelInList[]>([])
 const predefinedTools = ref(PREDEFINED_OPENAI_TOOLS)
+console.log('Predefined tools:', predefinedTools.value)
 const selectedPredefinedToolNames = ref<string[]>([])
 
 const defaultFormState = () => ({

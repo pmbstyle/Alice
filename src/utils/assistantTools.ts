@@ -232,4 +232,146 @@ export const PREDEFINED_OPENAI_TOOLS = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'get_calendar_events',
+      description:
+        "Fetches events from the user's Google Calendar for a specified time range or with a query. Use this to check the user's schedule. Always clarify date ranges if not explicitly given by the user. Default to the 'primary' calendar.",
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          calendarId: {
+            type: 'string',
+            description:
+              "The calendar ID to fetch events from. Defaults to 'primary'.",
+          },
+          timeMin: {
+            type: 'string',
+            description:
+              "Start of the time range in ISO 8601 format (e.g., '2025-05-20T00:00:00Z'). If not provided, defaults to now.",
+          },
+          timeMax: {
+            type: 'string',
+            description:
+              "End of the time range in ISO 8601 format (e.g., '2025-05-27T23:59:59Z').",
+          },
+          q: {
+            type: 'string',
+            description: 'Free text search query for events.',
+          },
+          maxResults: {
+            type: 'integer',
+            description: 'Maximum number of events to return. Defaults to 10.',
+          },
+        },
+        required: [],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_calendar_event',
+      description:
+        "Creates a new event in the user's Google Calendar. Ensure you have a summary, start time, and end time. Confirm with the user before creating. Default to the 'primary' calendar.",
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          calendarId: {
+            type: 'string',
+            description:
+              "The calendar ID to create the event in. Defaults to 'primary'.",
+          },
+          summary: {
+            type: 'string',
+            description: 'The title or summary of the event.',
+          },
+          description: {
+            type: 'string',
+            description: 'A more detailed description of the event.',
+          },
+          startDateTime: {
+            type: 'string',
+            description:
+              "The start date and time of the event in ISO 8601 format (e.g., '2025-05-20T10:00:00-07:00').",
+          },
+          endDateTime: {
+            type: 'string',
+            description:
+              "The end date and time of the event in ISO 8601 format (e.g., '2025-05-20T11:00:00-07:00').",
+          },
+          location: {
+            type: 'string',
+            description: 'The location of the event.',
+          },
+          attendees: {
+            type: 'array',
+            items: { type: 'string', format: 'email' },
+            description: 'A list of email addresses of attendees.',
+          },
+        },
+        required: ['summary', 'startDateTime', 'endDateTime'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_calendar_event',
+      description:
+        "Updates an existing event in the user's Google Calendar. You MUST have the eventId. If you don't have it, first use 'get_calendar_events' to find it and confirm with the user. Default to the 'primary' calendar.",
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          calendarId: {
+            type: 'string',
+            description:
+              "The calendar ID where the event exists. Defaults to 'primary'.",
+          },
+          eventId: {
+            type: 'string',
+            description: 'The ID of the event to update.',
+          },
+          summary: { type: 'string' },
+          description: { type: 'string' },
+          startDateTime: { type: 'string', description: 'ISO 8601 format.' },
+          endDateTime: { type: 'string', description: 'ISO 8601 format.' },
+          location: { type: 'string' },
+          attendees: {
+            type: 'array',
+            items: { type: 'string', format: 'email' },
+          },
+        },
+        required: ['eventId'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_calendar_event',
+      description:
+        "Deletes an event from the user's Google Calendar. You MUST have the eventId. Confirm with the user before deleting. If you don't have the eventId, use 'get_calendar_events' to find it. Default to the 'primary' calendar.",
+      strict: false,
+      parameters: {
+        type: 'object',
+        properties: {
+          calendarId: {
+            type: 'string',
+            description:
+              "The calendar ID where the event exists. Defaults to 'primary'.",
+          },
+          eventId: {
+            type: 'string',
+            description: 'The ID of the event to delete.',
+          },
+        },
+        required: ['eventId'],
+      },
+    },
+  },
 ]

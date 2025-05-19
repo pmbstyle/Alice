@@ -528,7 +528,177 @@ async function search_torrents(
   }
 }
 
-//helpers
+interface CalendarEventResource {
+  summary?: string
+  description?: string
+  start?: { dateTime?: string; timeZone?: string; date?: string }
+  end?: { dateTime?: string; timeZone?: string; date?: string }
+  location?: string
+  attendees?: { email: string }[]
+}
+
+/**
+ * Retrieves a list of events from the user's Google Calendar.
+ */
+
+async function get_calendar_events(args: {
+  calendarId?: string
+  timeMin?: string
+  timeMax?: string
+  q?: string
+  maxResults?: number
+}): Promise<FunctionResult> {
+  try {
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:list-events',
+      {
+        calendarId: args.calendarId || 'primary',
+        timeMin: args.timeMin,
+        timeMax: args.timeMax,
+        q: args.q,
+        maxResults: args.maxResults || 10,
+      }
+    )
+    if (result.success) {
+      return { success: true, data: result.data || 'No events found.' }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to list calendar events.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Creates a new event in the user's Google Calendar.
+ */
+
+async function create_calendar_event(args: {
+  calendarId?: string
+  summary: string
+  description?: string
+  startDateTime: string
+  endDateTime: string
+  location?: string
+  attendees?: string[]
+}): Promise<FunctionResult> {
+  try {
+    const eventResource: CalendarEventResource = {
+      summary: args.summary,
+      description: args.description,
+      start: { dateTime: args.startDateTime },
+      end: { dateTime: args.endDateTime },
+      location: args.location,
+    }
+    if (args.attendees && args.attendees.length > 0) {
+      eventResource.attendees = args.attendees.map(email => ({ email }))
+    }
+
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:create-event',
+      {
+        calendarId: args.calendarId || 'primary',
+        eventResource,
+      }
+    )
+    if (result.success) {
+      return { success: true, data: result.data }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to create calendar event.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Updates an existing event in the user's Google Calendar.
+ */
+
+async function update_calendar_event(args: {
+  calendarId?: string
+  eventId: string
+  summary?: string
+  description?: string
+  startDateTime?: string
+  endDateTime?: string
+  location?: string
+  attendees?: string[]
+}): Promise<FunctionResult> {
+  try {
+    const eventResource: CalendarEventResource = {}
+    if (args.summary) eventResource.summary = args.summary
+    if (args.description) eventResource.description = args.description
+    if (args.startDateTime)
+      eventResource.start = { dateTime: args.startDateTime }
+    if (args.endDateTime) eventResource.end = { dateTime: args.endDateTime }
+    if (args.location) eventResource.location = args.location
+    if (args.attendees && args.attendees.length > 0) {
+      eventResource.attendees = args.attendees.map(email => ({ email }))
+    }
+
+    if (Object.keys(eventResource).length === 0) {
+      return {
+        success: false,
+        error: 'No fields provided to update for the event.',
+      }
+    }
+
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:update-event',
+      {
+        calendarId: args.calendarId || 'primary',
+        eventId: args.eventId,
+        eventResource,
+      }
+    )
+    if (result.success) {
+      return { success: true, data: result.data }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to update calendar event.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Deletes an event from the user's Google Calendar.
+ */
+
+async function delete_calendar_event(args: {
+  calendarId?: string
+  eventId: string
+}): Promise<FunctionResult> {
+  try {
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:delete-event',
+      {
+        calendarId: args.calendarId || 'primary',
+        eventId: args.eventId,
+      }
+    )
+    if (result.success) {
+      return { success: true, data: result.data }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to delete calendar event.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Helpers for parsing torrent data.
+ */
 
 function formatFileSize(bytes: string): string {
   const b = parseInt(bytes, 10)
@@ -628,6 +798,10 @@ const functionRegistry: {
   get_website_context: get_website_context,
   search_torrents: search_torrents,
   add_torrent_to_qb: add_torrent_to_qb,
+  get_calendar_events,
+  create_calendar_event,
+  update_calendar_event,
+  delete_calendar_event,
 }
 
 const functionSchemas = {
@@ -642,6 +816,12 @@ const functionSchemas = {
   get_website_context: { required: ['url'] },
   search_torrents: { required: ['query'] },
   add_torrent_to_qb: { required: ['magnet'] },
+  get_calendar_events: { required: [] },
+  create_calendar_event: {
+    required: ['summary', 'startDateTime', 'endDateTime'],
+  },
+  update_calendar_event: { required: ['eventId'] },
+  delete_calendar_event: { required: ['eventId'] },
 }
 
 /**

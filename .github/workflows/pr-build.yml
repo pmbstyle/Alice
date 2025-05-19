@@ -47,16 +47,29 @@ jobs:
 
       - name: Set up Python
         uses: actions/setup-python@v4
+        id: setup_python
         with:
           python-version: '3.11'
 
       - name: Install Dependencies
         run: npm install
+        env:
+          PYTHON: ${{ steps.setup_python.outputs.python-path }}
 
       - name: Rebuild native modules for Electron
         run: npm run rebuild
         env:
           DEBUG: 'electron-rebuild'
+          PYTHON: ${{ steps.setup_python.outputs.python-path }}
+
+      - name: Create dummy app-config.json
+        shell: bash
+        run: |
+          echo "{
+            \"VITE_GOOGLE_CLIENT_ID\": \"DUMMY_PR_BUILD_CLIENT_ID\",
+            \"VITE_GOOGLE_CLIENT_SECRET\": \"DUMMY_PR_BUILD_CLIENT_SECRET\"
+          }" > app-config.json
+          echo "Dummy app-config.json created for PR build."
 
       - name: Build Release Files
         run: npm run build

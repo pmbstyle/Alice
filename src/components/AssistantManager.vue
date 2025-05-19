@@ -278,7 +278,6 @@ interface ModelInList {
 const assistantsList = ref<AssistantInList[]>([])
 const modelsList = ref<ModelInList[]>([])
 const predefinedTools = ref(PREDEFINED_OPENAI_TOOLS)
-console.log('Predefined tools:', predefinedTools.value)
 const selectedPredefinedToolNames = ref<string[]>([])
 
 const defaultFormState = () => ({

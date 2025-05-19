@@ -25,8 +25,45 @@ const TOKEN_PATH = path.join(
   'google-calendar-tokens.json'
 )
 
-const GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID
-const GOOGLE_CLIENT_SECRET = process.env.VITE_GOOGLE_CLIENT_SECRET
+let GOOGLE_CLIENT_ID: string | undefined
+let GOOGLE_CLIENT_SECRET: string | undefined
+
+if (app.isPackaged) {
+  const configPath = path.join(process.resourcesPath, 'app-config.json')
+  try {
+    if (fs.existsSync(configPath)) {
+      const configFile = fs.readFileSync(configPath, 'utf-8')
+      const config = JSON.parse(configFile)
+      GOOGLE_CLIENT_ID = config.VITE_GOOGLE_CLIENT_ID
+      GOOGLE_CLIENT_SECRET = config.VITE_GOOGLE_CLIENT_SECRET
+      console.log(
+        '[GoogleAuthManager] Loaded credentials from packaged app-config.json'
+      )
+    } else {
+      console.error(
+        `[GoogleAuthManager] CRITICAL: app-config.json not found at ${configPath}`
+      )
+    }
+  } catch (error) {
+    console.error(
+      '[GoogleAuthManager] CRITICAL: Could not load or parse app-config.json in packaged app:',
+      error
+    )
+  }
+} else {
+  const projectRoot = app.getAppPath()
+  const envPath = path.resolve(projectRoot, '.env')
+  const result = dotenv.config({ path: envPath })
+  if (result.error) {
+    console.warn(
+      `[GoogleAuthManager] dotenv: Could not load .env file from ${envPath}. Error: ${result.error.message}`
+    )
+  } else {
+    console.log(`[GoogleAuthManager] dotenv: Loaded .env file from ${envPath}`)
+  }
+  GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID
+  GOOGLE_CLIENT_SECRET = process.env.VITE_GOOGLE_CLIENT_SECRET
+}
 
 export const GOOGLE_REDIRECT_URI = 'http://127.0.0.1:9876/oauth2callback'
 

@@ -45,6 +45,21 @@ jobs:
         with:
           node-version: 18
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        id: setup_python
+        with:
+          python-version: '3.11'
+
+      - name: Install setuptools
+        if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
+        run: ${{ steps.setup_python.outputs.python-path }} -m pip install setuptools
+        shell: bash
+
+      - name: Configure npm to use correct Python for node-gyp
+        run: npm config set python ${{ steps.setup_python.outputs.python-path }}
+        shell: bash
+
       - name: Install Dependencies
         run: npm install
 

@@ -573,6 +573,14 @@ export const useConversationStore = defineStore('conversation', () => {
         return '🧠 Let me think back...'
       case 'delete_memory':
         return '🗑️ Forgetting that now...'
+      case 'get_calendar_events':
+        return '🗓️ Fetching your schedule...'
+      case 'create_calendar_event':
+        return '🗓️ Adding to your calendar...'
+      case 'update_calendar_event':
+        return '🗓️ Updating your calendar...'
+      case 'delete_calendar_event':
+        return '🗑️ Removing from your calendar...'
       default:
         return `⚙️ Using tool: ${toolName}...`
     }

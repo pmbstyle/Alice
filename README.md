@@ -10,19 +10,30 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
 
 ## Features
 
-- **Voice recognition.**
+- 🗣️ **Voice recognition**
+  
   Speak to Alice using voice with Voice Activity Detection (VAD), transcribed via Groq's Whisper API.
-- **Text-to-speech.**
+  
+- 💬 **Text-to-speech**
+  
   Alice responds with natural-sounding speech using OpenAI's TTS API.
-- **Image recognition.**
+  
+- 🖼️ **Image recognition**
+  
   Capture screenshots and let Alice interpret them using OpenAI's Vision API.
-- **Memory system.** 
-  All Alice interactions are stored in a local database, allowing her to remember past conversations and facts. 
+  
+- 📝**Memory system**
+  
+  All Alice interactions are stored in a local database, allowing her to remember past conversations and facts.
+  
   - **Thoughts:** Past conversation fragments embedded in a local Hnswlib vector database for quick context inspiration.  
   - **Memories:** Long-term structured facts stored in a local database, retrievable on demand via memory tools.
-- **Animated assistant appearance.**
+- 🎞️ **Animated assistant appearance**
+  
   Several video states (standby, thinking, speaking) are used to make interactions lively.
-- **Function calling.**  
+  
+- ⚙️ **Function calling**
+  
   Data retrieval:
    - Web search
    - Website content extraction
@@ -37,7 +48,9 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
    - Add torrents to the download client
 
 ![image](https://github.com/user-attachments/assets/3468f115-e129-4885-87c2-fae68a8d0748)
+
 ![image](https://github.com/user-attachments/assets/fe5e1da2-96b1-4cc8-b79a-6a0228907295)
+
 ![image](https://github.com/user-attachments/assets/400c202e-67ed-477a-a51e-8132272d2d9a)
 
 
@@ -45,7 +58,7 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
 
 **Get the latest version of Alice for your operating system:**
 
-[**➡️ Download Latest Release**](https://github.com/pmbstyle/Alice/releases/latest) (Windows, MacOS, Linux)
+[![download_btn](https://github.com/user-attachments/assets/3790ee40-2bb5-4d5c-abb8-ed9f8d37a228)](https://github.com/pmbstyle/Alice/releases/latest)
 
 Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupInstructions.md) to create all needed API references and set up your assistant.
 

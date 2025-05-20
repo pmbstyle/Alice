@@ -10,19 +10,19 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
 
 ## Features
 
-- **Voice recognition.**
+- 🗣️ **Voice recognition.**
   Speak to Alice using voice with Voice Activity Detection (VAD), transcribed via Groq's Whisper API.
-- **Text-to-speech.**
+- 💬 **Text-to-speech.**
   Alice responds with natural-sounding speech using OpenAI's TTS API.
-- **Image recognition.**
+- 🖼️ **Image recognition.**
   Capture screenshots and let Alice interpret them using OpenAI's Vision API.
-- **Memory system.** 
+- 📝**Memory system.** 
   All Alice interactions are stored in a local database, allowing her to remember past conversations and facts. 
   - **Thoughts:** Past conversation fragments embedded in a local Hnswlib vector database for quick context inspiration.  
   - **Memories:** Long-term structured facts stored in a local database, retrievable on demand via memory tools.
-- **Animated assistant appearance.**
+- 🎞️ **Animated assistant appearance.**
   Several video states (standby, thinking, speaking) are used to make interactions lively.
-- **Function calling.**  
+- ⚙️ **Function calling.**  
   Data retrieval:
    - Web search
    - Website content extraction

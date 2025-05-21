@@ -19,6 +19,7 @@ jobs:
   build:
     name: Build for ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    environment: Prod
     strategy:
       matrix:
         os: [macos-latest, ubuntu-latest, windows-latest]

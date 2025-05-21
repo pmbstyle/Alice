@@ -56,7 +56,7 @@ jobs:
 
       - name: Create app-config.json
         shell: bash
-        run: run: |
+        run: |
           printf "{\n" > app-config.json
           printf "  \"VITE_GOOGLE_CLIENT_ID\": \"%s\",\n" "${{ secrets.VITE_GOOGLE_CLIENT_ID }}" >> app-config.json
           printf "  \"VITE_GOOGLE_CLIENT_SECRET\": \"%s\"\n" "${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}" >> app-config.json

@@ -1,5 +1,7 @@
 # Alice
 
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/pmbstyle/Alice)
+
 Say 'Hi' to Alice 👋
 
 Alice is an open-source AI assistant that offers voice interaction, text-to-speech, and image recognition. It wraps around powerful language and vision APIs to provide natural conversations, perform helpful tasks, and respond to visual inputs with context-aware intelligence.

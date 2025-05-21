@@ -1,7 +1,7 @@
 import { google } from 'googleapis'
 import { app } from 'electron'
 import path from 'node:path'
-import fs from 'node:fs/promises'
+import fs from 'node:fs'
 import dotenv from 'dotenv'
 
 const projectRoot = app.isPackaged
@@ -13,10 +13,10 @@ if (!app.isPackaged) {
   const result = dotenv.config({ path: envPath })
   if (result.error) {
     console.warn(
-      `[GoogleAuthManager] dotenv: Could not load .env file from ${envPath}. Error: ${result.error.message}`
+      `[GoogleAuthManager] dotenv dev: Could not load .env. Error: ${result.error.message}`
     )
   } else {
-    console.log(`[GoogleAuthManager] dotenv: Loaded .env file from ${envPath}`)
+    console.log(`[GoogleAuthManager] dotenv dev: Loaded .env from ${envPath}`)
   }
 }
 
@@ -30,37 +30,35 @@ let GOOGLE_CLIENT_SECRET: string | undefined
 
 if (app.isPackaged) {
   const configPath = path.join(process.resourcesPath, 'app-config.json')
+  console.log(
+    '[GoogleAuthManager] Packaged app: Attempting to load config from:',
+    configPath
+  )
   try {
     if (fs.existsSync(configPath)) {
-      const configFile = fs.readFileSync(configPath, 'utf-8')
-      const config = JSON.parse(configFile)
-      GOOGLE_CLIENT_ID = config.VITE_GOOGLE_CLIENT_ID
-      GOOGLE_CLIENT_SECRET = config.VITE_GOOGLE_CLIENT_SECRET
-      console.log(
-        '[GoogleAuthManager] Loaded credentials from packaged app-config.json'
-      )
+      const configFileContent = fs.readFileSync(configPath, 'utf-8')
+
+      if (configFileContent.trim() === '') {
+      } else {
+        const config = JSON.parse(configFileContent)
+        GOOGLE_CLIENT_ID = config.VITE_GOOGLE_CLIENT_ID
+        GOOGLE_CLIENT_SECRET = config.VITE_GOOGLE_CLIENT_SECRET
+      }
     } else {
       console.error(
-        `[GoogleAuthManager] CRITICAL: app-config.json not found at ${configPath}`
+        '[GoogleAuthManager] CRITICAL: app-config.json NOT FOUND at:',
+        configPath
       )
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error(
-      '[GoogleAuthManager] CRITICAL: Could not load or parse app-config.json in packaged app:',
-      error
+      '[GoogleAuthManager] CRITICAL: Error loading or parsing app-config.json in packaged app:',
+      error.message,
+      error.stack
     )
   }
 } else {
-  const projectRoot = app.getAppPath()
-  const envPath = path.resolve(projectRoot, '.env')
-  const result = dotenv.config({ path: envPath })
-  if (result.error) {
-    console.warn(
-      `[GoogleAuthManager] dotenv: Could not load .env file from ${envPath}. Error: ${result.error.message}`
-    )
-  } else {
-    console.log(`[GoogleAuthManager] dotenv: Loaded .env file from ${envPath}`)
-  }
+  // Development mode
   GOOGLE_CLIENT_ID = process.env.VITE_GOOGLE_CLIENT_ID
   GOOGLE_CLIENT_SECRET = process.env.VITE_GOOGLE_CLIENT_SECRET
 }
@@ -68,18 +66,20 @@ if (app.isPackaged) {
 export const GOOGLE_REDIRECT_URI = 'http://127.0.0.1:9876/oauth2callback'
 
 export function getOAuth2Client() {
+  console.log('[GoogleAuthManager] getOAuth2Client() called.')
   if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
     console.error(
-      '[GoogleAuthManager] CRITICAL: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is undefined.'
+      '[GoogleAuthManager] CRITICAL in getOAuth2Client: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is undefined or empty.'
+    )
+    console.error(
+      '[GoogleAuthManager]   Current GOOGLE_CLIENT_ID:',
+      GOOGLE_CLIENT_ID
+    )
+    console.error(
+      '[GoogleAuthManager]   Current GOOGLE_CLIENT_SECRET:',
+      GOOGLE_CLIENT_SECRET ? '********' : GOOGLE_CLIENT_SECRET
     )
   }
-  console.log('[GoogleAuthManager] Creating OAuth2 client with:')
-  console.log('[GoogleAuthManager] Client ID:', GOOGLE_CLIENT_ID)
-  console.log(
-    '[GoogleAuthManager] Client Secret:',
-    GOOGLE_CLIENT_SECRET ? '********' : undefined
-  )
-  console.log('[GoogleAuthManager] Redirect URI:', GOOGLE_REDIRECT_URI)
 
   return new google.auth.OAuth2(
     GOOGLE_CLIENT_ID,

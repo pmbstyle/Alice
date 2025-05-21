@@ -76,7 +76,7 @@ export function getOAuth2Client() {
 
 export async function loadTokens(): Promise<any | null> {
   try {
-    const content = await fs.readFile(TOKEN_PATH, 'utf-8')
+    const content = await fsPromises.readFile(TOKEN_PATH, 'utf-8')
     const tokens = JSON.parse(content)
     return tokens
   } catch (err) {

@@ -87,7 +87,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineEmits, ref, watch, onMounted, nextTick, computed } from 'vue'
+import { ref, watch, onMounted, nextTick, computed } from 'vue'
 import Chat from './Chat.vue'
 import Settings from './Settings.vue'
 import MemoryManagerComponent from './MemoryManager.vue'

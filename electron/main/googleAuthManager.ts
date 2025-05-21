@@ -2,6 +2,7 @@ import { google } from 'googleapis'
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs'
+import fsPromises from 'node:fs/promises'
 import dotenv from 'dotenv'
 
 const projectRoot = app.isPackaged
@@ -66,21 +67,6 @@ if (app.isPackaged) {
 export const GOOGLE_REDIRECT_URI = 'http://127.0.0.1:9876/oauth2callback'
 
 export function getOAuth2Client() {
-  console.log('[GoogleAuthManager] getOAuth2Client() called.')
-  if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) {
-    console.error(
-      '[GoogleAuthManager] CRITICAL in getOAuth2Client: GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is undefined or empty.'
-    )
-    console.error(
-      '[GoogleAuthManager]   Current GOOGLE_CLIENT_ID:',
-      GOOGLE_CLIENT_ID
-    )
-    console.error(
-      '[GoogleAuthManager]   Current GOOGLE_CLIENT_SECRET:',
-      GOOGLE_CLIENT_SECRET ? '********' : GOOGLE_CLIENT_SECRET
-    )
-  }
-
   return new google.auth.OAuth2(
     GOOGLE_CLIENT_ID,
     GOOGLE_CLIENT_SECRET,
@@ -100,7 +86,7 @@ export async function loadTokens(): Promise<any | null> {
 }
 
 export async function saveTokens(tokens: any): Promise<void> {
-  await fs.writeFile(TOKEN_PATH, JSON.stringify(tokens))
+  await fsPromises.writeFile(TOKEN_PATH, JSON.stringify(tokens))
   console.log('Tokens saved to', TOKEN_PATH)
 }
 

@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, defineEmits } from 'vue'
+import { computed } from 'vue'
 import { useGeneralStore } from '../stores/generalStore'
 import { messageMarkdown } from '../utils/markdown'
 import { storeToRefs } from 'pinia'

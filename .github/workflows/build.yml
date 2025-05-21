@@ -56,12 +56,15 @@ jobs:
 
       - name: Create app-config.json
         shell: bash
-        run: |
-          echo "{
-            \"VITE_GOOGLE_CLIENT_ID\": \"${{ secrets.VITE_GOOGLE_CLIENT_ID }}\",
-            \"VITE_GOOGLE_CLIENT_SECRET\": \"${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}\"
-          }" > app-config.json
+        run: run: |
+          printf "{\n" > app-config.json
+          printf "  \"VITE_GOOGLE_CLIENT_ID\": \"%s\",\n" "${{ secrets.VITE_GOOGLE_CLIENT_ID }}" >> app-config.json
+          printf "  \"VITE_GOOGLE_CLIENT_SECRET\": \"%s\"\n" "${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}" >> app-config.json
+          printf "}\n" >> app-config.json
           echo "app-config.json created successfully."
+          echo "--- app-config.json content START ---"
+          cat app-config.json
+          echo "--- app-config.json content END ---"
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}

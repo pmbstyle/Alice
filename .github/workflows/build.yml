@@ -46,12 +46,24 @@ jobs:
       - name: Rebuild native modules for Electron
         run: npm run rebuild
         env:
-          DEBUG: "electron-rebuild"
+          DEBUG: 'electron-rebuild'
 
       - name: Get app version from package.json
         id: get_version
         run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV
         shell: bash
+
+      - name: Create app-config.json
+        shell: bash
+        run: |
+          echo "{
+            \"VITE_GOOGLE_CLIENT_ID\": \"${{ secrets.VITE_GOOGLE_CLIENT_ID }}\",
+            \"VITE_GOOGLE_CLIENT_SECRET\": \"${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}\"
+          }" > app-config.json
+          echo "app-config.json created successfully."
+        env:
+          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
+          VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}
 
       - name: Build Release Files (without auto-publishing)
         run: npm run build -- --publish never

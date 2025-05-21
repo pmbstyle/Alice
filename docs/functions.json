@@ -1,207 +1,260 @@
 [
   {
-  "name": "perform_web_search",
-  "description": "Searches the web for information on a given query. Use this for current events, general knowledge questions, or topics not covered by other tools. Use this tool for browsing the web and when you don't know something or need additional context or data.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "query": {
-        "type": "string",
-        "description": "The specific search query or question to look up on the web."
-      }
-    },
-    "required": [
-      "query"
-    ]
-  }
-},
-{
-  "name": "get_weather_forecast",
-  "description": "Fetches the current weather forecast for a specific location. Use this toll if you know the location and want to get only current weather.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "location": {
-        "type": "string",
-        "description": "The city name (e.g., \"London\", \"Paris, FR\", \"Tokyo\"). Include state or country if ambiguous."
-      }
-    },
-    "required": [
-      "location"
-    ]
-  }
-},
-{
-  "name": "get_current_datetime",
-  "description": "Call this function whenever discussing current events, recent developments, or when time-sensitive information is needed. This function returns the current date, time, and other temporal information needed to provide accurate, up-to-date responses.",
-  "strict": true,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "format": {
-        "type": "string",
-        "enum": [
-          "full",
-          "date_only",
-          "time_only",
-          "year_only"
-        ],
-        "description": "The format of the datetime information to return. 'full', 'date_only', 'time_only' or 'year_only' are your options. Default is 'full' if not specified."
-      }
-    },
-    "additionalProperties": false,
-    "required": [
-      "format"
-    ]
-  }
-},
-{
-  "name": "open_path",
-  "description": "Opens a specified file, folder, or application on the user's computer using the default operating system handler, or opens a URL in the default web browser. Use for launching apps, documents, folders, or websites mentioned by the user. User name in his system is 'User'(change)",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "target": {
-        "type": "string",
-        "description": "The target to open. Can be an absolute file path (e.g., '/Users/User(change)/file.txt'), a folder path (e.g., 'C:\\Users\\User(change)\\Documents'), or a full URL (e.g., 'https://www.google.com'). User is using Windows 11(change), when you need to open an application define a path to it in this OS. Use this tool to open web search result url for user command."
-      }
-    },
-    "required": [
-      "query"
-    ]
-  }
-},
-{
-  "name": "manage_clipboard",
-  "description": "Manages the system clipboard. Can read the current text content from the clipboard or write new text content to it. Useful for transferring text between Alice and other applications.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "action": {
-        "type": "string",
-        "enum": [
-          "read",
-          "write"
-        ],
-        "description": "Specifies the operation to perform: 'read' to get text from the clipboard, 'write' to put text onto the clipboard."
+    "name": "perform_web_search",
+    "description": "Searches the web for information on a given query. Use this for current events, general knowledge questions, or topics not covered by other tools. Use this tool for browsing the web and when you don't know something or need additional context or data.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The specific search query or question to look up on the web."
+        }
       },
-      "content": {
-        "type": "string",
-        "description": "The text content to write to the clipboard. Required only when the action is 'write'. Ignored for 'read'."
-      }
-    },
-    "required": [
-      "action"
-    ]
-  }
-},
-{
-  "name": "get_website_context",
-  "description": "Extracts the main content from a specified URL. Use this tool to get the text content from a webpage, allowing Alice to analyze, summarize, or answer questions about information found online.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "url": {
-        "type": "string",
-        "description": "The full URL of the webpage to extract content from (e.g., https://www.example.com/article)."
-      }
-    },
-    "required": [
-      "url"
-    ]
-  }
-},
-{
-  "name": "search_torrents",
-  "description": "Searches for torrents using Jackett. Use this tool when the user asks to find or download a specific movie, TV show, or file.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "query": {
-        "type": "string",
-        "description": "The name of the movie, show, or content to search for."
-      }
-    },
-    "required": [
-      "query"
-    ]
-  }
-},
-{
-  "name": "add_torrent_to_qb",
-  "description": "Adds a torrent to qBittorrent using a magnet link. Use this tool when the user selects or confirms a torrent to download.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "magnet": {
-        "type": "string",
-        "description": "The magnet link of the torrent to be added to the download queue."
-      }
-    },
-    "required": [
-      "magnet"
-    ]
-  }
-},
-{
-  "name": "save_memory",
-  "description": "Store a long-term memory about the User. The memory should be a short, clear description that you can recall later to better understand and assist him. For example: 'User, enjoys hiking in the mountains.' Categorize the memory by type (e.g., 'personal', 'work', 'hobby').",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "content": {
-        "type": "string",
-        "description": "The memory content to store. It should be a brief but meaningful description of the fact or event."
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "get_weather_forecast",
+    "description": "Fetches the current weather forecast for a specific location. Use this toll if you know the location and want to get only current weather.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "location": {
+          "type": "string",
+          "description": "The city name (e.g., \"London\", \"Paris, FR\", \"Tokyo\"). Include state or country if ambiguous."
+        }
       },
-      "memoryType": {
-        "type": "string",
-        "description": "The type of memory, like 'personal', 'work', 'hobby'. Default is 'general'."
-      }
-    },
-    "required": [
-      "content",
-      "memoryType"
-    ]
+      "required": [
+        "location"
+      ]
+    }
+  },
+  {
+    "name": "get_current_datetime",
+    "description": "Call this function whenever discussing current events, recent developments, or when time-sensitive information is needed. This function returns the current date, time, and other temporal information needed to provide accurate, up-to-date responses.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "format": {
+          "type": "string",
+          "enum": [
+            "full",
+            "date_only",
+            "time_only",
+            "year_only"
+          ],
+          "description": "The format of the datetime information to return. 'full', 'date_only', 'time_only' or 'year_only' are your options. Default is 'full' if not specified."
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "format"
+      ]
+    }
+  },
+  {
+    "name": "open_path",
+    "description": "Opens a specified file, folder, or application on the user's computer using the default operating system handler, or opens a URL in the default web browser. Use for launching apps, documents, folders, or websites mentioned by the user. User name in his system is 'User'(change)",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "target": {
+          "type": "string",
+          "description": "The target to open. Can be an absolute file path (e.g., '/Users/User(change)/file.txt'), a folder path (e.g., 'C:\\Users\\User(change)\\Documents'), or a full URL (e.g., 'https://www.google.com'). User is using Windows 11(change), when you need to open an application define a path to it in this OS. Use this tool to open web search result url for user command."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "manage_clipboard",
+    "description": "Manages the system clipboard. Can read the current text content from the clipboard or write new text content to it. Useful for transferring text between Alice and other applications.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": [
+            "read",
+            "write"
+          ],
+          "description": "Specifies the operation to perform: 'read' to get text from the clipboard, 'write' to put text onto the clipboard."
+        },
+        "content": {
+          "type": "string",
+          "description": "The text content to write to the clipboard. Required only when the action is 'write'. Ignored for 'read'."
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  {
+    "name": "get_website_context",
+    "description": "Extracts the main content from a specified URL. Use this tool to get the text content from a webpage, allowing Alice to analyze, summarize, or answer questions about information found online.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The full URL of the webpage to extract content from (e.g., https://www.example.com/article)."
+        }
+      },
+      "required": [
+        "url"
+      ]
+    }
+  },
+  {
+    "name": "search_torrents",
+    "description": "Searches for torrents using Jackett. Use this tool when the user asks to find or download a specific movie, TV show, or file.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The name of the movie, show, or content to search for."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "add_torrent_to_qb",
+    "description": "Adds a torrent to qBittorrent using a magnet link. Use this tool when the user selects or confirms a torrent to download.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "magnet": {
+          "type": "string",
+          "description": "The magnet link of the torrent to be added to the download queue."
+        }
+      },
+      "required": [
+        "magnet"
+      ]
+    }
+  },
+  {
+    "name": "save_memory",
+    "description": "Store a long-term memory about the User. The memory should be a short, clear description that you can recall later to better understand and assist him. For example: 'User, enjoys hiking in the mountains.' Categorize the memory by type (e.g., 'personal', 'work', 'hobby').",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "The memory content to store. It should be a brief but meaningful description of the fact or event."
+        },
+        "memoryType": {
+          "type": "string",
+          "description": "The type of memory, like 'personal', 'work', 'hobby'. Default is 'general'."
+        }
+      },
+      "required": [
+        "content",
+        "memoryType"
+      ]
+    }
+  },
+  {
+    "name": "delete_memory",
+    "description": "Forget a long-term memory about User by permanently deleting it from storage. Use this if the memory is no longer valid or User asks you to forget it.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique ID of the memory to delete. This ID identifies exactly which memory should be removed."
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  {
+    "name": "recall_memories",
+    "description": "Retrieve recent long-term memories stored about the User. Use this to remind yourself of important facts, preferences, or past events related to him.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "memoryType": {
+          "type": "string",
+          "description": "You can select type of memory you want to recall, like 'personal', 'project', 'mood', 'general'. Anything you saved as memoryType."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "get_unread_emails",
+    "description": "Fetches a list of recent unread emails from the user's Gmail. Provides subject, sender, and snippet for each.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "maxResults": {
+          "type": "integer",
+          "description": "The maximum number of unread emails to fetch. Defaults to 5 if not specified."
+        }
+      },
+      "required": []
+    }
+  },
+  {
+    "name": "search_emails",
+    "description": "Searches emails in the user's Gmail based on a query, date range, or other criteria. Provides subject, sender, and snippet.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query. Examples: 'from:boss@example.com', 'subject:project update', 'after:2024/01/15 before:2024/01/20', 'is:important'."
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": "The maximum number of emails to return. Defaults to 10."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "get_email_content",
+    "description": "Fetches the detailed content of a specific email using its message ID. Use this after 'get_unread_emails' or 'search_emails' if the user wants to read a specific email.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "description": "The ID of the email message to fetch."
+        }
+      },
+      "required": [
+        "messageId"
+      ]
+    }
   }
-},
-{
-  "name": "delete_memory",
-  "description": "Forget a long-term memory about User by permanently deleting it from storage. Use this if the memory is no longer valid or User asks you to forget it.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "id": {
-        "type": "string",
-        "description": "The unique ID of the memory to delete. This ID identifies exactly which memory should be removed."
-      }
-    },
-    "required": [
-      "id"
-    ]
-  }
-},
-{
-  "name": "recall_memories",
-  "description": "Retrieve recent long-term memories stored about the User. Use this to remind yourself of important facts, preferences, or past events related to him.",
-  "strict": false,
-  "parameters": {
-    "type": "object",
-    "properties": {
-      "memoryType": {
-        "type": "string",
-        "description": "You can select type of memory you want to recall, like 'personal', 'project', 'mood', 'general'. Anything you saved as memoryType."
-      }
-    },
-    "required": []
-  }
-}
 ]

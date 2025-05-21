@@ -93,6 +93,90 @@
       </fieldset>
 
       <fieldset
+        class="fieldset bg-gray-900/90 border-purple-500/50 rounded-box w-full border p-4"
+      >
+        <legend class="fieldset-legend">Google Services Integration</legend>
+        <div class="p-2 space-y-4">
+          <div
+            v-if="
+              !googleAuthStatus.isAuthenticated &&
+              !googleAuthStatus.authInProgress
+            "
+          >
+            <button
+              type="button"
+              @click="connectGoogleCalendar"
+              class="btn btn-info btn-active"
+              :disabled="googleAuthStatus.isLoading"
+            >
+              {{
+                googleAuthStatus.isLoading
+                  ? 'Connecting...'
+                  : 'Connect to Google Services'
+              }}
+            </button>
+          </div>
+          <div
+            v-if="
+              googleAuthStatus.authInProgress &&
+              !googleAuthStatus.isAuthenticated
+            "
+          >
+            <p class="text-sm mb-2">
+              Awaiting authorization in your browser. Please follow the
+              instructions there.
+            </p>
+            <span class="loading loading-dots loading-md"></span>
+          </div>
+          <div v-if="googleAuthStatus.isAuthenticated">
+            <div
+              role="alert"
+              class="alert alert-success mb-4"
+              v-if="googleAuthStatus.isAuthenticated"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                class="h-6 w-6 shrink-0 stroke-current"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span>Successfully connected to Google Services</span>
+            </div>
+            <button
+              type="button"
+              @click="disconnectGoogleCalendar"
+              class="btn btn-warning btn-outline"
+            >
+              Disconnect from Google Services
+            </button>
+          </div>
+          <p
+            v-if="googleAuthStatus.error"
+            class="text-xs text-error-content mt-1"
+          >
+            {{ googleAuthStatus.error }}
+          </p>
+          <p
+            v-if="
+              googleAuthStatus.message &&
+              !googleAuthStatus.isAuthenticated &&
+              !googleAuthStatus.error
+            "
+            class="text-xs text-white mt-1"
+          >
+            {{ googleAuthStatus.message }}
+          </p>
+        </div>
+      </fieldset>
+
+      <fieldset
         class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
       >
         <legend class="fieldset-legend">
@@ -284,7 +368,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, computed } from 'vue'
+import { ref, watch, onMounted, onUnmounted, reactive } from 'vue'
 import { useSettingsStore, type AliceSettings } from '../stores/settingsStore'
 import { newTabIcon, heartIcon } from '../utils/assetsImport'
 import { useGeneralStore } from '../stores/generalStore'
@@ -295,6 +379,95 @@ const generalStore = useGeneralStore()
 
 const currentSettings = ref<AliceSettings>({ ...settingsStore.settings })
 const showAssistantManager = ref(false)
+
+const googleAuthCode = ref('')
+const googleAuthStatus = reactive({
+  isAuthenticated: false,
+  authInProgress: false,
+  isLoading: false,
+  error: null as string | null,
+  message: null as string | null,
+})
+
+async function checkGoogleAuthStatus() {
+  googleAuthStatus.isLoading = true
+  googleAuthStatus.error = null
+  try {
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:check-auth-status'
+    )
+    if (result.success) {
+      googleAuthStatus.isAuthenticated = result.isAuthenticated
+    }
+  } catch (e: any) {
+    googleAuthStatus.error = 'Error checking auth status: ' + e.message
+  } finally {
+    googleAuthStatus.isLoading = false
+  }
+}
+
+async function connectGoogleCalendar() {
+  googleAuthStatus.isLoading = true
+  googleAuthStatus.authInProgress = true
+  googleAuthStatus.error = null
+  googleAuthStatus.message = null
+  try {
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:get-auth-url'
+    )
+    if (result.success) {
+      googleAuthStatus.message = result.message
+    } else {
+      googleAuthStatus.error =
+        result.error || 'Failed to start Google Calendar authentication.'
+      googleAuthStatus.authInProgress = false
+    }
+  } catch (e: any) {
+    googleAuthStatus.error = 'Error initiating auth: ' + e.message
+    googleAuthStatus.authInProgress = false
+  } finally {
+    googleAuthStatus.isLoading = false
+  }
+}
+
+async function disconnectGoogleCalendar() {
+  googleAuthStatus.isLoading = true
+  googleAuthStatus.error = null
+  googleAuthStatus.message = 'Disconnecting...'
+  try {
+    const result = await window.ipcRenderer.invoke('google-calendar:disconnect')
+    if (result.success) {
+      googleAuthStatus.isAuthenticated = false
+      googleAuthStatus.authInProgress = false
+      googleAuthStatus.message = result.message
+    } else {
+      googleAuthStatus.error =
+        result.error || 'Failed to disconnect from Google Calendar.'
+      googleAuthStatus.message = null
+    }
+  } catch (e: any) {
+    googleAuthStatus.error = 'Error disconnecting: ' + e.message
+    googleAuthStatus.message = null
+  } finally {
+    googleAuthStatus.isLoading = false
+  }
+}
+
+function handleGoogleAuthSuccess(event: any, message: string) {
+  console.log('Loopback Auth Success (Renderer):', message)
+  googleAuthStatus.isAuthenticated = true
+  googleAuthStatus.authInProgress = false
+  googleAuthStatus.message = message
+  googleAuthStatus.error = null
+}
+
+function handleGoogleAuthError(event: any, errorMsg: string) {
+  console.error('Loopback Auth Error (Renderer):', errorMsg)
+  googleAuthStatus.isAuthenticated = false
+  googleAuthStatus.authInProgress = false
+  googleAuthStatus.error = `Authentication failed: ${errorMsg}`
+  googleAuthStatus.message = null
+}
 
 onMounted(async () => {
   if (!settingsStore.initialLoadAttempted) {
@@ -308,6 +481,24 @@ onMounted(async () => {
     if (settingsStore.isProduction) {
       // showAssistantManager.value = true; // Decided against auto-showing, let user click.
     }
+  }
+  await checkGoogleAuthStatus()
+  if (window.ipcRenderer) {
+    window.ipcRenderer.on(
+      'google-auth-loopback-success',
+      handleGoogleAuthSuccess
+    )
+    window.ipcRenderer.on('google-auth-loopback-error', handleGoogleAuthError)
+  }
+})
+
+onUnmounted(() => {
+  if (window.ipcRenderer) {
+    window.ipcRenderer.off(
+      'google-auth-loopback-success',
+      handleGoogleAuthSuccess
+    )
+    window.ipcRenderer.off('google-auth-loopback-error', handleGoogleAuthError)
   }
 })
 

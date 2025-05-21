@@ -230,7 +230,6 @@ export const runAssistant = async (
 
   const runParams: OpenAI.Beta.Threads.Runs.RunCreateParams = {
     assistant_id: assistantId,
-    temperature: 0.5,
     additional_instructions: `Current datetime: ${new Date().toLocaleString()}. ${thoughtsInstructionPart}`,
   }
   console.log('Running assistant with params:', runParams)

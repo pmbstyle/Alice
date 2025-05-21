@@ -12,9 +12,13 @@ Run in your terminal `xattr -cr /Applications/Alice\ app.app`
 - Go to [Groq cloud console](https://console.groq.com/home)  and set up your account
 - Get your API key from [API keys](https://console.groq.com/keys) section and paste it in settings
 
+# Google services connection
+
+- In settings click 'Connect to Google Services', authorize your Google account to connect to Alice
+
 # OpenAI Assistant setup
 
--  Save and test settings, then select `Manage assistants` option
+- Save and test settings, then select `Manage assistants` option
 - Create a new assistant
 - Define the assistant's name
 - Add assistant system prompt, use [example](https://github.com/pmbstyle/Alice/blob/main/docs/systemPrompt.md) as reference

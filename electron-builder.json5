@@ -8,6 +8,12 @@
     output: 'release/${version}',
   },
   files: ['dist', 'dist-electron'],
+  "extraResources": [
+    {
+      "from": "./app-config.json",
+      "to": "app-config.json"
+    }
+  ],
   mac: {
     target: ['dmg'],
     icon: 'public/app_logo.png',

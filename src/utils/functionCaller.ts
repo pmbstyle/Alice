@@ -45,6 +45,19 @@ interface DeleteMemoryArgs {
   id: string
 }
 
+interface GetUnreadEmailsArgs {
+  maxResults?: number
+}
+
+interface SearchEmailsArgs {
+  query: string
+  maxResults?: number
+}
+
+interface GetEmailContentArgs {
+  messageId: string
+}
+
 async function save_memory(args: SaveMemoryArgs) {
   if (!args.content) {
     return { success: false, error: 'Content is required.' }
@@ -528,7 +541,351 @@ async function search_torrents(
   }
 }
 
-//helpers
+interface CalendarEventResource {
+  summary?: string
+  description?: string
+  start?: { dateTime?: string; timeZone?: string; date?: string }
+  end?: { dateTime?: string; timeZone?: string; date?: string }
+  location?: string
+  attendees?: { email: string }[]
+}
+
+/**
+ * Retrieves a list of events from the user's Google Calendar.
+ */
+
+async function get_calendar_events(args: {
+  calendarId?: string
+  timeMin?: string
+  timeMax?: string
+  q?: string
+  maxResults?: number
+}): Promise<FunctionResult> {
+  try {
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:list-events',
+      {
+        calendarId: args.calendarId || 'primary',
+        timeMin: args.timeMin,
+        timeMax: args.timeMax,
+        q: args.q,
+        maxResults: args.maxResults || 10,
+      }
+    )
+    if (result.success) {
+      return { success: true, data: result.data || 'No events found.' }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to list calendar events.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Creates a new event in the user's Google Calendar.
+ */
+
+async function create_calendar_event(args: {
+  calendarId?: string
+  summary: string
+  description?: string
+  startDateTime: string
+  endDateTime: string
+  location?: string
+  attendees?: string[]
+}): Promise<FunctionResult> {
+  try {
+    const eventResource: CalendarEventResource = {
+      summary: args.summary,
+      description: args.description,
+      start: { dateTime: args.startDateTime },
+      end: { dateTime: args.endDateTime },
+      location: args.location,
+    }
+    if (args.attendees && args.attendees.length > 0) {
+      eventResource.attendees = args.attendees.map(email => ({ email }))
+    }
+
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:create-event',
+      {
+        calendarId: args.calendarId || 'primary',
+        eventResource,
+      }
+    )
+    if (result.success) {
+      return { success: true, data: result.data }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to create calendar event.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Updates an existing event in the user's Google Calendar.
+ */
+
+async function update_calendar_event(args: {
+  calendarId?: string
+  eventId: string
+  summary?: string
+  description?: string
+  startDateTime?: string
+  endDateTime?: string
+  location?: string
+  attendees?: string[]
+}): Promise<FunctionResult> {
+  try {
+    const eventResource: CalendarEventResource = {}
+    if (args.summary) eventResource.summary = args.summary
+    if (args.description) eventResource.description = args.description
+    if (args.startDateTime)
+      eventResource.start = { dateTime: args.startDateTime }
+    if (args.endDateTime) eventResource.end = { dateTime: args.endDateTime }
+    if (args.location) eventResource.location = args.location
+    if (args.attendees && args.attendees.length > 0) {
+      eventResource.attendees = args.attendees.map(email => ({ email }))
+    }
+
+    if (Object.keys(eventResource).length === 0) {
+      return {
+        success: false,
+        error: 'No fields provided to update for the event.',
+      }
+    }
+
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:update-event',
+      {
+        calendarId: args.calendarId || 'primary',
+        eventId: args.eventId,
+        eventResource,
+      }
+    )
+    if (result.success) {
+      return { success: true, data: result.data }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to update calendar event.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Deletes an event from the user's Google Calendar.
+ */
+
+async function delete_calendar_event(args: {
+  calendarId?: string
+  eventId: string
+}): Promise<FunctionResult> {
+  try {
+    const result = await window.ipcRenderer.invoke(
+      'google-calendar:delete-event',
+      {
+        calendarId: args.calendarId || 'primary',
+        eventId: args.eventId,
+      }
+    )
+    if (result.success) {
+      return { success: true, data: result.data }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to delete calendar event.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Helper function to process email details for AI
+ */
+
+function processEmailForAI(
+  emailData: any,
+  isRequestingFullContent: boolean = false
+) {
+  if (!emailData) return 'Email data not found.'
+  const headers = emailData.payload?.headers || []
+  const subject =
+    headers.find((h: any) => h.name === 'Subject')?.value || 'No Subject'
+  const from =
+    headers.find((h: any) => h.name === 'From')?.value || 'Unknown Sender'
+  const date =
+    headers.find((h: any) => h.name === 'Date')?.value || 'Unknown Date'
+
+  let mainContentOutput: string
+
+  if (isRequestingFullContent) {
+    mainContentOutput =
+      emailData.decodedPlainTextBody ||
+      emailData.snippet ||
+      'No detailed content available.'
+  } else {
+    mainContentOutput = emailData.snippet || 'No snippet available.'
+  }
+
+  const returnedObject: any = {
+    id: emailData.id,
+    threadId: emailData.threadId,
+    subject,
+    from,
+    date,
+  }
+
+  if (isRequestingFullContent) {
+    returnedObject.content = mainContentOutput
+  } else {
+    returnedObject.snippet =
+      mainContentOutput.substring(0, 250) +
+      (mainContentOutput.length > 250 ? '...' : '')
+  }
+
+  return returnedObject
+}
+
+/**
+ * Fetches unread emails from the user's Gmail account.
+ */
+
+async function get_unread_emails(
+  args: GetUnreadEmailsArgs
+): Promise<FunctionResult> {
+  try {
+    const listResult = await window.ipcRenderer.invoke(
+      'google-gmail:list-messages',
+      {
+        maxResults: args.maxResults || 5,
+        labelIds: ['UNREAD'],
+        q: 'is:unread',
+      }
+    )
+
+    if (
+      listResult.success &&
+      listResult.data &&
+      Array.isArray(listResult.data)
+    ) {
+      if (listResult.data.length === 0) {
+        return { success: true, data: 'No unread emails found.' }
+      }
+      const emailDetailsPromises = listResult.data.map(msg =>
+        window.ipcRenderer.invoke('google-gmail:get-message', {
+          id: msg.id,
+          format: 'metadata',
+        })
+      )
+      const emailDetailsResults = await Promise.all(emailDetailsPromises)
+      const processedEmails = emailDetailsResults
+        .filter(res => res.success && res.data)
+        .map(res => processEmailForAI(res.data, false))
+      return { success: true, data: processedEmails }
+    }
+    return {
+      success: false,
+      error: listResult.error || 'Failed to fetch unread emails.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Searches emails in the user's Gmail account based on a query.
+ */
+
+async function search_emails(args: SearchEmailsArgs): Promise<FunctionResult> {
+  if (!args.query) {
+    return { success: false, error: 'Search query is required.' }
+  }
+  try {
+    const listResult = await window.ipcRenderer.invoke(
+      'google-gmail:list-messages',
+      {
+        q: args.query,
+        maxResults: args.maxResults || 10,
+      }
+    )
+    if (
+      listResult.success &&
+      listResult.data &&
+      Array.isArray(listResult.data)
+    ) {
+      if (listResult.data.length === 0) {
+        return {
+          success: true,
+          data: `No emails found for query: "${args.query}"`,
+        }
+      }
+      const emailDetailsPromises = listResult.data.map(msg =>
+        window.ipcRenderer.invoke('google-gmail:get-message', {
+          id: msg.id,
+          format: 'metadata',
+        })
+      )
+      const emailDetailsResults = await Promise.all(emailDetailsPromises)
+      const processedEmails = emailDetailsResults
+        .filter(res => res.success && res.data)
+        .map(res => processEmailForAI(res.data, false))
+      return { success: true, data: processedEmails }
+    }
+    return {
+      success: false,
+      error:
+        listResult.error ||
+        `Failed to search emails for query: "${args.query}"`,
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Fetches the content of an email using its message ID.
+ */
+
+async function get_email_content(
+  args: GetEmailContentArgs
+): Promise<FunctionResult> {
+  if (!args.messageId) {
+    return {
+      success: false,
+      error: 'Message ID is required to get email content.',
+    }
+  }
+  try {
+    const result = await window.ipcRenderer.invoke('google-gmail:get-message', {
+      id: args.messageId,
+      format: 'full',
+    })
+    if (result.success && result.data) {
+      const processedData = processEmailForAI(result.data, true)
+      return { success: true, data: processedData }
+    }
+    return {
+      success: false,
+      error: result.error || 'Failed to fetch email content.',
+    }
+  } catch (error: any) {
+    return { success: false, error: `IPC Error: ${error.message}` }
+  }
+}
+
+/**
+ * Helpers for parsing torrent data.
+ */
 
 function formatFileSize(bytes: string): string {
   const b = parseInt(bytes, 10)
@@ -628,6 +985,13 @@ const functionRegistry: {
   get_website_context: get_website_context,
   search_torrents: search_torrents,
   add_torrent_to_qb: add_torrent_to_qb,
+  get_calendar_events,
+  create_calendar_event,
+  update_calendar_event,
+  delete_calendar_event,
+  get_unread_emails,
+  search_emails,
+  get_email_content,
 }
 
 const functionSchemas = {
@@ -642,6 +1006,15 @@ const functionSchemas = {
   get_website_context: { required: ['url'] },
   search_torrents: { required: ['query'] },
   add_torrent_to_qb: { required: ['magnet'] },
+  get_calendar_events: { required: [] },
+  create_calendar_event: {
+    required: ['summary', 'startDateTime', 'endDateTime'],
+  },
+  update_calendar_event: { required: ['eventId'] },
+  delete_calendar_event: { required: ['eventId'] },
+  get_unread_emails: { required: [] },
+  search_emails: { required: ['query'] },
+  get_email_content: { required: ['messageId'] },
 }
 
 /**

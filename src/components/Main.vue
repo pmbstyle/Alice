@@ -61,6 +61,7 @@ import { bg } from '../utils/assetsImport'
 
 import { useGeneralStore } from '../stores/generalStore'
 import { useConversationStore } from '../stores/openAIStore'
+import type { ChatMessage, OpenAI } from '../stores/openAIStore'
 import { useAudioProcessing } from '../composables/useAudioProcessing'
 import { useAudioPlayback } from '../composables/useAudioPlayback'
 import { useScreenshot } from '../composables/useScreenshot'
@@ -155,14 +156,22 @@ const handleProcessingComplete = (transcription: string) => {
   if (
     transcription &&
     transcription.trim() &&
-    audioState.value === 'PROCESSING_AUDIO'
+    (audioState.value === 'PROCESSING_AUDIO' ||
+      audioState.value === 'LISTENING')
   ) {
+    generalStore.recognizedText = transcription
     processRequest(transcription)
   } else {
     console.warn(
-      "[Main.vue] Transcription received, but state wasn't PROCESSING_AUDIO or text empty. State:",
+      "[Main.vue] Transcription received, but state wasn't PROCESSING_AUDIO/LISTENING or text empty. State:",
       audioState.value
     )
+    if (
+      audioState.value !== 'SPEAKING' &&
+      audioState.value !== 'WAITING_FOR_RESPONSE'
+    ) {
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+    }
   }
 }
 
@@ -199,72 +208,35 @@ const addMessageToHistory = (
 }
 
 const processRequest = async (text: string) => {
-  console.log(`[Main.vue] Processing request: "${text}"`)
+  console.log(`[Main.vue] Processing request from STT: "${text}"`)
+  setAudioState('WAITING_FOR_RESPONSE')
 
-  let messageContent: any[] = [{ type: 'text', text: text }]
+  const appContentParts: AppChatMessageContentPart[] = [
+    { type: 'app_text', text: text },
+  ]
 
   if (screenshotReady.value && screenShot.value) {
-    console.log('[Main.vue] Screenshot ready, attempting upload.')
-    try {
-      const fileId = await uploadScreenshotToOpenAI(screenShot.value)
-      if (fileId) {
-        messageContent.push({
-          type: 'image_file',
-          image_file: { file_id: fileId },
-        })
-        console.log('[Main.vue] Screenshot added to message content.')
-      } else {
-        console.error(
-          '[Main.vue] Screenshot upload failed, proceeding without image.'
-        )
-        addMessageToHistory('system', '(System: Failed to upload screenshot)')
-      }
-    } catch (error) {
-      console.error('[Main.vue] Error during screenshot upload:', error)
-      addMessageToHistory('system', '(System: Error uploading screenshot)')
-    } finally {
-      screenshotReady.value = false
-      screenShot.value = ''
+    const imageDataUri = await conversationStore.uploadScreenshotToOpenAI(
+      screenShot.value
+    )
+    if (imageDataUri) {
+      appContentParts.push({ type: 'app_image_uri', uri: imageDataUri })
+    } else {
+      console.error(
+        '[Main.vue] Screenshot processing failed, proceeding without image.'
+      )
     }
+    screenshotReady.value = false
+    screenShot.value = ''
   }
-  const userMessagePayload = {
+
+  const userMessage: ChatMessage = {
     role: 'user',
-    content: messageContent,
+    content: appContentParts,
   }
 
-  const alreadyAdded =
-    generalStore.chatHistory[0]?.role === 'user' &&
-    generalStore.chatHistory[0]?.content[0]?.text?.value === text
-  if (!alreadyAdded) {
-    addMessageToHistory('user', text)
-  }
-
-  const prompt = await createOpenAIPrompt(
-    userMessagePayload,
-    storeMessage.value
-  )
-
-  if (!prompt || !prompt.message) {
-    console.error('[Main.vue] Failed to create prompt.')
-    setAudioState(isTTSEnabled.value ? 'LISTENING' : 'IDLE')
-    addMessageToHistory('system', '(System: Error preparing request)')
-    return
-  }
-
-  const messageSent = await sendMessageToThread(
-    prompt.message,
-    storeMessage.value
-  )
-
-  if (!messageSent) {
-    console.error('[Main.vue] Failed to send message to thread.')
-    setAudioState(isTTSEnabled.value ? 'LISTENING' : 'IDLE')
-    addMessageToHistory('system', '(System: Error sending message)')
-    return
-  }
-
-  setAudioState('WAITING_FOR_RESPONSE')
-  await chat(prompt.history)
+  generalStore.addMessageToHistory(userMessage)
+  await conversationStore.chat()
 }
 </script>
 

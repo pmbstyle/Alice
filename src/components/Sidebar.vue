@@ -122,15 +122,24 @@ let debounceTimeout = ref<number | null>(null)
 const debounceDelay = 300
 
 const chatInputHandle = async () => {
-  if (chatInput.value.length > 0 && isConversationReady.value) {
+  const text = chatInput.value.trim()
+  if (text.length > 0 && isConversationReady.value) {
     if (debounceTimeout.value) clearTimeout(debounceTimeout.value)
+
     debounceTimeout.value = window.setTimeout(async () => {
-      storeMessage.value = true
-      await emit('processRequest', chatInput.value)
       chatInput.value = ''
+
+      const userMessage: ChatMessage = {
+        role: 'user',
+        content: text,
+        t,
+      }
+      generalStore.addMessageToHistory(userMessage)
+      await conversationStore.chat()
     }, debounceDelay)
   } else if (!isConversationReady.value) {
     console.warn('Sidebar: Chat input submitted but conversation not ready.')
+    generalStore.statusMessage = 'AI not ready. Please wait or check settings.'
   }
 }
 

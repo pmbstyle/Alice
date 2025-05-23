@@ -1,6 +1,8 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { setVideo } from '../utils/videoProcess'
+import type { ChatMessage, AppChatMessageContentPart } from './openAIStore'
+import type { OpenAI } from 'openai'
 
 export type AudioState =
   | 'IDLE'
@@ -14,43 +16,22 @@ export const useGeneralStore = defineStore('general', () => {
   const audioState = ref<AudioState>('IDLE')
   const isRecordingRequested = ref<boolean>(false)
   const isTTSEnabled = ref<boolean>(true)
-
-  const provider = ref<string>('')
   const recognizedText = ref<string>('')
-  const chatHistory = ref<
-    {
-      role: string
-      content: {
-        type: 'text'
-        text: { value: string; annotations: any[] }
-      }[]
-      id?: string
-    }[]
-  >([])
+  const chatHistory = ref<ChatMessage[]>([])
   const chatInput = ref<string>('')
   const statusMessage = ref<string>('Stand by')
   const openSidebar = ref<boolean>(false)
   const isMinimized = ref<boolean>(false)
   const takingScreenShot = ref<boolean>(false)
-
   const audioPlayer = ref<HTMLAudioElement | null>(null)
   const aiVideo = ref<HTMLVideoElement | null>(null)
   const videoSource = ref<string>(setVideo('STAND_BY'))
   const audioQueue = ref<Response[]>([])
-
-  const storeMessage = ref<boolean>(false)
-  const sideBarView = ref<string>('')
-  const forceOpenSettings = ref<boolean>(false)
-
-  const setProvider = (providerName: string) => {
-    provider.value = providerName || 'openai'
-  }
+  const sideBarView = ref<string>('chat')
 
   const setAudioState = (newState: AudioState) => {
     if (audioState.value === newState) return
-    console.log(`Audio state changing: ${audioState.value} -> ${newState}`)
     audioState.value = newState
-
     switch (newState) {
       case 'IDLE':
         statusMessage.value = isRecordingRequested.value
@@ -117,21 +98,138 @@ export const useGeneralStore = defineStore('general', () => {
     { immediate: true }
   )
 
-  const queueAudioForPlayback = (audioResponse: Response) => {
-    if (!isTTSEnabled.value) {
-      console.log('TTS disabled, discarding audio chunk.')
-      return false
-    }
+  const queueAudioForPlayback = (audioResponse: Response): boolean => {
+    if (!isTTSEnabled.value) return false
     audioQueue.value.push(audioResponse)
-    console.log(`Audio chunk added to queue. Size: ${audioQueue.value.length}`)
     return true
+  }
+
+  const findMessageIndexByTempId = (tempId: string): number => {
+    return chatHistory.value.findIndex(m => m.local_id_temp === tempId)
+  }
+
+  const addMessageToHistory = (message: ChatMessage): string => {
+    const localId =
+      message.local_id_temp ||
+      `local-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
+    const messageWithId = { ...message, local_id_temp: localId }
+
+    chatHistory.value.unshift(messageWithId)
+    return localId
+  }
+
+  const updateMessageApiIdByTempId = (tempId: string, apiMsgId: string) => {
+    const index = findMessageIndexByTempId(tempId)
+    if (index !== -1) {
+      chatHistory.value[index].api_message_id = apiMsgId
+    } else {
+      console.warn(
+        `updateMessageApiIdByTempId: Message with tempId ${tempId} not found.`
+      )
+    }
+  }
+
+  const appendMessageDeltaByTempId = (tempId: string, delta: string) => {
+    const index = findMessageIndexByTempId(tempId)
+    if (index !== -1) {
+      const message = chatHistory.value[index]
+      if (
+        typeof message.content !== 'string' &&
+        Array.isArray(message.content)
+      ) {
+        let firstTextPart = message.content.find(p => p.type === 'app_text') as
+          | AppChatMessageContentPart
+          | undefined
+
+        if (!firstTextPart) {
+          firstTextPart = { type: 'app_text', text: '' }
+          message.content.unshift(firstTextPart)
+        }
+        firstTextPart.text = (firstTextPart.text || '') + delta
+      } else if (typeof message.content === 'string') {
+        message.content += delta
+      } else {
+        console.warn(
+          `appendMessageDeltaByTempId: Message (tempId ${tempId}) has unexpected content structure. Initializing with delta.`,
+          message.content
+        )
+        message.content = [{ type: 'app_text', text: delta }]
+      }
+    } else {
+      console.warn(
+        `appendMessageDeltaByTempId: Message with tempId ${tempId} not found.`
+      )
+    }
+  }
+
+  const updateMessageContentByTempId = (
+    tempId: string,
+    newContentText: string
+  ) => {
+    const index = findMessageIndexByTempId(tempId)
+    if (index !== -1) {
+      chatHistory.value[index].content = [
+        { type: 'app_text', text: newContentText },
+      ]
+    } else {
+      console.warn(
+        `updateMessageContentByTempId: Message with tempId ${tempId} not found.`
+      )
+    }
+  }
+
+  const addToolCallToMessageByTempId = (
+    tempId: string,
+    toolCall: OpenAI.Responses.ToolCall
+  ) => {
+    const index = findMessageIndexByTempId(tempId)
+    if (index !== -1) {
+      if (!chatHistory.value[index].tool_calls) {
+        chatHistory.value[index].tool_calls = []
+      }
+      if (
+        !chatHistory.value[index].tool_calls!.find(tc => tc.id === toolCall.id)
+      ) {
+        chatHistory.value[index].tool_calls!.push(toolCall)
+      }
+    } else {
+      console.warn(
+        `addToolCallToMessageByTempId: Message with tempId ${tempId} not found.`
+      )
+    }
+  }
+
+  const updateMessageToolCallsByTempId = (
+    tempId: string,
+    toolCalls: OpenAI.Responses.ToolCall[]
+  ) => {
+    const index = findMessageIndexByTempId(tempId)
+    if (index !== -1) {
+      chatHistory.value[index].tool_calls = toolCalls
+    } else {
+      console.warn(
+        `updateMessageToolCallsByTempId: Message with tempId ${tempId} not found.`
+      )
+    }
+  }
+
+  const stopPlaybackAndClearQueue = () => {
+    if (audioPlayer.value) {
+      audioPlayer.value.pause()
+      if (audioPlayer.value.src && audioPlayer.value.src.startsWith('blob:')) {
+        URL.revokeObjectURL(audioPlayer.value.src)
+      }
+      audioPlayer.value.src = ''
+      audioPlayer.value.onended = null
+      audioPlayer.value.onerror = null
+    }
+    audioQueue.value = []
   }
 
   return {
     audioState,
     isRecordingRequested,
     isTTSEnabled,
-    provider,
     recognizedText,
     chatHistory,
     chatInput,
@@ -139,15 +237,19 @@ export const useGeneralStore = defineStore('general', () => {
     openSidebar,
     isMinimized,
     takingScreenShot,
-    storeMessage,
     audioPlayer,
     aiVideo,
     videoSource,
     audioQueue,
-    setProvider,
+    sideBarView,
     setAudioState,
     queueAudioForPlayback,
-    forceOpenSettings,
-    sideBarView,
+    addMessageToHistory,
+    updateMessageApiIdByTempId,
+    appendMessageDeltaByTempId,
+    updateMessageContentByTempId,
+    addToolCallToMessageByTempId,
+    updateMessageToolCallsByTempId,
+    stopPlaybackAndClearQueue,
   }
 })

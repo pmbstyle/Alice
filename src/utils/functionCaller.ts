@@ -1023,10 +1023,10 @@ const functionSchemas = {
  */
 export async function executeFunction(
   name: string,
-  argsString: string
+  argsString: any
 ): Promise<string> {
   const func = functionRegistry[name]
-  const schema = functionSchemas[name]
+  const schema = functionSchemas[name as keyof typeof functionSchemas]
 
   if (!func) {
     console.error(`Function ${name} not found in registry.`)
@@ -1034,7 +1034,15 @@ export async function executeFunction(
   }
 
   try {
-    const args = JSON.parse(argsString || '{}')
+    console.log('[ARGS STRING]', argsString)
+    let args: any
+    if (typeof argsString === 'string') {
+      args = JSON.parse(argsString || '{}')
+    } else if (typeof argsString === 'object' && argsString !== null) {
+      args = argsString
+    } else {
+      args = {}
+    }
     console.log(`Executing function "${name}" with args:`, args)
 
     if (schema?.required) {

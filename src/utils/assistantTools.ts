@@ -4,6 +4,7 @@ import rawFunctionSchemasFromFile from '../../docs/functions.json'
 export interface ApiRequestBodyFunctionTool {
   type: 'function'
   name: string
+  strict: boolean
   description?: string
   parameters: OpenAI.FunctionTool.Parameters
 }

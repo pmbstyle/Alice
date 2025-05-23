@@ -18,12 +18,10 @@ export const getOpenAIClient = (): OpenAI => {
 }
 
 export const createOpenAIResponse = async (
-  input: OpenAI.Responses.Request.InputItemLike[],
+  input: any[],
   previousResponseId: string | null,
   stream: boolean = false
-): Promise<
-  OpenAI.Responses.Response | AsyncIterable<OpenAI.Responses.StreamEvent>
-> => {
+): Promise<any> => {
   const openai = getOpenAIClient()
   const settings = useSettingsStore().config
 
@@ -44,7 +42,7 @@ export const createOpenAIResponse = async (
     }
   }
 
-  const params: OpenAI.Responses.Request = {
+  const params: any = {
     model: settings.assistantModel || 'gpt-4.1-mini',
     input: input,
     instructions: settings.assistantSystemPrompt || undefined,
@@ -56,18 +54,11 @@ export const createOpenAIResponse = async (
     store: true,
     truncation: 'auto',
   }
-
-  console.log(
-    'Creating OpenAI Response with params (tools section shown if any):',
-    JSON.stringify({ model: params.model, tools: params.tools }, null, 2)
-  )
-
+  console.log('[REQUEST PARAMS]', JSON.stringify(params, null, 2))
   if (stream) {
-    return openai.responses.create(params as OpenAI.Responses.StreamableRequest)
+    return openai.responses.create(params)
   } else {
-    return openai.responses.create(
-      params as OpenAI.Responses.NonStreamableRequest
-    )
+    return openai.responses.create(params)
   }
 }
 

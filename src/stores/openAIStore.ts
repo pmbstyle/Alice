@@ -22,11 +22,12 @@ export interface AppChatMessageContentPart {
 export interface ChatMessage {
   local_id_temp?: string
   api_message_id?: string
+  api_response_id?: string
   role: 'user' | 'assistant' | 'system' | 'developer' | 'tool'
   content: string | AppChatMessageContentPart[]
   tool_call_id?: string
   name?: string
-  tool_calls?: OpenAI.Responses.ToolCall[]
+  tool_calls?: any[]
 }
 
 export const useConversationStore = defineStore('conversation', () => {
@@ -171,40 +172,64 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function processStream(
-    stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
+    stream: AsyncIterable<any>,
     placeholderTempId: string
   ) {
     let currentSentence = ''
     let currentAssistantApiMessageId: string | null = null
+    // Buffer for accumulating arguments by item_id
+    const functionCallArgsBuffer: Record<string, string> = {}
 
     try {
       for await (const event of stream) {
         if (event.type === 'response.created') {
           currentResponseId.value = event.response.id
+          generalStore.updateMessageApiResponseIdByTempId(
+            placeholderTempId,
+            event.response.id
+          )
         }
 
-        if (event.type === 'response.output_item.added') {
+        if (event.type === 'response.output_item.added' || event.type === 'response.output_item.updated') {
           if (
             event.item.type === 'message' &&
             event.item.role === 'assistant'
           ) {
             currentAssistantApiMessageId = event.item.id
-            generalStore.updateMessageApiIdByTempId(
-              placeholderTempId,
-              currentAssistantApiMessageId
-            )
-          } else if (event.item.type === 'function_call') {
-            const functionCallPayload =
-              event.item as OpenAI.Responses.FunctionCall
-            generalStore.addToolCallToMessageByTempId(
-              placeholderTempId,
-              functionCallPayload
-            )
-            if (audioState.value === 'SPEAKING')
-              generalStore.stopPlaybackAndClearQueue()
-            await handleToolCall(functionCallPayload, currentResponseId.value)
-            return
+            if (currentAssistantApiMessageId) {
+              generalStore.updateMessageApiIdByTempId(
+                placeholderTempId,
+                currentAssistantApiMessageId
+              )
+            }
           }
+        }
+
+        // Accumulate argument deltas
+        if (event.type === 'response.function_call_arguments.delta') {
+          const itemId = event.item_id;
+          functionCallArgsBuffer[itemId] = (functionCallArgsBuffer[itemId] || '') + (event.delta || '');
+        }
+
+        // On done, execute the tool call
+        if (event.type === 'response.output_item.done' && event.item.type === 'function_call') {
+          const functionCallPayload = event.item;
+          const itemId = functionCallPayload.id;
+          let args = {};
+          try {
+            args = JSON.parse(functionCallArgsBuffer[itemId] || functionCallPayload.arguments || '{}');
+          } catch (e) {
+            args = {};
+          }
+          functionCallPayload.arguments = args;
+          generalStore.addToolCallToMessageByTempId(
+            placeholderTempId,
+            functionCallPayload
+          );
+          if (audioState.value === 'SPEAKING')
+            generalStore.stopPlaybackAndClearQueue();
+          await handleToolCall(functionCallPayload, currentResponseId.value);
+          return;
         }
 
         if (
@@ -230,8 +255,8 @@ export const useConversationStore = defineStore('conversation', () => {
         if (event.type === 'response.completed') {
           currentResponseId.value = event.response.id
           const finalMessage = event.response.output?.find(
-            o => o.type === 'message' && o.id === currentAssistantApiMessageId
-          ) as OpenAI.Responses.MessageOutputItem
+            (o: any) => o.type === 'message' && o.id === currentAssistantApiMessageId
+          ) as any
           if (finalMessage?.tool_calls) {
             generalStore.updateMessageToolCallsByTempId(
               placeholderTempId,
@@ -272,7 +297,7 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function handleToolCall(
-    toolCall: OpenAI.Responses.FunctionCall,
+    toolCall: any,
     originalResponseIdForTool: string | null
   ) {
     const functionName = toolCall.name
@@ -382,6 +407,10 @@ export const useConversationStore = defineStore('conversation', () => {
       for await (const event of stream) {
         if (event.type === 'response.created') {
           currentResponseId.value = event.response.id
+          generalStore.updateMessageApiResponseIdByTempId(
+            messagePlaceholderTempId,
+            event.response.id
+          )
         }
         if (
           event.type === 'response.output_item.added' &&
@@ -419,8 +448,8 @@ export const useConversationStore = defineStore('conversation', () => {
         if (event.type === 'response.completed') {
           currentResponseId.value = event.response.id
           const finalMessage = event.response.output?.find(
-            o => o.type === 'message' && o.id === localAssistantApiMessageId
-          ) as OpenAI.Responses.MessageOutputItem
+            (o: any) => o.type === 'message' && o.id === localAssistantApiMessageId
+          ) as any
           if (finalMessage?.tool_calls) {
             generalStore.updateMessageToolCallsByTempId(
               messagePlaceholderTempId,

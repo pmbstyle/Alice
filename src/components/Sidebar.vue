@@ -132,7 +132,6 @@ const chatInputHandle = async () => {
       const userMessage: ChatMessage = {
         role: 'user',
         content: text,
-        t,
       }
       generalStore.addMessageToHistory(userMessage)
       await conversationStore.chat()

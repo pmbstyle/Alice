@@ -178,9 +178,16 @@ export const useGeneralStore = defineStore('general', () => {
     }
   }
 
+  const updateMessageApiResponseIdByTempId = (tempId: string, apiResponseId: string) => {
+    const index = findMessageIndexByTempId(tempId)
+    if (index !== -1) {
+      chatHistory.value[index].api_response_id = apiResponseId
+    }
+  }
+
   const addToolCallToMessageByTempId = (
     tempId: string,
-    toolCall: OpenAI.Responses.ToolCall
+    toolCall: any
   ) => {
     const index = findMessageIndexByTempId(tempId)
     if (index !== -1) {
@@ -188,7 +195,7 @@ export const useGeneralStore = defineStore('general', () => {
         chatHistory.value[index].tool_calls = []
       }
       if (
-        !chatHistory.value[index].tool_calls!.find(tc => tc.id === toolCall.id)
+        !chatHistory.value[index].tool_calls!.find((tc: any) => tc.id === toolCall.id)
       ) {
         chatHistory.value[index].tool_calls!.push(toolCall)
       }
@@ -201,7 +208,7 @@ export const useGeneralStore = defineStore('general', () => {
 
   const updateMessageToolCallsByTempId = (
     tempId: string,
-    toolCalls: OpenAI.Responses.ToolCall[]
+    toolCalls: any[]
   ) => {
     const index = findMessageIndexByTempId(tempId)
     if (index !== -1) {
@@ -248,6 +255,7 @@ export const useGeneralStore = defineStore('general', () => {
     updateMessageApiIdByTempId,
     appendMessageDeltaByTempId,
     updateMessageContentByTempId,
+    updateMessageApiResponseIdByTempId,
     addToolCallToMessageByTempId,
     updateMessageToolCallsByTempId,
     stopPlaybackAndClearQueue,

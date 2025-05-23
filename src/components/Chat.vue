@@ -6,18 +6,14 @@
       :key="message.api_message_id || `local-${index}`"
       :class="{
         'chat-start': message.role === 'assistant' || message.role === 'system',
-        'chat-end':
-          message.role === 'user' ||
-          message.role === 'developer' ||
-          message.role === 'tool',
+        'chat-end': message.role === 'user'
       }"
     >
       <div
         class="chat-bubble mb-2"
         :class="{
           'chat-bubble-primary': message.role === 'assistant',
-          'chat-bubble-success': message.role === 'system',
-          'chat-bubble-info': message.role === 'tool',
+          'chat-bubble-success': message.role === 'system'
         }"
         v-html="getDisplayableMessageContent(message)"
       ></div>
@@ -39,7 +35,16 @@ const generalStore = useGeneralStore()
 const { chatHistory } = storeToRefs(generalStore)
 
 const chatHistoryDisplay = computed(() => {
-  return [...chatHistory.value].reverse()
+  return [...chatHistory.value].reverse().filter((message) => {
+    if (message.content.length && message.content[0]?.text === '') {
+      return false
+    }
+    return (
+      message.role === 'assistant' ||
+      message.role === 'system' ||
+      message.role === 'user'
+    )
+  })
 })
 
 const getDisplayableMessageContent = (message: ChatMessage): string => {

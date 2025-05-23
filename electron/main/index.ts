@@ -313,10 +313,18 @@ async function createWindow() {
     'memory:save',
     async (
       event,
-      { content, memoryType }: { content: string; memoryType?: string }
+      {
+        content,
+        memoryType,
+        embedding,
+      }: { content: string; memoryType?: string; embedding?: number[] }
     ) => {
       try {
-        const savedMemory = await saveMemoryLocal(content, memoryType)
+        const savedMemory = await saveMemoryLocal(
+          content,
+          memoryType,
+          embedding
+        )
         return { success: true, data: savedMemory }
       } catch (error) {
         console.error('IPC memory:save error:', error)
@@ -329,10 +337,18 @@ async function createWindow() {
     'memory:get',
     async (
       event,
-      { limit, memoryType }: { limit?: number; memoryType?: string }
+      {
+        limit,
+        memoryType,
+        queryEmbedding,
+      }: { limit?: number; memoryType?: string; queryEmbedding?: number[] }
     ) => {
       try {
-        const memories = await getRecentMemoriesLocal(limit, memoryType)
+        const memories = await getRecentMemoriesLocal(
+          limit,
+          memoryType,
+          queryEmbedding
+        )
         return { success: true, data: memories }
       } catch (error) {
         console.error('IPC memory:get error:', error)
@@ -359,10 +375,21 @@ async function createWindow() {
         id,
         content,
         memoryType,
-      }: { id: string; content: string; memoryType: string }
+        embedding,
+      }: {
+        id: string
+        content: string
+        memoryType: string
+        embedding?: number[]
+      }
     ) => {
       try {
-        const updatedMemory = await updateMemoryLocal(id, content, memoryType)
+        const updatedMemory = await updateMemoryLocal(
+          id,
+          content,
+          memoryType,
+          embedding
+        )
         if (updatedMemory) {
           return { success: true, data: updatedMemory }
         } else {

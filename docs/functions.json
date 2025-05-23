@@ -66,14 +66,14 @@
   {
     "type": "function",
     "name": "open_path",
-    "description": "Opens a specified file, folder, or application on the user's computer using the default operating system handler, or opens a URL in the default web browser. Use for launching apps, documents, folders, or websites mentioned by the user. User name in his system is 'User'(change)",
+    "description": "Opens a specified file, folder, or application on the user's computer using the default operating system handler, or opens a URL in the default web browser. Use for launching apps, documents, folders, or websites mentioned by the user. Ask user for their username in system, if needed. If user mention that they are on non Windows OS adjust commands accordingly.",
     "strict": true,
     "parameters": {
       "type": "object",
       "properties": {
         "target": {
           "type": "string",
-          "description": "The target to open. Can be an absolute file path (e.g., '/Users/User(change)/file.txt'), a folder path (e.g., 'C:\\Users\\User(change)\\Documents'), or a full URL (e.g., 'https://www.google.com'). User is using Windows 11(change), when you need to open an application define a path to it in this OS. Use this tool to open web search result url for user command."
+          "description": "The target to open. Can be an absolute file path (e.g., '/Users/(username)/file.txt'), a folder path (e.g., 'C:\\Users\\(username)\\Documents'), or a full URL (e.g., 'https://www.google.com'). User is using Windows 11, when you need to open an application define a path to it in this OS. Use this tool to open web search result url for user command."
         }
       },
       "required": [
@@ -212,14 +212,18 @@
   {
     "type": "function",
     "name": "recall_memories",
-    "description": "Retrieve recent long-term memories stored about the User. Use this to remind yourself of important facts, preferences, or past events related to him.",
+    "description": "Retrieve long-term memories stored about the User. Use the query parameter to find memories relevant to a specific topic or context. If query is omitted, recent memories are returned.",
     "strict": false,
     "parameters": {
       "type": "object",
       "properties": {
+        "query": {
+          "type": "string",
+          "description": "The topic, question, or context to find relevant memories for. Omit to get recent general memories."
+        },
         "memoryType": {
           "type": "string",
-          "description": "You can select type of memory you want to recall, like 'personal', 'project', 'mood', 'general'. Anything you saved as memoryType."
+          "description": "Filter memories by type (e.g., 'personal', 'work'). Can be combined with a query."
         }
       },
       "required": [],

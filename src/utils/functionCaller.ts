@@ -1,5 +1,6 @@
 import axios from 'axios'
 import { useSettingsStore } from '../stores/settingsStore'
+import { embedTextForThoughts } from '../api/openAI/assistant'
 
 interface WebSearchArgs {
   query: string
@@ -38,6 +39,7 @@ interface SaveMemoryArgs {
 }
 
 interface GetRecentMemoriesArgs {
+  query?: string
   memoryType?: string
 }
 
@@ -63,9 +65,27 @@ async function save_memory(args: SaveMemoryArgs) {
     return { success: false, error: 'Content is required.' }
   }
   try {
+    let generatedEmbedding: number[] | undefined = undefined
+    try {
+      generatedEmbedding = await embedTextForThoughts(args.content)
+      if (generatedEmbedding.length === 0) {
+        console.warn(
+          '[FunctionCaller save_memory] Generated empty embedding for content:',
+          args.content
+        )
+        generatedEmbedding = undefined
+      }
+    } catch (embedError) {
+      console.error(
+        '[FunctionCaller save_memory] Error generating embedding for memory:',
+        embedError
+      )
+    }
+
     const result = await window.ipcRenderer.invoke('memory:save', {
       content: args.content,
       memoryType: args.memoryType,
+      embedding: generatedEmbedding,
     })
     if (result.success) {
       console.log('Memory saved via IPC:', result.data)
@@ -105,10 +125,31 @@ async function delete_memory(args: DeleteMemoryArgs) {
 
 async function recall_memories(args: GetRecentMemoriesArgs) {
   try {
+    let queryEmbedding: number[] | undefined = undefined
+    if (args.query && args.query.trim()) {
+      try {
+        queryEmbedding = await embedTextForThoughts(args.query)
+        if (queryEmbedding.length === 0) {
+          console.warn(
+            '[FunctionCaller recall_memories] Generated empty embedding for query:',
+            args.query
+          )
+          queryEmbedding = undefined
+        }
+      } catch (embedError) {
+        console.error(
+          '[FunctionCaller recall_memories] Error generating embedding for query:',
+          embedError
+        )
+      }
+    }
+
     const result = await window.ipcRenderer.invoke('memory:get', {
       limit: 20,
       memoryType: args.memoryType,
+      queryEmbedding: queryEmbedding,
     })
+
     if (result.success) {
       console.log('Memories fetched via IPC:', result.data)
       return { success: true, data: result.data }
@@ -1034,10 +1075,9 @@ export async function executeFunction(
   }
 
   try {
-    console.log('[ARGS STRING]', argsString)
     let args: any
     if (typeof argsString === 'string') {
-      args = JSON.parse(argsString || '{}')
+      args = argsString.trim() === '' ? {} : JSON.parse(argsString)
     } else if (typeof argsString === 'object' && argsString !== null) {
       args = argsString
     } else {
@@ -1053,7 +1093,11 @@ export async function executeFunction(
           args[requiredParam] === undefined ||
           (typeof args[requiredParam] === 'string' &&
             args[requiredParam].trim() === '' &&
-            !(name === 'manage_clipboard' && args.action === 'write'))
+            !(
+              name === 'manage_clipboard' &&
+              args.action === 'write' &&
+              requiredParam === 'content'
+            ))
         ) {
           console.warn(
             `Pre-computation validation failed: Missing required parameter "${requiredParam}" for function "${name}".`
@@ -1090,6 +1134,9 @@ export async function executeFunction(
       `Error parsing arguments or executing function ${name}:`,
       error
     )
+    if (error instanceof SyntaxError && typeof argsString === 'string') {
+      return `Error processing function ${name}: Invalid JSON arguments provided: "${argsString}"`
+    }
     return `Error processing function ${name}: ${error.message || 'Unknown error'}`
   }
 }

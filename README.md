@@ -106,7 +106,7 @@ Tools:
 
 ```
 
-2. Build the Electron app:  
+1. Build the Electron app:  
    `npm run build`
 
-3. Install the app from the `release` folder.
+1. Install the app from the `release` folder.

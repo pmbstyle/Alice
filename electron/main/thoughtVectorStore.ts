@@ -4,19 +4,25 @@ import fs from 'node:fs/promises'
 import HnswlibNode from 'hnswlib-node'
 const { HierarchicalNSW } = HnswlibNode
 import Database from 'better-sqlite3'
+import { randomUUID } from 'node:crypto'
 
 const VECTOR_DIMENSION = 1536
 const MAX_ELEMENTS_HNSW = 10000
 const HNSW_INDEX_FILE_NAME = 'alice-thoughts-hnsw.index'
 const DB_FILE_NAME = 'alice-thoughts.sqlite'
+const OLD_MEMORIES_JSON_FILE = 'alice-memories.json'
 
 const hnswIndexFilePath = path.join(
   app.getPath('userData'),
   HNSW_INDEX_FILE_NAME
 )
 const dbFilePath = path.join(app.getPath('userData'), DB_FILE_NAME)
+const oldJsonMemoriesPath = path.join(
+  app.getPath('userData'),
+  OLD_MEMORIES_JSON_FILE
+)
 
-interface ThoughtMetadata {
+export interface ThoughtMetadata {
   id: string
   conversationId: string
   role: string
@@ -24,12 +30,22 @@ interface ThoughtMetadata {
   createdAt: string
 }
 
+export interface MemoryRecord {
+  id: string
+  content: string
+  memoryType: string
+  createdAt: string
+  embedding?: number[] | Buffer
+}
+
 let hnswIndex: HierarchicalNSW | null = null
 let db: Database.Database | null = null
 let isStoreInitialized = false
 
 function initDB() {
-  db = new Database(dbFilePath, { verbose: console.log })
+  if (db) return
+
+  db = new Database(dbFilePath)
   db.pragma('journal_mode = WAL')
 
   db.exec(`
@@ -43,9 +59,109 @@ function initDB() {
       embedding BLOB
     );
   `)
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS long_term_memories (
+      id TEXT PRIMARY KEY,
+      content TEXT NOT NULL,
+      memory_type TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      embedding BLOB NULLABLE
+    );
+    CREATE INDEX IF NOT EXISTS idx_ltm_memory_type ON long_term_memories (memory_type);
+    CREATE INDEX IF NOT EXISTS idx_ltm_created_at ON long_term_memories (created_at);
+  `)
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS migration_flags (
+      flag_name TEXT PRIMARY KEY,
+      completed INTEGER NOT NULL DEFAULT 0
+    );
+  `)
+
   console.log(
-    '[ThoughtVectorStore DB] SQLite database initialized and table ensured.'
+    '[ThoughtVectorStore DB] SQLite database initialized and tables ensured.'
   )
+}
+
+async function migrateMemoriesFromJsonToDb() {
+  if (!db) {
+    console.error('[Migration] DB not initialized. Cannot migrate.')
+    return
+  }
+
+  const migrationFlag = db
+    .prepare('SELECT completed FROM migration_flags WHERE flag_name = ?')
+    .get('json_memories_migrated') as { completed: number } | undefined
+
+  if (migrationFlag && migrationFlag.completed === 1) {
+    console.log('[Migration] JSON memories already migrated. Skipping.')
+    return
+  }
+
+  try {
+    await fs.access(oldJsonMemoriesPath)
+    const jsonData = await fs.readFile(oldJsonMemoriesPath, 'utf-8')
+    const oldMemories = JSON.parse(jsonData) as MemoryRecord[]
+
+    if (oldMemories && oldMemories.length > 0) {
+      console.log(
+        `[Migration] Found ${oldMemories.length} memories in JSON file. Starting migration...`
+      )
+      const insertStmt = db.prepare(
+        'INSERT OR IGNORE INTO long_term_memories (id, content, memory_type, created_at, embedding) VALUES (?, ?, ?, ?, ?)'
+      )
+
+      db.transaction(() => {
+        for (const memory of oldMemories) {
+          insertStmt.run(
+            memory.id || randomUUID(),
+            memory.content,
+            memory.memoryType,
+            memory.createdAt,
+            null
+          )
+        }
+      })()
+      console.log(
+        '[Migration] Successfully migrated memories from JSON to SQLite.'
+      )
+
+      db.prepare(
+        'INSERT OR REPLACE INTO migration_flags (flag_name, completed) VALUES (?, ?)'
+      ).run('json_memories_migrated', 1)
+
+      try {
+        await fs.rename(oldJsonMemoriesPath, `${oldJsonMemoriesPath}.migrated`)
+        console.log(
+          `[Migration] Renamed old JSON memories file to ${OLD_MEMORIES_JSON_FILE}.migrated`
+        )
+      } catch (renameError) {
+        console.error(
+          '[Migration] Could not rename old JSON file, please handle manually:',
+          renameError
+        )
+      }
+    } else {
+      console.log(
+        '[Migration] Old JSON memories file is empty or not found. No migration needed from JSON.'
+      )
+      db.prepare(
+        'INSERT OR REPLACE INTO migration_flags (flag_name, completed) VALUES (?, ?)'
+      ).run('json_memories_migrated', 1)
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      console.log(
+        '[Migration] Old JSON memories file not found. No migration needed from JSON.'
+      )
+      db.prepare(
+        'INSERT OR REPLACE INTO migration_flags (flag_name, completed) VALUES (?, ?)'
+      ).run('json_memories_migrated', 1)
+    } else {
+      console.error('[Migration] Error during JSON memory migration:', error)
+    }
+  }
 }
 
 function insertThoughtMetadata(
@@ -117,8 +233,8 @@ function getAllEmbeddingsWithLabelsFromDB(): {
 }
 
 async function loadIndexAndSyncWithDB() {
-  if (!db) initDB()
-  if (!db) throw new Error('Failed to initialize database for loading index.')
+  if (!db)
+    throw new Error('Failed to initialize database for loading HNSW index.')
 
   hnswIndex = new HierarchicalNSW('cosine', VECTOR_DIMENSION)
 
@@ -217,7 +333,12 @@ async function rebuildHnswIndexFromDB() {
 }
 
 async function saveHnswIndex() {
-  if (!hnswIndex) return
+  if (!hnswIndex || !isStoreInitialized) {
+    console.warn(
+      '[ThoughtVectorStore Save] Attempted to save HNSW index but store or index not ready.'
+    )
+    return
+  }
   try {
     const dir = path.dirname(hnswIndexFilePath)
     await fs.mkdir(dir, { recursive: true })
@@ -231,6 +352,7 @@ async function saveHnswIndex() {
 export async function initializeThoughtVectorStore(): Promise<void> {
   if (isStoreInitialized) return
   initDB()
+  await migrateMemoriesFromJsonToDb()
   await loadIndexAndSyncWithDB()
 }
 
@@ -257,7 +379,6 @@ export async function addThoughtVector(
   }
 
   const thoughtId = `${conversationId}-${role}-${Date.now()}`
-
   const label = hnswIndex.getCurrentCount()
 
   if (label >= hnswIndex.getMaxElements()) {
@@ -357,9 +478,8 @@ export async function deleteAllThoughtVectors(): Promise<void> {
   )
   db.prepare('DELETE FROM thoughts').run()
   hnswIndex.clearPoints()
-  if (!hnswIndex.isIndexInitialized() || hnswIndex.getCurrentCount() > 0) {
-    hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
-  }
+
+  hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
   await saveHnswIndex()
   console.log(
     '[ThoughtVectorStore DELETE ALL] All thought vectors and DB entries deleted.'
@@ -376,7 +496,23 @@ export async function ensureSaveOnQuit(): Promise<void> {
     )
   }
   if (db) {
-    db.close()
-    console.log('[ThoughtVectorStore QUIT_SAVE] DB connection closed.')
+    db.close((err: Error | null) => {
+      if (err) {
+        console.error(
+          '[ThoughtVectorStore QUIT_SAVE] Error closing DB:',
+          err.message
+        )
+      } else {
+        console.log('[ThoughtVectorStore QUIT_SAVE] DB connection closed.')
+      }
+    })
+    db = null
   }
+}
+
+export function getDBInstance(): Database.Database {
+  if (!db) {
+    initDB()
+  }
+  return db!
 }

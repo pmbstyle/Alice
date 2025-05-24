@@ -19,6 +19,8 @@ export function useScreenshot() {
   const takeScreenShot = async () => {
     if (isElectron && !takingScreenShot.value) {
       takingScreenShot.value = true
+      screenshotReady.value = false
+      screenShot.value = ''
       statusMessage.value = 'Taking a screenshot...'
       try {
         await window.ipcRenderer.invoke('show-overlay')
@@ -29,7 +31,7 @@ export function useScreenshot() {
         takingScreenShot.value = false
       }
     } else if (!isElectron) {
-      console.warn('Screenshot feature only available in Electron app.')
+      statusMessage.value = 'Screenshot not available in web mode.'
     } else {
       console.log('Screenshot request ignored, already in progress.')
     }
@@ -38,35 +40,31 @@ export function useScreenshot() {
   const setupScreenshotListeners = () => {
     if (isElectron) {
       handleScreenshotCapturedListener = async () => {
-        console.log("IPC 'screenshot-captured' received.")
         try {
           const dataURI = await window.ipcRenderer.invoke('get-screenshot')
           if (dataURI) {
             screenShot.value = dataURI
             screenshotReady.value = true
             statusMessage.value = 'Screenshot ready'
-            console.log('Screenshot data retrieved.')
           } else {
-            console.warn('Retrieved empty screenshot data URI.')
-            statusMessage.value = 'Error: Empty screenshot'
+            statusMessage.value = 'Error: Captured empty screenshot'
+            screenshotReady.value = false
           }
         } catch (error) {
           console.error('Error retrieving screenshot via IPC:', error)
           statusMessage.value = 'Error retrieving screenshot'
-        } finally {
-          takingScreenShot.value = false
+          screenshotReady.value = false
         }
       }
 
       handleOverlayClosedListener = () => {
-        console.log("IPC 'overlay-closed' received.")
         if (takingScreenShot.value) {
-          takingScreenShot.value = false
           if (!screenshotReady.value) {
             statusMessage.value = isRecordingRequested.value
               ? 'Listening...'
               : 'Stand by'
           }
+          takingScreenShot.value = false
         }
       }
 
@@ -75,7 +73,6 @@ export function useScreenshot() {
         handleScreenshotCapturedListener
       )
       window.ipcRenderer.on('overlay-closed', handleOverlayClosedListener)
-      console.log('Screenshot IPC listeners attached.')
     } else {
       console.log('Not in Electron, skipping screenshot listener setup.')
     }
@@ -84,7 +81,6 @@ export function useScreenshot() {
   const cleanupScreenshotListeners = () => {
     if (isElectron) {
       try {
-        s
         if (handleScreenshotCapturedListener) {
           window.ipcRenderer.off(
             'screenshot-captured',
@@ -94,7 +90,6 @@ export function useScreenshot() {
         if (handleOverlayClosedListener) {
           window.ipcRenderer.off('overlay-closed', handleOverlayClosedListener)
         }
-        console.log('Screenshot IPC listeners removed.')
       } catch (error) {
         console.error('Error removing screenshot IPC listeners:', error)
       } finally {

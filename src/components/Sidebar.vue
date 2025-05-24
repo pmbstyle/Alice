@@ -122,15 +122,17 @@ let debounceTimeout = ref<number | null>(null)
 const debounceDelay = 300
 
 const chatInputHandle = async () => {
-  if (chatInput.value.length > 0 && isConversationReady.value) {
+  const text = chatInput.value.trim()
+  if (text.length > 0 && isConversationReady.value) {
     if (debounceTimeout.value) clearTimeout(debounceTimeout.value)
+
     debounceTimeout.value = window.setTimeout(async () => {
-      storeMessage.value = true
-      await emit('processRequest', chatInput.value)
+      const textToSend = chatInput.value.trim()
       chatInput.value = ''
+      emit('processRequest', textToSend)
     }, debounceDelay)
   } else if (!isConversationReady.value) {
-    console.warn('Sidebar: Chat input submitted but conversation not ready.')
+    generalStore.statusMessage = 'AI not ready. Please wait or check settings.'
   }
 }
 
@@ -174,7 +176,6 @@ const resizeWindow = async (open: boolean) => {
 
 onMounted(async () => {
   if (!settingsStore.initialLoadAttempted) {
-    console.log('[Sidebar] Settings not loaded yet, awaiting load...')
     await settingsStore.loadSettings()
   }
 
@@ -185,13 +186,11 @@ onMounted(async () => {
     canInitializeAI && !conversationStore.isInitialized
 
   if (needsSettingsConfig) {
-    console.log('[Sidebar] Needs essential settings configuration.')
     generalStore.openSidebar = true
     resizeWindow(true)
     changeSidebarView('settings')
     generalStore.setAudioState('CONFIG')
   } else if (aiNeedsInitialization) {
-    console.log('[Sidebar] Settings OK, attempting AI ConversationStore init.')
     generalStore.statusMessage = 'Initializing AI...'
     changeSidebarView('chat')
     if (!generalStore.openSidebar) {
@@ -201,7 +200,6 @@ onMounted(async () => {
 
     const initSuccess = await conversationStore.initialize()
     if (initSuccess) {
-      console.log('[Sidebar] AI initialized successfully on mount.')
       if (
         generalStore.audioState === 'CONFIG' ||
         generalStore.statusMessage.startsWith('Initializing AI')
@@ -216,7 +214,6 @@ onMounted(async () => {
       console.log('[Sidebar] AI initialization failed on mount.')
     }
   } else if (conversationStore.isInitialized) {
-    console.log('[Sidebar] AI already initialized on mount.')
     changeSidebarView('chat')
     if (generalStore.audioState === 'CONFIG') {
       if (generalStore.isRecordingRequested) {
@@ -234,9 +231,6 @@ onMounted(async () => {
       generalStore.setAudioState('IDLE')
     }
   } else {
-    console.warn(
-      '[Sidebar] Unexpected state on mount. Defaulting to chat view.'
-    )
     changeSidebarView('chat')
     if (generalStore.audioState === 'CONFIG') generalStore.setAudioState('IDLE')
   }
@@ -250,9 +244,6 @@ watch(
         conversationStore.isInitialized &&
         settingsStore.areEssentialSettingsProvided
       ) {
-        console.log(
-          '[Sidebar] Settings saved & AI (re)initialized. Switching to chat view in 1.5s.'
-        )
         settingsStore.successMessage = null
 
         setTimeout(() => {

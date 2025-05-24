@@ -2,7 +2,6 @@ import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { setVideo } from '../utils/videoProcess'
 import type { ChatMessage, AppChatMessageContentPart } from './openAIStore'
-import type { OpenAI } from 'openai'
 
 export type AudioState =
   | 'IDLE'
@@ -112,9 +111,17 @@ export const useGeneralStore = defineStore('general', () => {
     const localId =
       message.local_id_temp ||
       `local-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-    const messageWithId = { ...message, local_id_temp: localId }
 
-    chatHistory.value.unshift(messageWithId)
+    const messageToStore: ChatMessage = {
+      ...message,
+      local_id_temp: localId,
+      content: Array.isArray(message.content)
+        ? message.content.map(part => ({ ...part }))
+        : message.content,
+    }
+
+    chatHistory.value.unshift(messageToStore)
+
     return localId
   }
 
@@ -133,31 +140,24 @@ export const useGeneralStore = defineStore('general', () => {
     const index = findMessageIndexByTempId(tempId)
     if (index !== -1) {
       const message = chatHistory.value[index]
-      if (
-        typeof message.content !== 'string' &&
-        Array.isArray(message.content)
-      ) {
-        let firstTextPart = message.content.find(p => p.type === 'app_text') as
-          | AppChatMessageContentPart
-          | undefined
-
-        if (!firstTextPart) {
-          firstTextPart = { type: 'app_text', text: '' }
-          message.content.unshift(firstTextPart)
-        }
-        firstTextPart.text = (firstTextPart.text || '') + delta
-      } else if (typeof message.content === 'string') {
-        message.content += delta
-      } else {
-        console.warn(
-          `appendMessageDeltaByTempId: Message (tempId ${tempId}) has unexpected content structure. Initializing with delta.`,
-          message.content
-        )
-        message.content = [{ type: 'app_text', text: delta }]
+      if (!Array.isArray(message.content)) {
+        message.content = [
+          { type: 'app_text', text: message.content as string },
+        ]
       }
+
+      let firstTextPart = message.content.find(p => p.type === 'app_text') as
+        | AppChatMessageContentPart
+        | undefined
+
+      if (!firstTextPart) {
+        firstTextPart = { type: 'app_text', text: '' }
+        message.content.unshift(firstTextPart)
+      }
+      firstTextPart.text = (firstTextPart.text || '') + delta
     } else {
       console.warn(
-        `appendMessageDeltaByTempId: Message with tempId ${tempId} not found.`
+        `[GeneralStore appendMessageDelta] Message with tempId ${tempId} not found for delta: "${delta.substring(0, 30)}..."`
       )
     }
   }
@@ -178,24 +178,26 @@ export const useGeneralStore = defineStore('general', () => {
     }
   }
 
-  const updateMessageApiResponseIdByTempId = (tempId: string, apiResponseId: string) => {
+  const updateMessageApiResponseIdByTempId = (
+    tempId: string,
+    apiResponseId: string
+  ) => {
     const index = findMessageIndexByTempId(tempId)
     if (index !== -1) {
       chatHistory.value[index].api_response_id = apiResponseId
     }
   }
 
-  const addToolCallToMessageByTempId = (
-    tempId: string,
-    toolCall: any
-  ) => {
+  const addToolCallToMessageByTempId = (tempId: string, toolCall: any) => {
     const index = findMessageIndexByTempId(tempId)
     if (index !== -1) {
       if (!chatHistory.value[index].tool_calls) {
         chatHistory.value[index].tool_calls = []
       }
       if (
-        !chatHistory.value[index].tool_calls!.find((tc: any) => tc.id === toolCall.id)
+        !chatHistory.value[index].tool_calls!.find(
+          (tc: any) => tc.id === toolCall.id
+        )
       ) {
         chatHistory.value[index].tool_calls!.push(toolCall)
       }
@@ -206,10 +208,7 @@ export const useGeneralStore = defineStore('general', () => {
     }
   }
 
-  const updateMessageToolCallsByTempId = (
-    tempId: string,
-    toolCalls: any[]
-  ) => {
+  const updateMessageToolCallsByTempId = (tempId: string, toolCalls: any[]) => {
     const index = findMessageIndexByTempId(tempId)
     if (index !== -1) {
       chatHistory.value[index].tool_calls = toolCalls

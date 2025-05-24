@@ -27,7 +27,7 @@ export interface ChatMessage {
   content: string | AppChatMessageContentPart[]
   tool_call_id?: string
   name?: string
-  tool_calls?: any[]
+  tool_calls?: OpenAI.Responses.FunctionCall[]
 }
 
 export const useConversationStore = defineStore('conversation', () => {
@@ -71,7 +71,6 @@ export const useConversationStore = defineStore('conversation', () => {
     }
     isInitialized.value = true
     generalStore.statusMessage = 'Stand by'
-    console.log('OpenAI Store (Responses API) initialized.')
     generalStore.chatHistory = []
     currentResponseId.value = null
     return true
@@ -85,6 +84,15 @@ export const useConversationStore = defineStore('conversation', () => {
       .slice(0, MAX_HISTORY_MESSAGES_FOR_API)
       .reverse()
 
+    let lastUserMessageInFullHistoryId: string | null = null
+    for (let i = 0; i < historyToBuildFrom.length; i++) {
+      if (historyToBuildFrom[i].role === 'user') {
+        lastUserMessageInFullHistoryId =
+          historyToBuildFrom[i].local_id_temp || null
+        break
+      }
+    }
+
     for (const msg of recentHistory) {
       let apiItemPartial: Partial<OpenAI.Responses.Request.InputItemLike> & {
         type?: string
@@ -96,29 +104,27 @@ export const useConversationStore = defineStore('conversation', () => {
         apiItemPartial = {
           type: 'function_call_output',
           call_id: msg.tool_call_id,
-          output: msg.content as string,
+          output:
+            typeof msg.content === 'string'
+              ? msg.content
+              : JSON.stringify(msg.content),
         }
       } else if (msg.role === 'system') {
         apiItemPartial = { role: 'system', content: '' }
         if (msg.name) (apiItemPartial as any).name = msg.name
-        if (typeof msg.content === 'string')
+        if (typeof msg.content === 'string') {
           apiItemPartial.content = msg.content
-        else if (
+        } else if (
           Array.isArray(msg.content) &&
           msg.content[0]?.type === 'app_text'
-        )
+        ) {
           apiItemPartial.content = msg.content[0].text || ''
+        }
       } else {
         const currentApiRole = msg.role as 'user' | 'assistant' | 'developer'
         apiItemPartial = { role: currentApiRole, content: [] }
 
-        if (
-          msg.name &&
-          (currentApiRole === 'developer' ||
-            currentApiRole === 'assistant' ||
-            currentApiRole === 'system' ||
-            currentApiRole === 'user')
-        ) {
+        if (msg.name && currentApiRole !== 'tool') {
           ;(apiItemPartial as any).name = msg.name
         }
 
@@ -130,6 +136,10 @@ export const useConversationStore = defineStore('conversation', () => {
               : 'output_text'
           messageContentParts = [{ type: typeForPart, text: msg.content }]
         } else if (Array.isArray(msg.content)) {
+          const isThisTheLastUserMessageWithPotentialNewImage =
+            currentApiRole === 'user' &&
+            msg.local_id_temp === lastUserMessageInFullHistoryId
+
           messageContentParts = msg.content
             .map((appPart: AppChatMessageContentPart) => {
               if (appPart.type === 'app_text') {
@@ -139,20 +149,50 @@ export const useConversationStore = defineStore('conversation', () => {
                     : 'output_text'
                 return { type: typeForPart, text: appPart.text || '' }
               } else if (appPart.type === 'app_image_uri') {
-                return {
-                  type: 'image_url',
-                  image_url: { url: appPart.uri || '' },
+                if (!appPart.uri) {
+                  console.warn(
+                    '[buildApiInput]   app_image_uri found but appPart.uri is empty/null. Skipping this part.'
+                  )
+                  return null
+                }
+
+                if (
+                  isThisTheLastUserMessageWithPotentialNewImage &&
+                  (currentApiRole === 'user' || currentApiRole === 'developer')
+                ) {
+                  return {
+                    type: 'input_image',
+                    image_url: appPart.uri,
+                  }
+                } else if (
+                  currentApiRole === 'user' ||
+                  currentApiRole === 'developer'
+                ) {
+                  return {
+                    type: 'input_text',
+                    text: '[User previously sent an image]',
+                  }
+                } else {
+                  console.warn(
+                    `[buildApiInput]   app_image_uri found for role ${currentApiRole} (not current user turn or not user/dev role). Skipping image data.`
+                  )
+                  return null
                 }
               }
+              console.warn(
+                `[buildApiInput]   Unknown appPart type: ${appPart.type}. Skipping this part.`
+              )
               return null
             })
-            .filter(Boolean) as OpenAI.Responses.Request.ContentPartLike[]
+            .filter(
+              p => p !== null
+            ) as OpenAI.Responses.Request.ContentPartLike[] // Filter out nulls
         }
 
-        if (
-          messageContentParts.length === 0 &&
-          (currentApiRole === 'user' || currentApiRole === 'assistant')
-        ) {
+        if (messageContentParts.length === 0) {
+          console.warn(
+            `[buildApiInput] Message (local_id: ${msg.local_id_temp}, role: ${currentApiRole}) resulted in empty content parts. Adding default empty text part.`
+          )
           const typeForPart =
             currentApiRole === 'user' || currentApiRole === 'developer'
               ? 'input_text'
@@ -164,20 +204,16 @@ export const useConversationStore = defineStore('conversation', () => {
 
       apiInput.push(apiItemPartial as OpenAI.Responses.Request.InputItemLike)
     }
-    console.log(
-      'Final Built API input for OpenAI (Corrected tool_call_output with call_id):',
-      JSON.stringify(apiInput, null, 2)
-    )
+
     return apiInput
   }
 
   async function processStream(
-    stream: AsyncIterable<any>,
+    stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
     placeholderTempId: string
   ) {
     let currentSentence = ''
     let currentAssistantApiMessageId: string | null = null
-    // Buffer for accumulating arguments by item_id
     const functionCallArgsBuffer: Record<string, string> = {}
 
     try {
@@ -190,7 +226,10 @@ export const useConversationStore = defineStore('conversation', () => {
           )
         }
 
-        if (event.type === 'response.output_item.added' || event.type === 'response.output_item.updated') {
+        if (
+          event.type === 'response.output_item.added' ||
+          event.type === 'response.output_item.updated'
+        ) {
           if (
             event.item.type === 'message' &&
             event.item.role === 'assistant'
@@ -205,31 +244,46 @@ export const useConversationStore = defineStore('conversation', () => {
           }
         }
 
-        // Accumulate argument deltas
         if (event.type === 'response.function_call_arguments.delta') {
-          const itemId = event.item_id;
-          functionCallArgsBuffer[itemId] = (functionCallArgsBuffer[itemId] || '') + (event.delta || '');
+          const itemId = event.item_id
+          functionCallArgsBuffer[itemId] =
+            (functionCallArgsBuffer[itemId] || '') + (event.delta || '')
         }
 
-        // On done, execute the tool call
-        if (event.type === 'response.output_item.done' && event.item.type === 'function_call') {
-          const functionCallPayload = event.item;
-          const itemId = functionCallPayload.id;
-          let args = {};
+        if (
+          event.type === 'response.output_item.done' &&
+          event.item.type === 'function_call'
+        ) {
+          const functionCallPayload =
+            event.item as OpenAI.Responses.FunctionCall
+          const itemId = functionCallPayload.id
+          let args = {}
           try {
-            args = JSON.parse(functionCallArgsBuffer[itemId] || functionCallPayload.arguments || '{}');
+            args = JSON.parse(
+              functionCallArgsBuffer[itemId] ||
+                (typeof functionCallPayload.arguments === 'string'
+                  ? functionCallPayload.arguments
+                  : '{}')
+            )
           } catch (e) {
-            args = {};
+            console.error(
+              `[processStream] Error parsing arguments for function call ${itemId}:`,
+              functionCallArgsBuffer[itemId],
+              e
+            )
+            args = {}
           }
-          functionCallPayload.arguments = args;
+          functionCallPayload.arguments = args
+
           generalStore.addToolCallToMessageByTempId(
             placeholderTempId,
             functionCallPayload
-          );
+          )
+
           if (audioState.value === 'SPEAKING')
-            generalStore.stopPlaybackAndClearQueue();
-          await handleToolCall(functionCallPayload, currentResponseId.value);
-          return;
+            generalStore.stopPlaybackAndClearQueue()
+          await handleToolCall(functionCallPayload, currentResponseId.value)
+          return
         }
 
         if (
@@ -255,8 +309,9 @@ export const useConversationStore = defineStore('conversation', () => {
         if (event.type === 'response.completed') {
           currentResponseId.value = event.response.id
           const finalMessage = event.response.output?.find(
-            (o: any) => o.type === 'message' && o.id === currentAssistantApiMessageId
-          ) as any
+            (o: any) =>
+              o.type === 'message' && o.id === currentAssistantApiMessageId
+          ) as OpenAI.Responses.MessageResponse
           if (finalMessage?.tool_calls) {
             generalStore.updateMessageToolCallsByTempId(
               placeholderTempId,
@@ -297,7 +352,7 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function handleToolCall(
-    toolCall: any,
+    toolCall: OpenAI.Responses.FunctionCall,
     originalResponseIdForTool: string | null
   ) {
     const functionName = toolCall.name
@@ -311,7 +366,12 @@ export const useConversationStore = defineStore('conversation', () => {
       )
       generalStore.addMessageToHistory({
         role: 'system',
-        content: `System error: Invalid tool call from AI for ${toolCall.id}.`,
+        content: [
+          {
+            type: 'app_text',
+            text: `System error: Invalid tool call from AI for ${toolCall.id}.`,
+          },
+        ],
       })
       if (audioState.value === 'WAITING_FOR_RESPONSE')
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
@@ -321,7 +381,7 @@ export const useConversationStore = defineStore('conversation', () => {
     const toolStatusMessage = getToolStatusMessage(functionName)
     generalStore.addMessageToHistory({
       role: 'system',
-      content: toolStatusMessage,
+      content: [{ type: 'app_text', text: toolStatusMessage }],
     })
 
     if (generalStore.isTTSEnabled) {
@@ -340,7 +400,7 @@ export const useConversationStore = defineStore('conversation', () => {
 
     let resultString: string
     try {
-      resultString = await executeFunction(functionName, functionArgs)
+      resultString = await executeFunction(functionName, functionArgs as object)
     } catch (error: any) {
       console.error(`[handleToolCall] Error executing ${functionName}:`, error)
       resultString = `Error executing tool ${functionName}: ${error.message || 'Unknown error'}`
@@ -362,7 +422,7 @@ export const useConversationStore = defineStore('conversation', () => {
         role: 'assistant',
         content: [{ type: 'app_text', text: '' }],
       }
-      const afterToolPlaceholderTempId =
+      afterToolPlaceholderTempId =
         generalStore.addMessageToHistory(afterToolPlaceholder)
 
       const continuedStream = (await createOpenAIResponse(
@@ -390,7 +450,7 @@ export const useConversationStore = defineStore('conversation', () => {
       } else {
         generalStore.addMessageToHistory({
           role: 'assistant',
-          content: errorMsg,
+          content: [{ type: 'app_text', text: errorMsg }],
         })
       }
       setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
@@ -448,8 +508,9 @@ export const useConversationStore = defineStore('conversation', () => {
         if (event.type === 'response.completed') {
           currentResponseId.value = event.response.id
           const finalMessage = event.response.output?.find(
-            (o: any) => o.type === 'message' && o.id === localAssistantApiMessageId
-          ) as any
+            (o: any) =>
+              o.type === 'message' && o.id === localAssistantApiMessageId
+          ) as OpenAI.Responses.MessageResponse
           if (finalMessage?.tool_calls) {
             generalStore.updateMessageToolCallsByTempId(
               messagePlaceholderTempId,
@@ -499,21 +560,11 @@ export const useConversationStore = defineStore('conversation', () => {
       generalStore.statusMessage =
         'Error: Chat not ready (AI not fully initialized).'
       setAudioState('IDLE')
-      console.warn(
-        'OpenAI store not initialized or assistant/thread missing. Cannot start chat.'
-      )
+      console.warn('OpenAI store not initialized. Cannot start chat.')
       return
     }
 
     const lastMessage = generalStore.chatHistory[0]
-    console.log(
-      '[Chat] Checking for pending tool calls. Last message:',
-      JSON.parse(JSON.stringify(lastMessage || {}))
-    )
-    console.log(
-      '[Chat] Current global currentResponseId.value:',
-      currentResponseId.value
-    )
 
     if (
       lastMessage &&
@@ -523,6 +574,7 @@ export const useConversationStore = defineStore('conversation', () => {
     ) {
       const pendingToolCallsToProcess = [...lastMessage.tool_calls]
       const originalMessageTempId = lastMessage.local_id_temp
+
       if (originalMessageTempId) {
         generalStore.updateMessageToolCallsByTempId(originalMessageTempId, [])
       } else {
@@ -532,42 +584,34 @@ export const useConversationStore = defineStore('conversation', () => {
         lastMessage.tool_calls = []
       }
 
-      console.log(
-        `[Chat] Found ${pendingToolCallsToProcess.length} pending tool call(s). Processing them.`
-      )
       setAudioState('WAITING_FOR_RESPONSE')
 
       const responseIdForTheseToolCalls = lastMessage.api_response_id
-      console.log(
-        `[Chat] Using api_response_id from lastMessage: '${responseIdForTheseToolCalls}' for pending tool calls.`
-      )
 
       if (!responseIdForTheseToolCalls) {
         console.error(
-          '[Chat] CRITICAL: lastMessage.api_response_id is missing for a pending tool call. This will likely fail. lastMessage:',
+          '[Chat] CRITICAL: lastMessage.api_response_id is missing for a pending tool call.',
           JSON.parse(JSON.stringify(lastMessage))
         )
         generalStore.addMessageToHistory({
           role: 'system',
-          content:
-            'Error: Internal state error processing pending tool call. Missing response context.',
+          content: [
+            {
+              type: 'app_text',
+              text: 'Error: Internal state error processing pending tool call. Missing response context.',
+            },
+          ],
         })
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
         return
       }
 
       for (const pendingToolCall of pendingToolCallsToProcess) {
-        console.log(
-          `[Chat] Processing pending tool: ${pendingToolCall.name}, Call ID: ${pendingToolCall.call_id}, associated with Response ID: ${responseIdForTheseToolCalls}`
-        )
         await handleToolCall(pendingToolCall, responseIdForTheseToolCalls)
       }
       return
     }
 
-    console.log(
-      '[Chat] No pending tool calls found, proceeding with new input.'
-    )
     setAudioState('WAITING_FOR_RESPONSE')
     const constructedApiInput = buildApiInput()
 
@@ -609,7 +653,7 @@ export const useConversationStore = defineStore('conversation', () => {
       else
         generalStore.addMessageToHistory({
           role: 'assistant',
-          content: errorMsg,
+          content: [{ type: 'app_text', text: errorMsg }],
         })
       setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
     }
@@ -622,6 +666,7 @@ export const useConversationStore = defineStore('conversation', () => {
       return await transcribeAudio(audioBuffer)
     } catch (error) {
       generalStore.statusMessage = 'Error: Transcription service failed'
+      console.error('Transcription service error:', error)
       return ''
     }
   }
@@ -629,9 +674,20 @@ export const useConversationStore = defineStore('conversation', () => {
   const uploadScreenshotToOpenAI = async (
     screenshotDataURI: string
   ): Promise<string | null> => {
-    if (!screenshotDataURI) return null
-    if (screenshotDataURI.startsWith('data:image/')) return screenshotDataURI
-    console.warn('uploadScreenshotToOpenAI: Provided URI is not a data URI.')
+    if (!screenshotDataURI) {
+      console.warn(
+        '[uploadScreenshotToOpenAI] Received empty screenshotDataURI.'
+      )
+      return null
+    }
+
+    if (screenshotDataURI.startsWith('data:image/')) {
+      return screenshotDataURI
+    }
+    console.warn(
+      '[uploadScreenshotToOpenAI] Provided URI is not a data URI. URI starts with:',
+      screenshotDataURI.substring(0, 100) + '...'
+    )
     return null
   }
 
@@ -689,11 +745,11 @@ export const useConversationStore = defineStore('conversation', () => {
       const modelsPage = await openai.models.list()
       availableModels.value = modelsPage.data
         .filter(
-          model =>
-            model.id.startsWith('gpt-') ||
-            model.id.startsWith('o1-') ||
-            model.id.startsWith('o3-') ||
-            model.id.startsWith('o4-')
+          model => model.id.startsWith('gpt-')
+          // model.id.startsWith('gpt-') || //not yet ready for thinking models
+          // model.id.startsWith('o1-') ||
+          // model.id.startsWith('o3-') ||
+          // model.id.startsWith('o4-')
         )
         .sort((a, b) => a.id.localeCompare(b.id))
     } catch (error: any) {

@@ -97,12 +97,17 @@ Tools:
    
 ## Local build for production
 1. Create `app-config.json` file in the root directory with the following content to use Google integration (optional):
+
 ```json
+
 {
   "VITE_GOOGLE_CLIENT_ID": "",
   "VITE_GOOGLE_CLIENT_SECRET": ""
 }
+
 ```
+
 2. Build the Electron app:  
    `npm run build`
+
 3. Install the app from the `release` folder.

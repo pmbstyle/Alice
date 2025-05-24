@@ -263,6 +263,12 @@ async function createWindow() {
         embedding: number[]
       }
     ) => {
+      console.log('[Main IPC thoughtVector:add] Received:', {
+        conversationId,
+        role,
+        textPreview: textContent.substring(0, 50),
+        embeddingLength: embedding?.length,
+      })
       try {
         await addThoughtVector(conversationId, role, textContent, embedding)
         return { success: true }

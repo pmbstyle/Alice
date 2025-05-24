@@ -20,7 +20,8 @@ export const getOpenAIClient = (): OpenAI => {
 export const createOpenAIResponse = async (
   input: any[],
   previousResponseId: string | null,
-  stream: boolean = false
+  stream: boolean = false,
+  customInstructions?: string
 ): Promise<any> => {
   const openai = getOpenAIClient()
   const settings = useSettingsStore().config
@@ -45,7 +46,10 @@ export const createOpenAIResponse = async (
   const params: any = {
     model: settings.assistantModel || 'gpt-4.1-mini',
     input: input,
-    instructions: settings.assistantSystemPrompt || undefined,
+    instructions:
+      customInstructions !== undefined
+        ? customInstructions
+        : settings.assistantSystemPrompt || undefined,
     temperature: settings.assistantTemperature ?? 1.0,
     top_p: settings.assistantTopP ?? 1.0,
     tools: activeTools.length > 0 ? activeTools : undefined,

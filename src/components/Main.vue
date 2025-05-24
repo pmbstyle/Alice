@@ -61,6 +61,7 @@ import { bg } from '../utils/assetsImport'
 
 import { useGeneralStore } from '../stores/generalStore'
 import { useConversationStore } from '../stores/openAIStore'
+import { indexMessageForThoughts } from '../api/openAI/assistant'
 import type {
   ChatMessage,
   AppChatMessageContentPart,
@@ -219,6 +220,39 @@ const processRequest = async (
   const userMessage: ChatMessage = {
     role: 'user',
     content: appContentParts,
+  }
+
+  try {
+    let userTextForIndexing = ''
+    if (typeof userMessage.content === 'string') {
+      userTextForIndexing = userMessage.content
+    } else if (Array.isArray(userMessage.content)) {
+      const textPart = userMessage.content.find(p => p.type === 'app_text')
+      if (textPart && textPart.text) {
+        userTextForIndexing = textPart.text
+      }
+    }
+
+    if (userTextForIndexing) {
+      const conversationIdForThought =
+        conversationStore.currentResponseId || 'default_conversation'
+
+      console.log(
+        `[Main.vue] Indexing user message: "${userTextForIndexing.substring(0, 50)}"`
+      )
+      await indexMessageForThoughts(conversationIdForThought, 'user', {
+        content: appContentParts,
+      })
+    } else {
+      console.warn(
+        '[Main.vue] No text content found in user message to index for thoughts.'
+      )
+    }
+  } catch (e) {
+    console.error(
+      '[Main.vue] Error calling indexMessageForThoughts for user message:',
+      e
+    )
   }
 
   generalStore.addMessageToHistory(userMessage)

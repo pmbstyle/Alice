@@ -8,6 +8,10 @@ import {
   getOpenAIClient,
 } from '../api/openAI/responsesApi'
 import { transcribeAudio } from '../api/groq/stt'
+import {
+  retrieveRelevantThoughtsForPrompt,
+  indexMessageForThoughts,
+} from '../api/openAI/assistant'
 
 import { useGeneralStore } from './generalStore'
 import { useSettingsStore } from './settingsStore'
@@ -186,7 +190,7 @@ export const useConversationStore = defineStore('conversation', () => {
             })
             .filter(
               p => p !== null
-            ) as OpenAI.Responses.Request.ContentPartLike[] // Filter out nulls
+            ) as OpenAI.Responses.Request.ContentPartLike[]
         }
 
         if (messageContentParts.length === 0) {
@@ -204,7 +208,6 @@ export const useConversationStore = defineStore('conversation', () => {
 
       apiInput.push(apiItemPartial as OpenAI.Responses.Request.InputItemLike)
     }
-
     return apiInput
   }
 
@@ -414,6 +417,66 @@ export const useConversationStore = defineStore('conversation', () => {
     }
     generalStore.addMessageToHistory(toolResponseMessage)
 
+    let finalInstructionsForToolFollowUp =
+      settingsStore.config.assistantSystemPrompt || ''
+    let contextTextForThoughts = ''
+
+    const userMessages = generalStore.chatHistory.filter(m => m.role === 'user')
+    if (userMessages.length > 0) {
+      const latestUserMsg = userMessages[0]
+      if (typeof latestUserMsg.content === 'string') {
+        contextTextForThoughts = latestUserMsg.content
+      } else if (Array.isArray(latestUserMsg.content)) {
+        const textPart = latestUserMsg.content.find(
+          part => part.type === 'app_text'
+        )
+        if (textPart && textPart.text) {
+          contextTextForThoughts = textPart.text
+        }
+      }
+    }
+
+    if (contextTextForThoughts) {
+      try {
+        console.log(
+          '[openAIStore handleToolCall] Retrieving thoughts for tool follow-up, context:',
+          contextTextForThoughts
+        )
+        const relevantThoughtsArray = await retrieveRelevantThoughtsForPrompt(
+          contextTextForThoughts
+        )
+        console.log(
+          '[openAIStore handleToolCall] Retrieved thoughts for tool follow-up:',
+          relevantThoughtsArray
+        )
+
+        let thoughtsBlock =
+          'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
+        if (relevantThoughtsArray && relevantThoughtsArray.length > 0) {
+          thoughtsBlock += relevantThoughtsArray.map(t => `- ${t}`).join('\n')
+        } else {
+          thoughtsBlock += 'No relevant thoughts...'
+        }
+        finalInstructionsForToolFollowUp =
+          thoughtsBlock +
+          '\n\n---\n\n' +
+          (settingsStore.config.assistantSystemPrompt || '')
+      } catch (error) {
+        console.error(
+          '[openAIStore handleToolCall] Error retrieving or formatting thoughts for tool follow-up:',
+          error
+        )
+        finalInstructionsForToolFollowUp =
+          settingsStore.config.assistantSystemPrompt || ''
+      }
+    } else {
+      console.warn(
+        '[openAIStore handleToolCall] No context text found to fetch thoughts for tool follow-up.'
+      )
+      finalInstructionsForToolFollowUp =
+        settingsStore.config.assistantSystemPrompt || ''
+    }
+
     const nextApiInput = buildApiInput()
 
     try {
@@ -428,7 +491,8 @@ export const useConversationStore = defineStore('conversation', () => {
       const continuedStream = (await createOpenAIResponse(
         nextApiInput,
         originalResponseIdForTool,
-        true
+        true,
+        finalInstructionsForToolFollowUp
       )) as AsyncIterable<OpenAI.Responses.StreamEvent>
 
       await processStreamAfterTool(continuedStream, afterToolPlaceholderTempId)
@@ -552,6 +616,52 @@ export const useConversationStore = defineStore('conversation', () => {
       ) {
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       }
+      const finalAssistantMessage = generalStore.chatHistory.find(
+        m => m.local_id_temp === placeholderTempId && m.role === 'assistant'
+      )
+      if (finalAssistantMessage) {
+        try {
+          let assistantTextForIndexing = ''
+          if (typeof finalAssistantMessage.content === 'string') {
+            assistantTextForIndexing = finalAssistantMessage.content
+          } else if (Array.isArray(finalAssistantMessage.content)) {
+            const textPart = finalAssistantMessage.content.find(
+              p => p.type === 'app_text'
+            )
+            if (textPart && textPart.text) {
+              assistantTextForIndexing = textPart.text
+            }
+          }
+
+          if (assistantTextForIndexing) {
+            const conversationIdForThought =
+              currentResponseId.value ||
+              placeholderTempId ||
+              'default_conversation'
+            console.log(
+              `[openAIStore processStream] Indexing assistant message: "${assistantTextForIndexing.substring(0, 50)}"`
+            )
+            await indexMessageForThoughts(
+              conversationIdForThought,
+              'assistant',
+              { content: finalAssistantMessage.content }
+            )
+          } else {
+            console.warn(
+              '[openAIStore processStream] No text content found in assistant message to index.'
+            )
+          }
+        } catch (e) {
+          console.error(
+            '[openAIStore processStream] Error calling indexMessageForThoughts for assistant message:',
+            e
+          )
+        }
+      } else {
+        console.warn(
+          `[openAIStore processStream] Could not find final assistant message with tempId ${placeholderTempId} to index.`
+        )
+      }
     }
   }
 
@@ -626,6 +736,72 @@ export const useConversationStore = defineStore('conversation', () => {
       return
     }
 
+    let finalInstructions = settingsStore.config.assistantSystemPrompt || ''
+    let currentUserInputTextForThoughts = ''
+
+    const latestMessageInHistory = generalStore.chatHistory[0]
+    if (latestMessageInHistory && latestMessageInHistory.role === 'user') {
+      if (typeof latestMessageInHistory.content === 'string') {
+        currentUserInputTextForThoughts = latestMessageInHistory.content
+      } else if (Array.isArray(latestMessageInHistory.content)) {
+        const textPart = latestMessageInHistory.content.find(
+          part => part.type === 'app_text'
+        )
+        if (textPart && textPart.text) {
+          currentUserInputTextForThoughts = textPart.text
+        }
+      }
+    } else {
+      console.warn(
+        '[openAIStore chat] Last message not from user, or no text found for thoughts query.'
+      )
+    }
+
+    if (currentUserInputTextForThoughts) {
+      try {
+        console.log(
+          '[openAIStore chat] Retrieving thoughts for input:',
+          currentUserInputTextForThoughts
+        )
+        const relevantThoughtsArray = await retrieveRelevantThoughtsForPrompt(
+          currentUserInputTextForThoughts
+        )
+        console.log(
+          '[openAIStore chat] Retrieved thoughts:',
+          relevantThoughtsArray
+        )
+
+        let thoughtsBlock =
+          'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
+        if (relevantThoughtsArray && relevantThoughtsArray.length > 0) {
+          thoughtsBlock += relevantThoughtsArray.map(t => `- ${t}`).join('\n')
+        } else {
+          thoughtsBlock += 'No relevant thoughts...'
+        }
+        finalInstructions =
+          thoughtsBlock +
+          '\n\n---\n\n' +
+          (settingsStore.config.assistantSystemPrompt || '')
+      } catch (error) {
+        console.error(
+          '[openAIStore chat] Error retrieving or formatting thoughts:',
+          error
+        )
+        finalInstructions = settingsStore.config.assistantSystemPrompt || ''
+      }
+    } else {
+      console.log(
+        '[openAIStore chat] No specific user input for thoughts, adding default thoughts block.'
+      )
+      let thoughtsBlock =
+        'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
+      thoughtsBlock += 'No relevant thoughts...'
+      finalInstructions =
+        thoughtsBlock +
+        '\n\n---\n\n' +
+        (settingsStore.config.assistantSystemPrompt || '')
+    }
+
     const assistantMessagePlaceholder: ChatMessage = {
       role: 'assistant',
       content: [{ type: 'app_text', text: '' }],
@@ -638,7 +814,8 @@ export const useConversationStore = defineStore('conversation', () => {
       const streamResult = await createOpenAIResponse(
         constructedApiInput,
         currentResponseId.value,
-        true
+        true,
+        finalInstructions
       )
       await processStream(
         streamResult as AsyncIterable<OpenAI.Responses.StreamEvent>,
@@ -745,11 +922,11 @@ export const useConversationStore = defineStore('conversation', () => {
       const modelsPage = await openai.models.list()
       availableModels.value = modelsPage.data
         .filter(
-          model => model.id.startsWith('gpt-')
-          // model.id.startsWith('gpt-') || //not yet ready for thinking models
-          // model.id.startsWith('o1-') ||
-          // model.id.startsWith('o3-') ||
-          // model.id.startsWith('o4-')
+          model =>
+            model.id.startsWith('gpt-')
+            // model.id.startsWith('o1-') || //not yet ready for thinking models
+            // model.id.startsWith('o3-') ||
+            // model.id.startsWith('o4-')
         )
         .sort((a, b) => a.id.localeCompare(b.id))
     } catch (error: any) {

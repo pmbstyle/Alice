@@ -174,20 +174,35 @@ function insertThoughtMetadata(
   embedding: number[]
 ) {
   if (!db) throw new Error('Database not initialized for inserting metadata.')
-  const stmt = db.prepare(`
-    INSERT INTO thoughts (hnsw_label, thought_id, conversation_id, role, text_content, created_at, embedding)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `)
-  const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer)
-  stmt.run(
-    label,
-    thoughtId,
-    conversationId,
-    role,
-    textContent,
-    createdAt,
-    embeddingBuffer
-  )
+  try {
+    const stmt = db.prepare(`
+      INSERT INTO thoughts (hnsw_label, thought_id, conversation_id, role, text_content, created_at, embedding)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `)
+    const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer)
+    const info = stmt.run(
+      label,
+      thoughtId,
+      conversationId,
+      role,
+      textContent,
+      createdAt,
+      embeddingBuffer
+    )
+    console.log(
+      '[insertThoughtMetadata] SQLite insert successful. Changes:',
+      info.changes
+    )
+    if (info.changes === 0) {
+      console.warn(
+        '[insertThoughtMetadata] SQLite insert reported 0 changes. ID might exist or other issue.',
+        { label, thoughtId }
+      )
+    }
+  } catch (dbError) {
+    console.error('[insertThoughtMetadata] SQLite insert FAILED:', dbError)
+    throw dbError
+  }
 }
 
 function getThoughtMetadataByLabels(labels: number[]): ThoughtMetadata[] {
@@ -362,6 +377,11 @@ export async function addThoughtVector(
   textContent: string,
   embedding: number[]
 ): Promise<void> {
+  console.log('[addThoughtVector] Attempting to add thought:', {
+    conversationId,
+    role,
+    textPreview: textContent.substring(0, 50),
+  })
   if (!isStoreInitialized || !hnswIndex || !db) {
     console.error('[ThoughtVectorStore ADD] Store not initialized properly.')
     await initializeThoughtVectorStore()

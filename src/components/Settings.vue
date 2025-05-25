@@ -273,6 +273,51 @@
       </fieldset>
 
       <fieldset
+        class="fieldset bg-gray-900/90 border-cyan-500/50 rounded-box w-full border p-4"
+      >
+        <legend class="fieldset-legend">
+          Remote MCP Servers
+          <a href="#" target="_blank" class="ml-2">
+            <span class="badge badge-sm badge-soft whitespace-nowrap">
+              MCP Info
+              <img :src="newTabIcon" class="size-3 inline-block ml-1" />
+            </span>
+          </a>
+        </legend>
+        <div class="p-2 space-y-4">
+          <div>
+            <label for="mcp-servers-config" class="block mb-1 text-sm">
+              MCP Servers JSON Configuration (Array)
+            </label>
+            <textarea
+              id="mcp-servers-config"
+              v-model="currentSettings.mcpServersConfig"
+              rows="10"
+              class="textarea textarea-bordered w-full focus:textarea-primary h-60 bg-gray-800"
+              placeholder='[
+                {
+                  "type": "mcp",
+                  "server_label": "deepwiki_example",
+                  "server_url": "https://mcp.deepwiki.com/mcp",
+                  "require_approval": "never",
+                  "allowed_tools": ["ask_question"],
+                  "headers": {
+                    "X-Custom-Header": "example_value"
+                  }
+                }
+              ]'
+            ></textarea>
+            <p class="text-xs text-gray-400 mt-1">
+              Enter a JSON array of MCP server configurations. Each object
+              should follow the OpenAI MCP tool format. Refer to MCP
+              documentation for details on fields like server_label, server_url,
+              require_approval, allowed_tools, and headers.
+            </p>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset
         class="fieldset bg-gray-900/90 border-gray-600/50 rounded-box w-full border p-4"
       >
         <legend class="fieldset-legend">
@@ -468,14 +513,14 @@ const availableToolsForSelect = computed(() => {
 const availableModelsForSelect = computed(() => {
   return availableModels.value.filter(
     model =>
-      model.id.startsWith('gpt-') ||
-      model.id.startsWith('o1-') ||
-      model.id.startsWith('o3-') ||
-      model.id.startsWith('o4-')
+      model.id.startsWith('gpt-')
+      // model.id.startsWith('o1-') || //thinking handling is not available yet
+      // model.id.startsWith('o3-') ||
+      // model.id.startsWith('o4-')
   )
 })
 
-const toolDependencies: Record<string, (keyof AliceSettings)[]> = {
+const toolDependencies: Record<string, string[]> = {
   search_torrents: ['VITE_JACKETT_API_KEY', 'VITE_JACKETT_URL'],
   add_torrent_to_qb: ['VITE_QB_URL', 'VITE_QB_USERNAME', 'VITE_QB_PASSWORD'],
   get_calendar_events: ['GOOGLE_AUTH'],
@@ -486,7 +531,6 @@ const toolDependencies: Record<string, (keyof AliceSettings)[]> = {
   search_emails: ['GOOGLE_AUTH'],
   get_email_content: ['GOOGLE_AUTH'],
 }
-
 function betterToolName(name: string): string {
   const nameMap: Record<string, string> = {
     get_current_datetime: 'Current Date & Time',
@@ -660,6 +704,36 @@ watch(
 )
 
 const handleSaveAndTestSettings = async () => {
+  if (
+    currentSettings.value.mcpServersConfig &&
+    currentSettings.value.mcpServersConfig.trim() !== '' &&
+    currentSettings.value.mcpServersConfig.trim() !== '[]'
+  ) {
+    try {
+      const parsedMcpConfig = JSON.parse(currentSettings.value.mcpServersConfig)
+      if (!Array.isArray(parsedMcpConfig)) {
+        settingsStore.error =
+          'MCP Servers Configuration must be a valid JSON array.'
+        settingsStore.successMessage = null
+        settingsStore.isSaving = false
+        return
+      }
+    } catch (e) {
+      settingsStore.error =
+        'MCP Servers Configuration is not valid JSON. Please check for errors like trailing commas or unquoted keys.'
+      settingsStore.successMessage = null
+      settingsStore.isSaving = false
+      return
+    }
+  }
+
+  if (
+    settingsStore.error &&
+    settingsStore.error.startsWith('MCP Servers Configuration')
+  ) {
+    settingsStore.error = null
+  }
+
   await settingsStore.saveAndTestSettings()
 }
 </script>

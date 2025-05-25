@@ -12,6 +12,7 @@ export interface AliceSettings {
   assistantTemperature: number
   assistantTopP: number
   assistantTools: string[]
+  mcpServersConfig?: string
 
   VITE_JACKETT_API_KEY: string
   VITE_JACKETT_URL: string
@@ -29,6 +30,7 @@ const defaultSettings: AliceSettings = {
   assistantTemperature: 0.7,
   assistantTopP: 1.0,
   assistantTools: ['get_current_datetime', 'perform_web_search'],
+  mcpServersConfig: '[]',
 
   VITE_JACKETT_API_KEY: '',
   VITE_JACKETT_URL: '',

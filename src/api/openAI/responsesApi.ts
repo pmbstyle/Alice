@@ -20,6 +20,18 @@ interface OpenAIResponsesApiWebSearchPreviewTool {
   type: 'web_search_preview'
 }
 
+interface MCPToolConfig {
+  type: 'mcp'
+  server_label: string
+  server_url: string
+  require_approval?:
+    | 'never'
+    | 'always'
+    | { never?: { tool_names?: string[] }; always?: { tool_names?: string[] } }
+  allowed_tools?: string[]
+  headers?: Record<string, string>
+}
+
 type OpenAIResponsesApiTool =
   | OpenAIResponsesApiFunctionTool
   | OpenAIResponsesApiImageTool
@@ -53,20 +65,45 @@ export const createOpenAIResponse = async (
       const toolDefinition = PREDEFINED_OPENAI_TOOLS.find(
         (tool: ApiRequestBodyFunctionTool) => tool.name === toolNameFromSettings
       )
-
       if (toolDefinition) {
-        const { name, description, parameters } = toolDefinition
         finalToolsForApi.push({
           type: 'function',
-          name,
-          description,
-          parameters,
+          name: toolDefinition.name,
+          description: toolDefinition.description,
+          parameters: toolDefinition.parameters,
         } as OpenAIResponsesApiFunctionTool)
       } else {
         console.warn(
           `Tool definition for '${toolNameFromSettings}' not found in PREDEFINED_OPENAI_TOOLS.`
         )
       }
+    }
+  }
+
+  if (
+    settings.mcpServersConfig &&
+    settings.mcpServersConfig.trim() !== '[]' &&
+    settings.mcpServersConfig.trim() !== ''
+  ) {
+    try {
+      const mcpServerDefinitions = JSON.parse(settings.mcpServersConfig)
+      if (Array.isArray(mcpServerDefinitions)) {
+        mcpServerDefinitions.forEach(mcpTool => {
+          if (
+            mcpTool.type === 'mcp' &&
+            mcpTool.server_label &&
+            mcpTool.server_url
+          ) {
+            finalToolsForApi.push(mcpTool as any)
+          } else {
+            console.warn('Invalid MCP tool definition skipped:', mcpTool)
+          }
+        })
+      } else {
+        console.warn('MCP servers config is not an array, skipping.')
+      }
+    } catch (e) {
+      console.error('Failed to parse MCP servers config JSON:', e)
     }
   }
 
@@ -93,7 +130,8 @@ export const createOpenAIResponse = async (
     store: true,
     truncation: 'auto',
   }
-  //console.log('[REQUEST PARAMS]', JSON.stringify(params, null, 2))
+
+  //console.log('[REQUEST PARAMS]', JSON.stringify(params, null, 2)) // dev debugging
 
   if (stream) {
     return openai.responses.create(params as any)

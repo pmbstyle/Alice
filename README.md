@@ -44,17 +44,12 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   - Current date and time awareness
 
   Computer and software use:
+  - MCP support
   - Image generation
   - Open applications
   - Open URLs
   - Read/write clipboard content
   - Add torrents to the download client
-
-![image](https://github.com/user-attachments/assets/3468f115-e129-4885-87c2-fae68a8d0748)
-
-![image](https://github.com/user-attachments/assets/fe5e1da2-96b1-4cc8-b79a-6a0228907295)
-
-![image](https://github.com/user-attachments/assets/400c202e-67ed-477a-a51e-8132272d2d9a)
 
 ## Download
 

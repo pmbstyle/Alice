@@ -37,26 +37,24 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
 - ⚙️ **Function calling**
   
   Data retrieval:
-   - Web search
-   - Website content extraction
-   - Google calendar integration
-   - Gmail integration
-   - Torrent search
-   - Weather checking
-   - Current date and time awareness
+  - Web search
+  - Google calendar integration
+  - Gmail integration
+  - Torrent search
+  - Current date and time awareness
 
   Computer and software use:
-   - Open applications
-   - Open URLs
-   - Read/write clipboard content
-   - Add torrents to the download client
+  - Image generation
+  - Open applications
+  - Open URLs
+  - Read/write clipboard content
+  - Add torrents to the download client
 
 ![image](https://github.com/user-attachments/assets/3468f115-e129-4885-87c2-fae68a8d0748)
 
 ![image](https://github.com/user-attachments/assets/fe5e1da2-96b1-4cc8-b79a-6a0228907295)
 
 ![image](https://github.com/user-attachments/assets/400c202e-67ed-477a-a51e-8132272d2d9a)
-
 
 ## Download
 
@@ -65,8 +63,6 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
 [![download_btn](https://github.com/user-attachments/assets/3790ee40-2bb5-4d5c-abb8-ed9f8d37a228)](https://github.com/pmbstyle/Alice/releases/latest)
 
 Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupInstructions.md) to create all needed API references and set up your assistant.
-
-
 
 ## Technologies Used
 
@@ -80,7 +76,7 @@ Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupI
 - [Kling 1.6 Pro (fal.ai)](https://fal.ai/) (Image-to-video animation: Alice's animated states)
 
 Tools:
-- [TavilyAI](https://tavily.com) (Web search and crawler)
+
 - [Jackett](https://github.com/Jackett/Jackett) (Torrent search aggregation)
 - [qBittorrent](https://www.qbittorrent.org/) (Torrent client for downloads)
 
@@ -94,8 +90,21 @@ Tools:
    **Note: You can use the example `.env.example` file as a reference.**
 4. Run the development server:  
    `npm run dev`
-   
-## Build for production
+
+## Local build for production
+
+1. Create `app-config.json` file in the root directory with the following content to use Google integration (optional):
+
+```json
+
+{
+  "VITE_GOOGLE_CLIENT_ID": "",
+  "VITE_GOOGLE_CLIENT_SECRET": ""
+}
+
+```
+
 1. Build the Electron app:  
    `npm run build`
-2. Install the app from the `release` folder.
+
+1. Install the app from the `release` folder.

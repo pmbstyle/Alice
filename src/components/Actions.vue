@@ -122,14 +122,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  computed,
-  defineProps,
-  nextTick,
-  ref,
-  watch,
-  onMounted,
-} from 'vue'
+import { computed, defineProps, nextTick, ref, watch, onMounted } from 'vue'
 import { useGeneralStore, AudioState } from '../stores/generalStore'
 import { storeToRefs } from 'pinia'
 import {

@@ -112,12 +112,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
+import { embedTextForThoughts } from '../api/openAI/assistant'
+import { useSettingsStore } from '../stores/settingsStore'
 
 interface Memory {
   id: string
   content: string
   memoryType: string
   createdAt: string
+  embedding?: number[]
 }
 
 const memories = ref<Memory[]>([])
@@ -125,12 +128,14 @@ const isLoading = ref(false)
 const isSaving = ref(false)
 const listError = ref<string | null>(null)
 const formError = ref<string | null>(null)
+const settingsStore = useSettingsStore()
 
 const form = reactive({
   content: '',
   memoryType: 'general',
 })
 const editingMemoryId = ref<string | null>(null)
+const originalContentForEdit = ref<string>('')
 
 async function fetchMemories() {
   isLoading.value = true
@@ -138,7 +143,9 @@ async function fetchMemories() {
   try {
     const result = await window.ipcRenderer.invoke('memory:get', { limit: 200 })
     if (result.success) {
-      memories.value = result.data
+      memories.value = result.data.map((mem: any) => ({
+        ...mem,
+      }))
     } else {
       listError.value = result.error || 'Failed to fetch memories.'
     }
@@ -154,13 +161,54 @@ async function handleSaveMemory() {
     formError.value = 'Memory content cannot be empty.'
     return
   }
+  if (!settingsStore.config.VITE_OPENAI_API_KEY) {
+    formError.value =
+      'OpenAI API Key is not configured. Cannot generate embeddings for memory.'
+    isSaving.value = false
+    return
+  }
   isSaving.value = true
   formError.value = null
   try {
+    let generatedEmbedding: number[] | undefined = undefined
+    let shouldGenerateEmbedding = false
+
+    if (editingMemoryId.value) {
+      if (form.content !== originalContentForEdit.value) {
+        shouldGenerateEmbedding = true
+      }
+    } else {
+      shouldGenerateEmbedding = true
+    }
+
+    if (shouldGenerateEmbedding) {
+      try {
+        generatedEmbedding = await embedTextForThoughts(form.content)
+        if (generatedEmbedding.length === 0) {
+          console.warn(
+            '[MemoryManager UI] Generated empty embedding for content:',
+            form.content
+          )
+          generatedEmbedding = undefined
+        }
+      } catch (embedError: any) {
+        console.error(
+          '[MemoryManager UI] Error generating embedding:',
+          embedError
+        )
+        formError.value = `Error generating embedding: ${embedError.message}. Memory will be saved without it.`
+        generatedEmbedding = undefined
+      }
+    }
+
     let result
-    const memoryData = {
+    const memoryData: any = {
       content: form.content,
       memoryType: form.memoryType.trim() || 'general',
+    }
+
+    if (generatedEmbedding) {
+      memoryData.embedding = generatedEmbedding
     }
 
     if (editingMemoryId.value) {
@@ -188,8 +236,14 @@ async function handleSaveMemory() {
 function startEdit(memory: Memory) {
   editingMemoryId.value = memory.id
   form.content = memory.content
+  originalContentForEdit.value = memory.content
   form.memoryType = memory.memoryType
-  window.scrollTo(0, 0)
+  formError.value = null
+  const memoryWrapper = document.querySelector('.memory-manager')
+  memoryWrapper?.scrollTo({
+    top: 0,
+    behavior: 'smooth',
+  })
 }
 
 function cancelEdit() {
@@ -199,6 +253,7 @@ function cancelEdit() {
 function resetForm() {
   editingMemoryId.value = null
   form.content = ''
+  originalContentForEdit.value = ''
   form.memoryType = 'general'
   formError.value = null
 }
@@ -206,6 +261,7 @@ function resetForm() {
 async function confirmDeleteMemory(id: string) {
   if (confirm('Are you sure you want to delete this memory?')) {
     isLoading.value = true
+    listError.value = null
     try {
       const result = await window.ipcRenderer.invoke('memory:delete', { id })
       if (result.success) {
@@ -228,6 +284,7 @@ async function confirmDeleteAllMemories() {
     )
   ) {
     isLoading.value = true
+    listError.value = null
     try {
       const result = await window.ipcRenderer.invoke('memory:delete-all')
       if (result.success) {

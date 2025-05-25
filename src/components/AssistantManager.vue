@@ -301,8 +301,6 @@ const isSavingSelection = ref(false)
 const formError = ref<string | null>(null)
 
 const toolDependencies: Record<string, (keyof AliceSettings)[]> = {
-  perform_web_search: ['VITE_TAVILY_API_KEY'],
-  get_weather_forecast: ['VITE_OPENWEATHERMAP_API_KEY'],
   search_torrents: ['VITE_JACKETT_API_KEY', 'VITE_JACKETT_URL'],
   add_torrent_to_qb: ['VITE_QB_URL', 'VITE_QB_USERNAME', 'VITE_QB_PASSWORD'],
 }
@@ -317,9 +315,6 @@ const defaultFormStateValues = () => ({
 
 function betterToolName(name: string): string {
   const nameMap: Record<string, string> = {
-    perform_web_search: 'Web Search',
-    get_website_context: 'Read Website Content',
-    get_weather_forecast: 'Weather Forecast',
     get_current_datetime: 'Current Date & Time',
     open_path: 'Open Apps and URLs',
     manage_clipboard: 'Read/Write Clipboard',

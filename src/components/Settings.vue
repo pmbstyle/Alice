@@ -1,94 +1,194 @@
 <template>
   <div class="settings-panel p-4 h-full overflow-y-auto text-white">
     <h2 class="text-2xl font-semibold mb-6 text-center">
-      {{
-        showAssistantManager
-          ? 'Assistant Configuration'
-          : 'Application Settings'
-      }}
+      Application Settings
     </h2>
 
     <div
       v-if="settingsStore.isLoading && !settingsStore.initialLoadAttempted"
-      class="text-center"
+      class="text-center p-4"
     >
-      Loading settings...
+      <span class="loading loading-lg loading-spinner text-primary my-4"></span>
+      <p>Loading settings...</p>
     </div>
-
-    <AssistantManager
-      v-if="showAssistantManager"
-      @backToMainSettings="showAssistantManager = false"
-    />
 
     <form @submit.prevent="handleSaveAndTestSettings" v-else class="space-y-8">
       <fieldset
         class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
       >
-        <legend class="fieldset-legend">
-          OpenAI (Core API)
-          <a href="https://platform.openai.com" target="_blank" class="ml-2">
-            <span class="badge badge-sm badge-soft whitespace-nowrap">
-              Get Keys
-              <img :src="newTabIcon" class="size-3 inline-block ml-1" />
-            </span>
-          </a>
-        </legend>
+        <legend class="fieldset-legend">Core API Keys</legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
           <div>
-            <label for="openai-key" class="block mb-1 text-sm">API Key *</label>
+            <label for="openai-key" class="block mb-1 text-sm"
+              >OpenAI API Key *</label
+            >
             <input
               id="openai-key"
               type="password"
               v-model="currentSettings.VITE_OPENAI_API_KEY"
               class="input focus:outline-none w-full"
               autocomplete="new-password"
+              placeholder="sk-..."
             />
           </div>
           <div>
-            <label for="openai-org" class="block mb-1 text-sm"
-              >Organization ID (Optional)</label
+            <label for="groq-key" class="block mb-1 text-sm"
+              >Groq API Key (STT) *</label
             >
             <input
-              id="openai-org"
-              type="text"
-              v-model="currentSettings.VITE_OPENAI_ORGANIZATION"
+              id="groq-key"
+              type="password"
+              v-model="currentSettings.VITE_GROQ_API_KEY"
               class="input focus:outline-none w-full"
-            />
-          </div>
-          <div class="md:col-span-2">
-            <label for="openai-project" class="block mb-1 text-sm"
-              >Project ID (Optional)</label
-            >
-            <input
-              id="openai-project"
-              type="text"
-              v-model="currentSettings.VITE_OPENAI_PROJECT"
-              class="input focus:outline-none w-full"
+              autocomplete="new-password"
+              placeholder="gsk_..."
             />
           </div>
         </div>
       </fieldset>
 
       <fieldset
-        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+        class="fieldset bg-gray-900/90 border-green-500/50 rounded-box w-full border p-4"
       >
-        <legend class="fieldset-legend">
-          Groq (Speech-to-Text)
-          <a href="https://console.groq.com/" target="_blank" class="ml-2">
-            <span class="badge badge-sm badge-soft whitespace-nowrap">
-              Get Key <img :src="newTabIcon" class="size-3 inline-block ml-1" />
-            </span>
-          </a>
-        </legend>
-        <div class="p-2">
-          <label for="groq-key" class="block mb-1 text-sm">API Key *</label>
-          <input
-            id="groq-key"
-            type="password"
-            v-model="currentSettings.VITE_GROQ_API_KEY"
-            class="input focus:outline-none w-full"
-            autocomplete="new-password"
-          />
+        <legend class="fieldset-legend">Alice Assistant Configuration</legend>
+        <div class="space-y-4 p-2">
+          <div>
+            <label for="assistant-model" class="block mb-1 text-sm"
+              >Model *</label
+            >
+            <select
+              id="assistant-model"
+              v-model="currentSettings.assistantModel"
+              class="select select-bordered w-full focus:select-primary"
+              required
+            >
+              <option disabled value="">Select a model</option>
+              <option
+                v-if="
+                  conversationStore.availableModels.length === 0 &&
+                  settingsStore.coreOpenAISettingsValid
+                "
+                value=""
+              >
+                Loading models... (or ensure OpenAI key is valid)
+              </option>
+              <option
+                v-for="model in availableModelsForSelect"
+                :key="model.id"
+                :value="model.id"
+              >
+                {{ model.id }}
+              </option>
+            </select>
+            <p
+              v-if="
+                !settingsStore.coreOpenAISettingsValid &&
+                currentSettings.VITE_OPENAI_API_KEY
+              "
+              class="text-xs text-warning mt-1"
+            >
+              OpenAI API key needs to be validated (Save & Test) to load models.
+            </p>
+          </div>
+
+          <div>
+            <label for="assistant-system-prompt" class="block mb-1 text-sm"
+              >System Prompt</label
+            >
+            <textarea
+              id="assistant-system-prompt"
+              v-model="currentSettings.assistantSystemPrompt"
+              rows="8"
+              class="textarea textarea-bordered w-full focus:textarea-primary h-48"
+              placeholder="You are a helpful AI assistant..."
+            ></textarea>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="assistant-temperature" class="block mb-1 text-sm">
+                Temperature ({{
+                  currentSettings.assistantTemperature.toFixed(1)
+                }})
+              </label>
+              <input
+                id="assistant-temperature"
+                type="range"
+                min="0"
+                max="2"
+                step="0.1"
+                v-model.number="currentSettings.assistantTemperature"
+                class="range range-primary"
+              />
+            </div>
+            <div>
+              <label for="assistant-top-p" class="block mb-1 text-sm">
+                Top P ({{ currentSettings.assistantTopP.toFixed(1) }})
+              </label>
+              <input
+                id="assistant-top-p"
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                v-model.number="currentSettings.assistantTopP"
+                class="range range-secondary"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label class="block mb-2 text-sm font-medium">Enabled Tools</label>
+            <div
+              class="space-y-2 p-3 border border-neutral-content/20 rounded-md max-h-60 overflow-y-auto bg-gray-800/50"
+            >
+              <div
+                v-if="availableToolsForSelect.length === 0"
+                class="text-xs text-gray-400"
+              >
+                No tools defined.
+              </div>
+              <div
+                v-for="tool in availableToolsForSelect"
+                :key="tool.name"
+                class="form-control"
+              >
+                <label
+                  class="label cursor-pointer py-1 justify-start gap-3"
+                  :class="{
+                    'opacity-50 cursor-not-allowed': !isToolConfigured(
+                      tool.name
+                    ),
+                  }"
+                >
+                  <input
+                    type="checkbox"
+                    :value="tool.name"
+                    v-model="currentSettings.assistantTools"
+                    class="checkbox checkbox-accent checkbox-sm"
+                    :disabled="!isToolConfigured(tool.name)"
+                  />
+                  <span
+                    class="label-text"
+                    :title="
+                      tool.description +
+                      (!isToolConfigured(tool.name)
+                        ? ' (API key for this tool not configured in Optional Tool APIs section)'
+                        : '')
+                    "
+                  >
+                    {{ tool.displayName }}
+                    <span
+                      v-if="!isToolConfigured(tool.name)"
+                      class="text-xs text-warning normal-case"
+                    >
+                      (Needs config below)
+                    </span>
+                  </span>
+                </label>
+              </div>
+            </div>
+          </div>
         </div>
       </fieldset>
 
@@ -105,7 +205,7 @@
           >
             <button
               type="button"
-              @click="connectGoogleCalendar"
+              @click="connectGoogleServices"
               class="btn btn-info btn-active"
               :disabled="googleAuthStatus.isLoading"
             >
@@ -129,11 +229,7 @@
             <span class="loading loading-dots loading-md"></span>
           </div>
           <div v-if="googleAuthStatus.isAuthenticated">
-            <div
-              role="alert"
-              class="alert alert-success mb-4"
-              v-if="googleAuthStatus.isAuthenticated"
-            >
+            <div role="alert" class="alert alert-success mb-4">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
                 class="h-6 w-6 shrink-0 stroke-current"
@@ -147,11 +243,11 @@
                   d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <span>Successfully connected to Google Services</span>
+              <span>Successfully connected to Google Services.</span>
             </div>
             <button
               type="button"
-              @click="disconnectGoogleCalendar"
+              @click="disconnectGoogleServices"
               class="btn btn-warning btn-outline"
             >
               Disconnect from Google Services
@@ -177,10 +273,55 @@
       </fieldset>
 
       <fieldset
-        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+        class="fieldset bg-gray-900/90 border-cyan-500/50 rounded-box w-full border p-4"
       >
         <legend class="fieldset-legend">
-          Tool APIs (Optional)
+          Remote MCP Servers
+          <a href="#" target="_blank" class="ml-2">
+            <span class="badge badge-sm badge-soft whitespace-nowrap">
+              MCP Info
+              <img :src="newTabIcon" class="size-3 inline-block ml-1" />
+            </span>
+          </a>
+        </legend>
+        <div class="p-2 space-y-4">
+          <div>
+            <label for="mcp-servers-config" class="block mb-1 text-sm">
+              MCP Servers JSON Configuration (Array)
+            </label>
+            <textarea
+              id="mcp-servers-config"
+              v-model="currentSettings.mcpServersConfig"
+              rows="10"
+              class="textarea textarea-bordered w-full focus:textarea-primary h-60 bg-gray-800"
+              placeholder='[
+                {
+                  "type": "mcp",
+                  "server_label": "deepwiki_example",
+                  "server_url": "https://mcp.deepwiki.com/mcp",
+                  "require_approval": "never",
+                  "allowed_tools": ["ask_question"],
+                  "headers": {
+                    "X-Custom-Header": "example_value"
+                  }
+                }
+              ]'
+            ></textarea>
+            <p class="text-xs text-gray-400 mt-1">
+              Enter a JSON array of MCP server configurations. Each object
+              should follow the OpenAI MCP tool format. Refer to MCP
+              documentation for details on fields like server_label, server_url,
+              require_approval, allowed_tools, and headers.
+            </p>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset
+        class="fieldset bg-gray-900/90 border-gray-600/50 rounded-box w-full border p-4"
+      >
+        <legend class="fieldset-legend">
+          Optional Tool APIs
           <a
             href="https://github.com/pmbstyle/Alice/blob/main/docs/toolsInstructions.md"
             target="_blank"
@@ -192,30 +333,6 @@
           </a>
         </legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
-          <div>
-            <label for="tavily-key" class="block mb-1 text-sm"
-              >Tavily API Key (Web Search)</label
-            >
-            <input
-              id="tavily-key"
-              type="password"
-              v-model="currentSettings.VITE_TAVILY_API_KEY"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-            />
-          </div>
-          <div>
-            <label for="openweather-key" class="block mb-1 text-sm"
-              >OpenWeatherMap API Key</label
-            >
-            <input
-              id="openweather-key"
-              type="password"
-              v-model="currentSettings.VITE_OPENWEATHERMAP_API_KEY"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-            />
-          </div>
           <div>
             <label for="jackett-url" class="block mb-1 text-sm"
               >Jackett URL (Torrent Search)</label
@@ -276,30 +393,21 @@
         </div>
       </fieldset>
 
-      <div class="mt-8 flex justify-center gap-4">
+      <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
         <button
           type="submit"
           :disabled="settingsStore.isSaving"
-          class="btn btn-primary btn-active w-full md:w-auto"
+          class="btn btn-primary btn-active w-full sm:w-auto"
         >
           <span
             v-if="settingsStore.isSaving"
-            class="loading loading-spinner"
+            class="loading loading-spinner loading-sm"
           ></span>
           {{
             settingsStore.isSaving
               ? 'Saving & Testing...'
-              : 'Save & Test Core Settings'
+              : 'Save & Test Settings'
           }}
-        </button>
-
-        <button
-          v-if="settingsStore.coreOpenAISettingsValid"
-          type="button"
-          @click="showAssistantManager = true"
-          class="btn btn-accent btn-active w-full md:w-auto ml-0 md:ml-2"
-        >
-          Manage Assistants →
         </button>
       </div>
 
@@ -323,7 +431,6 @@
         </svg>
         <span>{{ settingsStore.error }}</span>
       </div>
-
       <div
         role="alert"
         class="alert alert-success mt-4"
@@ -344,6 +451,7 @@
         </svg>
         <span>{{ settingsStore.successMessage }}</span>
       </div>
+
       <p class="text-xs text-gray-400 mt-4 text-center">
         * Essential for core functionality. Other API keys are optional based on
         desired tools.
@@ -360,27 +468,29 @@
             target="_blank"
             class="link link-hover"
             >pmbstyle</a
-          ></span
-        >
+          >
+        </span>
       </div>
     </form>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted, reactive } from 'vue'
+import { ref, watch, onMounted, onUnmounted, reactive, computed } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useSettingsStore, type AliceSettings } from '../stores/settingsStore'
+import { useConversationStore } from '../stores/openAIStore'
 import { newTabIcon, heartIcon } from '../utils/assetsImport'
-import { useGeneralStore } from '../stores/generalStore'
-import AssistantManager from './AssistantManager.vue'
+import { PREDEFINED_OPENAI_TOOLS } from '../utils/assistantTools'
+
 const appVersion = ref(import.meta.env.VITE_APP_VERSION || '')
 const settingsStore = useSettingsStore()
-const generalStore = useGeneralStore()
+const conversationStore = useConversationStore()
 
-const currentSettings = ref<AliceSettings>({ ...settingsStore.settings })
-const showAssistantManager = ref(false)
+const currentSettings = ref<AliceSettings>({ ...settingsStore.config })
 
-const googleAuthCode = ref('')
+const { availableModels } = storeToRefs(conversationStore)
+
 const googleAuthStatus = reactive({
   isAuthenticated: false,
   authInProgress: false,
@@ -389,6 +499,75 @@ const googleAuthStatus = reactive({
   message: null as string | null,
 })
 
+const availableToolsForSelect = computed(() => {
+  return PREDEFINED_OPENAI_TOOLS.map(tool => {
+    const functionDef = (tool as any).function || tool
+    return {
+      name: functionDef.name,
+      description: functionDef.description || 'No description available.',
+      displayName: betterToolName(functionDef.name),
+    }
+  }).filter(tool => tool.name)
+})
+
+const availableModelsForSelect = computed(() => {
+  return availableModels.value.filter(
+    model =>
+      model.id.startsWith('gpt-')
+      // model.id.startsWith('o1-') || //thinking handling is not available yet
+      // model.id.startsWith('o3-') ||
+      // model.id.startsWith('o4-')
+  )
+})
+
+const toolDependencies: Record<string, string[]> = {
+  search_torrents: ['VITE_JACKETT_API_KEY', 'VITE_JACKETT_URL'],
+  add_torrent_to_qb: ['VITE_QB_URL', 'VITE_QB_USERNAME', 'VITE_QB_PASSWORD'],
+  get_calendar_events: ['GOOGLE_AUTH'],
+  create_calendar_event: ['GOOGLE_AUTH'],
+  update_calendar_event: ['GOOGLE_AUTH'],
+  delete_calendar_event: ['GOOGLE_AUTH'],
+  get_unread_emails: ['GOOGLE_AUTH'],
+  search_emails: ['GOOGLE_AUTH'],
+  get_email_content: ['GOOGLE_AUTH'],
+}
+function betterToolName(name: string): string {
+  const nameMap: Record<string, string> = {
+    get_current_datetime: 'Current Date & Time',
+    open_path: 'Open Apps/URLs',
+    manage_clipboard: 'Clipboard Read/Write',
+    search_torrents: 'Torrent Search',
+    add_torrent_to_qb: 'Add Torrent to QB',
+    save_memory: 'Save Memory',
+    delete_memory: 'Delete Memory',
+    recall_memories: 'Recall Memories',
+    get_calendar_events: 'Get Calendar Events',
+    create_calendar_event: 'Create Calendar Event',
+    update_calendar_event: 'Update Calendar Event',
+    delete_calendar_event: 'Delete Calendar Event',
+    get_unread_emails: 'Get Unread Emails',
+    search_emails: 'Search Emails',
+    get_email_content: 'Get Email Content',
+  }
+  return (
+    nameMap[name] ||
+    name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+  )
+}
+
+function isToolConfigured(toolName: string): boolean {
+  const currentLocalSettings = currentSettings.value
+  const deps = toolDependencies[toolName]
+  if (!deps) return true
+
+  return deps.every(depKey => {
+    if (depKey === 'GOOGLE_AUTH') {
+      return googleAuthStatus.isAuthenticated
+    }
+    return !!currentLocalSettings[depKey]?.trim()
+  })
+}
+
 async function checkGoogleAuthStatus() {
   googleAuthStatus.isLoading = true
   googleAuthStatus.error = null
@@ -396,9 +575,8 @@ async function checkGoogleAuthStatus() {
     const result = await window.ipcRenderer.invoke(
       'google-calendar:check-auth-status'
     )
-    if (result.success) {
+    if (result.success)
       googleAuthStatus.isAuthenticated = result.isAuthenticated
-    }
   } catch (e: any) {
     googleAuthStatus.error = 'Error checking auth status: ' + e.message
   } finally {
@@ -406,7 +584,7 @@ async function checkGoogleAuthStatus() {
   }
 }
 
-async function connectGoogleCalendar() {
+async function connectGoogleServices() {
   googleAuthStatus.isLoading = true
   googleAuthStatus.authInProgress = true
   googleAuthStatus.error = null
@@ -415,11 +593,10 @@ async function connectGoogleCalendar() {
     const result = await window.ipcRenderer.invoke(
       'google-calendar:get-auth-url'
     )
-    if (result.success) {
-      googleAuthStatus.message = result.message
-    } else {
+    if (result.success) googleAuthStatus.message = result.message
+    else {
       googleAuthStatus.error =
-        result.error || 'Failed to start Google Calendar authentication.'
+        result.error || 'Failed to start Google authentication.'
       googleAuthStatus.authInProgress = false
     }
   } catch (e: any) {
@@ -430,7 +607,7 @@ async function connectGoogleCalendar() {
   }
 }
 
-async function disconnectGoogleCalendar() {
+async function disconnectGoogleServices() {
   googleAuthStatus.isLoading = true
   googleAuthStatus.error = null
   googleAuthStatus.message = 'Disconnecting...'
@@ -442,7 +619,7 @@ async function disconnectGoogleCalendar() {
       googleAuthStatus.message = result.message
     } else {
       googleAuthStatus.error =
-        result.error || 'Failed to disconnect from Google Calendar.'
+        result.error || 'Failed to disconnect from Google.'
       googleAuthStatus.message = null
     }
   } catch (e: any) {
@@ -454,7 +631,6 @@ async function disconnectGoogleCalendar() {
 }
 
 function handleGoogleAuthSuccess(event: any, message: string) {
-  console.log('Loopback Auth Success (Renderer):', message)
   googleAuthStatus.isAuthenticated = true
   googleAuthStatus.authInProgress = false
   googleAuthStatus.message = message
@@ -462,7 +638,6 @@ function handleGoogleAuthSuccess(event: any, message: string) {
 }
 
 function handleGoogleAuthError(event: any, errorMsg: string) {
-  console.error('Loopback Auth Error (Renderer):', errorMsg)
   googleAuthStatus.isAuthenticated = false
   googleAuthStatus.authInProgress = false
   googleAuthStatus.error = `Authentication failed: ${errorMsg}`
@@ -474,14 +649,14 @@ onMounted(async () => {
     await settingsStore.loadSettings()
   }
   currentSettings.value = { ...settingsStore.config }
+
   if (
     settingsStore.coreOpenAISettingsValid &&
-    !settingsStore.config.VITE_OPENAI_ASSISTANT_ID
+    conversationStore.availableModels.length === 0
   ) {
-    if (settingsStore.isProduction) {
-      // showAssistantManager.value = true; // Decided against auto-showing, let user click.
-    }
+    await conversationStore.fetchModels()
   }
+
   await checkGoogleAuthStatus()
   if (window.ipcRenderer) {
     window.ipcRenderer.on(
@@ -529,15 +704,36 @@ watch(
 )
 
 const handleSaveAndTestSettings = async () => {
-  await settingsStore.saveAndTestSettings()
-}
-
-watch(
-  () => generalStore.sideBarView,
-  newView => {
-    if (newView !== 'settings' && showAssistantManager.value) {
-      showAssistantManager.value = false
+  if (
+    currentSettings.value.mcpServersConfig &&
+    currentSettings.value.mcpServersConfig.trim() !== '' &&
+    currentSettings.value.mcpServersConfig.trim() !== '[]'
+  ) {
+    try {
+      const parsedMcpConfig = JSON.parse(currentSettings.value.mcpServersConfig)
+      if (!Array.isArray(parsedMcpConfig)) {
+        settingsStore.error =
+          'MCP Servers Configuration must be a valid JSON array.'
+        settingsStore.successMessage = null
+        settingsStore.isSaving = false
+        return
+      }
+    } catch (e) {
+      settingsStore.error =
+        'MCP Servers Configuration is not valid JSON. Please check for errors like trailing commas or unquoted keys.'
+      settingsStore.successMessage = null
+      settingsStore.isSaving = false
+      return
     }
   }
-)
+
+  if (
+    settingsStore.error &&
+    settingsStore.error.startsWith('MCP Servers Configuration')
+  ) {
+    settingsStore.error = null
+  }
+
+  await settingsStore.saveAndTestSettings()
+}
 </script>

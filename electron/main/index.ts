@@ -7,6 +7,7 @@ import {
   session,
   desktopCapturer,
   clipboard,
+  protocol,
 } from 'electron'
 import { loadSettings, saveSettings, AppSettings } from './settingsManager'
 import {
@@ -31,6 +32,8 @@ import path from 'node:path'
 import os from 'node:os'
 import http from 'node:http'
 import { URL } from 'node:url'
+import fs from 'node:fs'
+import { mkdir, writeFile } from 'node:fs/promises'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -43,6 +46,13 @@ export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 const IS_DEV = !!VITE_DEV_SERVER_URL
 const OAUTH_SERVER_PORT = 9876
 let authServer: http.Server | null = null
+
+const USER_DATA_PATH = app.getPath('userData')
+const GENERATED_IMAGES_DIR_NAME = 'generated_images'
+const GENERATED_IMAGES_FULL_PATH = path.join(
+  USER_DATA_PATH,
+  GENERATED_IMAGES_DIR_NAME
+)
 
 process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
   ? path.join(process.env.APP_ROOT, 'public')
@@ -263,6 +273,12 @@ async function createWindow() {
         embedding: number[]
       }
     ) => {
+      console.log('[Main IPC thoughtVector:add] Received:', {
+        conversationId,
+        role,
+        textPreview: textContent.substring(0, 50),
+        embeddingLength: embedding?.length,
+      })
       try {
         await addThoughtVector(conversationId, role, textContent, embedding)
         return { success: true }
@@ -313,10 +329,18 @@ async function createWindow() {
     'memory:save',
     async (
       event,
-      { content, memoryType }: { content: string; memoryType?: string }
+      {
+        content,
+        memoryType,
+        embedding,
+      }: { content: string; memoryType?: string; embedding?: number[] }
     ) => {
       try {
-        const savedMemory = await saveMemoryLocal(content, memoryType)
+        const savedMemory = await saveMemoryLocal(
+          content,
+          memoryType,
+          embedding
+        )
         return { success: true, data: savedMemory }
       } catch (error) {
         console.error('IPC memory:save error:', error)
@@ -329,10 +353,18 @@ async function createWindow() {
     'memory:get',
     async (
       event,
-      { limit, memoryType }: { limit?: number; memoryType?: string }
+      {
+        limit,
+        memoryType,
+        queryEmbedding,
+      }: { limit?: number; memoryType?: string; queryEmbedding?: number[] }
     ) => {
       try {
-        const memories = await getRecentMemoriesLocal(limit, memoryType)
+        const memories = await getRecentMemoriesLocal(
+          limit,
+          memoryType,
+          queryEmbedding
+        )
         return { success: true, data: memories }
       } catch (error) {
         console.error('IPC memory:get error:', error)
@@ -359,10 +391,21 @@ async function createWindow() {
         id,
         content,
         memoryType,
-      }: { id: string; content: string; memoryType: string }
+        embedding,
+      }: {
+        id: string
+        content: string
+        memoryType: string
+        embedding?: number[]
+      }
     ) => {
       try {
-        const updatedMemory = await updateMemoryLocal(id, content, memoryType)
+        const updatedMemory = await updateMemoryLocal(
+          id,
+          content,
+          memoryType,
+          embedding
+        )
         if (updatedMemory) {
           return { success: true, data: updatedMemory }
         } else {
@@ -437,6 +480,47 @@ async function createWindow() {
 
   ipcMain.on('close-app', () => {
     app.quit()
+  })
+
+  ipcMain.handle('image:save-generated', async (event, base64Data: string) => {
+    try {
+      await mkdir(GENERATED_IMAGES_FULL_PATH, { recursive: true })
+
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
+      const fileName = `alice_generated_${timestamp}.png`
+      const absoluteFilePath = path.join(GENERATED_IMAGES_FULL_PATH, fileName)
+
+      await writeFile(absoluteFilePath, Buffer.from(base64Data, 'base64'))
+
+      console.log(
+        '[Main IPC image:save-generated] Image saved to:',
+        absoluteFilePath
+      )
+      return {
+        success: true,
+        fileName: fileName,
+        absolutePathForOpening: absoluteFilePath,
+      }
+    } catch (error: any) {
+      console.error(
+        '[Main IPC image:save-generated] RAW ERROR during image save:',
+        error
+      )
+      console.error(
+        '[Main IPC image:save-generated] Error message:',
+        error.message
+      )
+      console.error('[Main IPC image:save-generated] Error stack:', error.stack)
+
+      const errorMessage =
+        error && typeof error.message === 'string'
+          ? error.message
+          : 'Unknown error during image save.'
+      return {
+        success: false,
+        error: `Failed to save image in main process: ${errorMessage}`,
+      }
+    }
   })
 
   ipcMain.handle('electron:open-path', async (event, args) => {
@@ -598,6 +682,22 @@ app.on('ready', () => {
 })
 
 app.whenReady().then(async () => {
+  protocol.registerFileProtocol('alice-image', (request, callback) => {
+    const url = request.url.substring('alice-image://'.length)
+    const filePath = path.join(
+      GENERATED_IMAGES_FULL_PATH,
+      decodeURIComponent(url)
+    )
+
+    if (filePath.startsWith(GENERATED_IMAGES_FULL_PATH)) {
+      callback({ path: filePath })
+    } else {
+      console.error(
+        `[Protocol] Denied access to unsafe path: ${filePath} from URL: ${request.url}`
+      )
+      callback({ error: -6 })
+    }
+  })
   const initialSettings = await loadSettings()
   if (initialSettings) {
     console.log('Initial settings loaded in main process:', initialSettings)

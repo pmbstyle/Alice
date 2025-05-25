@@ -1,438 +1,1019 @@
 import { ref } from 'vue'
 import { defineStore, storeToRefs } from 'pinia'
+import type OpenAI from 'openai'
+
 import {
-  getAssistantData,
-  createThread,
-  uploadScreenshot,
-  listMessages,
-  sendMessage,
-  runAssistant,
-  retrieveRelevantThoughts,
+  createOpenAIResponse,
   ttsStream,
-  submitToolOutputs,
-  listAssistantsAPI,
-  createAssistantAPI,
-  retrieveAssistantAPI,
-  updateAssistantAPI,
-  deleteAssistantAPI,
-  listModelsAPI,
-  type LocalAssistantCreateParams,
-  type LocalAssistantUpdateParams,
+  getOpenAIClient,
+} from '../api/openAI/responsesApi'
+import { transcribeAudio } from '../api/groq/stt'
+import {
+  retrieveRelevantThoughtsForPrompt,
+  indexMessageForThoughts,
 } from '../api/openAI/assistant'
-import { transcribeAudio } from '../api/openAI/stt'
+
 import { useGeneralStore } from './generalStore'
 import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
 
-interface LocalModelStore {
-  id: string
+
+export interface AppChatMessageContentPart {
+  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path'
+  text?: string
+  uri?: string
+  path?: string
 }
 
-interface LocalAssistantStore {
-  id: string
-  name: string | null
-  model: string
+export interface ChatMessage {
+  local_id_temp?: string
+  api_message_id?: string
+  api_response_id?: string
+  role: 'user' | 'assistant' | 'system' | 'developer' | 'tool'
+  content: string | AppChatMessageContentPart[]
+  tool_call_id?: string
+  name?: string
+  tool_calls?: OpenAI.Responses.FunctionCall[]
 }
 
 export const useConversationStore = defineStore('conversation', () => {
   const generalStore = useGeneralStore()
   const settingsStore = useSettingsStore()
-  const { setAudioState } = generalStore
+  const {
+    setAudioState,
+    queueAudioForPlayback,
+    addContentPartToMessageByTempId,
+  } = generalStore
   const { isRecordingRequested, audioState } = storeToRefs(generalStore)
 
-  const assistant = ref<string>('')
-  const thread = ref<string>('')
-  const creatingThread = ref<boolean>(false)
+  const currentResponseId = ref<string | null>(null)
   const isInitialized = ref<boolean>(false)
-  const availableModels = ref<LocalModelStore[]>([])
+  const availableModels = ref<OpenAI.Models.Model[]>([])
 
   const initialize = async (): Promise<boolean> => {
-    const targetAssistantId = settingsStore.config.VITE_OPENAI_ASSISTANT_ID
-    if (
-      isInitialized.value &&
-      assistant.value === targetAssistantId &&
-      thread.value
-    ) {
-      console.log(
-        `OpenAI Store already initialized for assistant ${targetAssistantId}. Skipping full re-init.`
-      )
+    if (isInitialized.value) {
       return true
     }
-
     if (!settingsStore.initialLoadAttempted) {
       await settingsStore.loadSettings()
     }
-
-    const currentTargetAssistantId =
-      settingsStore.config.VITE_OPENAI_ASSISTANT_ID
-
-    if (
-      settingsStore.isProduction &&
-      !settingsStore.areEssentialSettingsProvided
-    ) {
-      generalStore.statusMessage =
-        'Error: Essential settings (including Assistant ID) not configured.'
-      console.error(
-        'OpenAI Store Initialization aborted: Essential settings missing.'
-      )
-      isInitialized.value = false
-      assistant.value = ''
-      thread.value = ''
-      return false
-    }
-
-    if (!currentTargetAssistantId) {
-      generalStore.statusMessage =
-        'Assistant not configured. Please select or create one in settings.'
-      console.warn(
-        'OpenAI Store Initialization deferred: Assistant ID missing.'
-      )
-      isInitialized.value = false
-      assistant.value = ''
-      thread.value = ''
-      return false
-    }
-
-    try {
-      console.log(
-        'Initializing OpenAI Store with Assistant ID:',
-        currentTargetAssistantId
-      )
-      const assistantData = await retrieveAssistantAPI(currentTargetAssistantId)
-      assistant.value = assistantData.id
-      console.log('Active Assistant ID loaded and verified:', assistant.value)
-
-      if (assistant.value) {
-        if (!thread.value || isInitialized.value === false) {
-          await createNewThread()
-        } else {
-          console.log(
-            `[OpenAIStore Initialize] Thread ${thread.value} already exists for assistant ${assistant.value}. Re-using.`
-          )
-        }
-        isInitialized.value = true
-        generalStore.statusMessage = 'Stand by'
-        console.log('OpenAI Store initialized successfully for chat.')
-        return true
-      } else {
-        console.error(
-          'Assistant ID not loaded after retrieveAssistantAPI, cannot create thread.'
-        )
+    if (settingsStore.isProduction) {
+      if (
+        !settingsStore.config.VITE_OPENAI_API_KEY ||
+        !settingsStore.config.assistantModel
+      ) {
         generalStore.statusMessage =
-          'Error: Assistant setup failed (ID missing after verification).'
+          'Error: Core OpenAI settings (API Key/Model) not configured.'
         isInitialized.value = false
-        assistant.value = ''
-        thread.value = ''
         return false
       }
-    } catch (error: any) {
-      console.error('Failed to initialize OpenAI Store:', error.message)
-      generalStore.statusMessage = `Error: Assistant setup failed (${error.message})`
-      isInitialized.value = false
-      assistant.value = ''
-      thread.value = ''
-      return false
+    } else {
+      if (!settingsStore.config.VITE_OPENAI_API_KEY)
+        console.warn('[Dev] OpenAI API Key missing.')
+      if (!settingsStore.config.assistantModel)
+        console.warn('[Dev] Assistant model not set.')
     }
+    if (
+      availableModels.value.length === 0 &&
+      settingsStore.config.VITE_OPENAI_API_KEY
+    ) {
+      await fetchModels()
+    }
+    isInitialized.value = true
+    generalStore.statusMessage = 'Stand by'
+    generalStore.chatHistory = []
+    currentResponseId.value = null
+    return true
   }
 
-  const createNewThread = async () => {
-    if (creatingThread.value) return
-    creatingThread.value = true
+  const buildApiInput = (): OpenAI.Responses.Request.InputItemLike[] => {
+    const historyToBuildFrom = [...generalStore.chatHistory]
+    const apiInput: OpenAI.Responses.Request.InputItemLike[] = []
+    const MAX_HISTORY_MESSAGES_FOR_API = 10
+    const recentHistory = historyToBuildFrom
+      .slice(0, MAX_HISTORY_MESSAGES_FOR_API)
+      .reverse()
+
+    let lastUserMessageInFullHistoryId: string | null = null
+    for (let i = 0; i < historyToBuildFrom.length; i++) {
+      if (historyToBuildFrom[i].role === 'user') {
+        lastUserMessageInFullHistoryId =
+          historyToBuildFrom[i].local_id_temp || null
+        break
+      }
+    }
+
+    for (const msg of recentHistory) {
+      let apiItemPartial: Partial<OpenAI.Responses.Request.InputItemLike> & {
+        type?: string
+        role?: string
+        content?: any
+      }
+
+      if (msg.role === 'tool') {
+        apiItemPartial = {
+          type: 'function_call_output',
+          call_id: msg.tool_call_id,
+          output:
+            typeof msg.content === 'string'
+              ? msg.content
+              : JSON.stringify(msg.content),
+        }
+      } else if (msg.role === 'system') {
+        apiItemPartial = { role: 'system', content: '' }
+        if (msg.name) (apiItemPartial as any).name = msg.name
+        if (typeof msg.content === 'string') {
+          apiItemPartial.content = msg.content
+        } else if (
+          Array.isArray(msg.content) &&
+          msg.content[0]?.type === 'app_text'
+        ) {
+          apiItemPartial.content = msg.content[0].text || ''
+        }
+      } else {
+        const currentApiRole = msg.role as 'user' | 'assistant' | 'developer'
+        apiItemPartial = { role: currentApiRole, content: [] }
+
+        if (msg.name) {
+          ;(apiItemPartial as any).name = msg.name
+        }
+
+        let messageContentParts: OpenAI.Responses.Request.ContentPartLike[] = []
+        if (typeof msg.content === 'string') {
+          const typeForPart =
+            currentApiRole === 'user' || currentApiRole === 'developer'
+              ? 'input_text'
+              : 'output_text'
+          messageContentParts = [{ type: typeForPart, text: msg.content }]
+        } else if (Array.isArray(msg.content)) {
+          const isThisTheLastUserMessageWithPotentialNewImage =
+            currentApiRole === 'user' &&
+            msg.local_id_temp === lastUserMessageInFullHistoryId
+
+          messageContentParts = msg.content
+            .map((appPart: AppChatMessageContentPart) => {
+              if (appPart.type === 'app_text') {
+                const typeForPart =
+                  currentApiRole === 'user' || currentApiRole === 'developer'
+                    ? 'input_text'
+                    : 'output_text'
+                return { type: typeForPart, text: appPart.text || '' }
+              } else if (appPart.type === 'app_image_uri') {
+                if (!appPart.uri) {
+                  console.warn(
+                    '[buildApiInput] app_image_uri found but appPart.uri is empty/null. Skipping this part.'
+                  )
+                  return null
+                }
+                if (
+                  isThisTheLastUserMessageWithPotentialNewImage &&
+                  (currentApiRole === 'user' || currentApiRole === 'developer')
+                ) {
+                  return {
+                    type: 'input_image',
+                    image_url: appPart.uri,
+                  }
+                } else if (
+                  currentApiRole === 'user' ||
+                  currentApiRole === 'developer'
+                ) {
+                  return {
+                    type: 'input_text',
+                    text: '[User previously sent an image]',
+                  }
+                } else {
+                  console.warn(
+                    `[buildApiInput] app_image_uri found for role ${currentApiRole} (not current user turn or not user/dev role). Skipping image data.`
+                  )
+                  return null
+                }
+              } else if (appPart.type === 'app_generated_image_path') {
+                if (currentApiRole === 'assistant') {
+                  return null
+                }
+                return null
+              }
+              console.warn(
+                `[buildApiInput] Unknown appPart type: ${appPart.type}. Skipping this part.`
+              )
+              return null
+            })
+            .filter(
+              p => p !== null
+            ) as OpenAI.Responses.Request.ContentPartLike[]
+        }
+
+        if (messageContentParts.length === 0) {
+          console.warn(
+            `[buildApiInput] Message (local_id: ${msg.local_id_temp}, role: ${currentApiRole}) resulted in empty content parts. Adding default empty text part.`
+          )
+          const typeForPart =
+            currentApiRole === 'user' || currentApiRole === 'developer'
+              ? 'input_text'
+              : 'output_text'
+          messageContentParts = [{ type: typeForPart, text: '' }]
+        }
+        apiItemPartial.content = messageContentParts
+      }
+      apiInput.push(apiItemPartial as OpenAI.Responses.Request.InputItemLike)
+    }
+    return apiInput
+  }
+
+  async function processStream(
+    stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
+    placeholderTempId: string
+  ) {
+    let currentSentence = ''
+    let currentAssistantApiMessageId: string | null = null
+    const functionCallArgsBuffer: Record<string, string> = {}
+
     try {
-      thread.value = await createThread()
-      console.log('New OpenAI thread created:', thread.value)
-      generalStore.chatHistory = []
-    } catch (error) {
-      console.error('Failed to create new thread:', error)
-      generalStore.statusMessage = 'Error: Could not create chat thread'
+      for await (const event of stream) {
+        if (event.type === 'response.created') {
+          currentResponseId.value = event.response.id
+          generalStore.updateMessageApiResponseIdByTempId(
+            placeholderTempId,
+            event.response.id
+          )
+        }
+
+        if (
+          event.type === 'response.output_item.added' ||
+          event.type === 'response.output_item.updated'
+        ) {
+          if (
+            event.item.type === 'message' &&
+            event.item.role === 'assistant'
+          ) {
+            currentAssistantApiMessageId = event.item.id
+            if (currentAssistantApiMessageId) {
+              generalStore.updateMessageApiIdByTempId(
+                placeholderTempId,
+                currentAssistantApiMessageId
+              )
+            }
+          }
+        }
+
+        if (
+          event.type === 'response.output_item.done' &&
+          event.item.type === 'image_generation_call'
+        ) {
+          setAudioState('GENERATING_IMAGE')
+          const imageBase64 = (
+            event.item as OpenAI.Responses.ImageGenerationCallOutput
+          ).result
+          if (imageBase64) {
+            let saveResult: {
+              success: boolean
+              fileName?: string
+              absolutePathForOpening?: string
+              error?: string
+            } | null = null
+            try {
+              saveResult = await window.ipcRenderer.invoke(
+                'image:save-generated',
+                imageBase64
+              )
+
+              if (
+                saveResult &&
+                saveResult.success &&
+                saveResult.fileName &&
+                saveResult.absolutePathForOpening
+              ) {
+                addContentPartToMessageByTempId(placeholderTempId, {
+                  type: 'app_generated_image_path',
+                  path: saveResult.fileName,
+                  absolutePathForOpening: saveResult.absolutePathForOpening,
+                })
+              } else {
+                const errorMessage =
+                  saveResult?.error ||
+                  'Unknown error saving image (IPC did not return success or details).'
+                console.error(
+                  'Failed to save generated image:',
+                  errorMessage,
+                  'Full saveResult:',
+                  saveResult
+                )
+                addContentPartToMessageByTempId(placeholderTempId, {
+                  type: 'app_text',
+                  text: `\n[Error saving image: ${errorMessage}]`,
+                })
+              }
+            } catch (ipcError: any) {
+              console.error(
+                'IPC invoke error for image:save-generated:',
+                ipcError
+              )
+              addContentPartToMessageByTempId(placeholderTempId, {
+                type: 'app_text',
+                text: `\n[IPC error saving image: ${ipcError.message || 'Unknown IPC error'}]`,
+              })
+            }
+          } else {
+            addContentPartToMessageByTempId(placeholderTempId, {
+              type: 'app_text',
+              text: '\n[Image generation did not return image data]',
+            })
+          }
+          if (
+            generalStore.audioQueue.length === 0 &&
+            audioState.value === 'GENERATING_IMAGE'
+          ) {
+            setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+          }
+        }
+
+        if (event.type === 'response.function_call_arguments.delta') {
+          const itemId = event.item_id
+          functionCallArgsBuffer[itemId] =
+            (functionCallArgsBuffer[itemId] || '') + (event.delta || '')
+        }
+
+        if (
+          event.type === 'response.output_item.done' &&
+          event.item.type === 'function_call'
+        ) {
+          const functionCallPayload =
+            event.item as OpenAI.Responses.FunctionCall
+          const itemId = functionCallPayload.id
+          let args = {}
+          try {
+            args = JSON.parse(
+              functionCallArgsBuffer[itemId] ||
+                (typeof functionCallPayload.arguments === 'string'
+                  ? functionCallPayload.arguments
+                  : '{}')
+            )
+          } catch (e) {
+            console.error(
+              `[processStream] Error parsing arguments for function call ${itemId}:`,
+              functionCallArgsBuffer[itemId],
+              e
+            )
+            args = {}
+          }
+          functionCallPayload.arguments = args
+
+          generalStore.addToolCallToMessageByTempId(
+            placeholderTempId,
+            functionCallPayload
+          )
+
+          if (audioState.value === 'SPEAKING')
+            generalStore.stopPlaybackAndClearQueue()
+          await handleToolCall(functionCallPayload, currentResponseId.value)
+          return
+        }
+
+        if (
+          event.type === 'response.output_text.delta' &&
+          event.item_id === currentAssistantApiMessageId
+        ) {
+          const textChunk = event.delta || ''
+          currentSentence += textChunk
+          generalStore.appendMessageDeltaByTempId(placeholderTempId, textChunk)
+          if (textChunk.match(/[.!?]\s*$/) || textChunk.includes('\n')) {
+            if (currentSentence.trim()) {
+              const ttsResponse = await ttsStream(currentSentence.trim())
+              if (
+                queueAudioForPlayback(ttsResponse) &&
+                audioState.value !== 'SPEAKING' &&
+                audioState.value !== 'GENERATING_IMAGE'
+              )
+                setAudioState('SPEAKING')
+              currentSentence = ''
+            }
+          }
+        }
+
+        if (event.type === 'response.completed') {
+          currentResponseId.value = event.response.id
+          const finalMessage = event.response.output?.find(
+            (o: any) =>
+              o.type === 'message' && o.id === currentAssistantApiMessageId
+          ) as OpenAI.Responses.MessageResponse
+          if (finalMessage?.tool_calls) {
+            generalStore.updateMessageToolCallsByTempId(
+              placeholderTempId,
+              finalMessage.tool_calls
+            )
+          }
+        }
+
+        if (event.type === 'error') {
+          console.error('Streaming error event:', event.error)
+          const errorMsg = `Error: ${event.error?.message || 'Streaming error'}`
+          generalStore.statusMessage = errorMsg
+          generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
+
+          break
+        }
+      }
+      if (currentSentence.trim()) {
+        const ttsResponse = await ttsStream(currentSentence.trim())
+        if (
+          queueAudioForPlayback(ttsResponse) &&
+          audioState.value !== 'SPEAKING' &&
+          audioState.value !== 'GENERATING_IMAGE'
+        )
+          setAudioState('SPEAKING')
+      }
+    } catch (error: any) {
+      console.error('Error processing stream:', error)
+      const errorMsg = `Error: Processing response failed (${error.message})`
+      generalStore.statusMessage = errorMsg
+      generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
     } finally {
-      creatingThread.value = false
+      if (
+        (audioState.value === 'WAITING_FOR_RESPONSE' ||
+          audioState.value === 'GENERATING_IMAGE') &&
+        generalStore.audioQueue.length === 0
+      ) {
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      }
+
+      const finalAssistantMessage = generalStore.chatHistory.find(
+        m => m.local_id_temp === placeholderTempId && m.role === 'assistant'
+      )
+      if (finalAssistantMessage) {
+        try {
+          let assistantTextForIndexing = ''
+          if (typeof finalAssistantMessage.content === 'string') {
+            assistantTextForIndexing = finalAssistantMessage.content
+          } else if (Array.isArray(finalAssistantMessage.content)) {
+            const textPart = finalAssistantMessage.content.find(
+              p => p.type === 'app_text'
+            )
+            if (textPart && textPart.text) {
+              assistantTextForIndexing = textPart.text
+            }
+          }
+
+          if (assistantTextForIndexing) {
+            const conversationIdForThought =
+              currentResponseId.value ||
+              placeholderTempId ||
+              'default_conversation'
+            console.log(
+              `[openAIStore processStream] Indexing assistant message: "${assistantTextForIndexing.substring(0, 50)}"`
+            )
+            await indexMessageForThoughts(
+              conversationIdForThought,
+              'assistant',
+              {
+                content: [{ type: 'app_text', text: assistantTextForIndexing }],
+              }
+            )
+          } else {
+            console.warn(
+              '[openAIStore processStream] No text content found in assistant message to index for thoughts.'
+            )
+          }
+        } catch (e) {
+          console.error(
+            '[openAIStore processStream] Error calling indexMessageForThoughts for assistant message:',
+            e
+          )
+        }
+      }
     }
   }
 
-  const getMessages = async (last = false) => {
-    if (!isInitialized.value || !thread.value) {
-      console.warn(
-        'OpenAI store not ready for getMessages (not initialized or no thread).'
+  async function handleToolCall(
+    toolCall: OpenAI.Responses.FunctionCall,
+    originalResponseIdForTool: string | null
+  ) {
+    const functionName = toolCall.name
+    const functionArgs = toolCall.arguments
+    let afterToolPlaceholderTempId: string | null = null
+
+    if (!functionName || functionArgs === undefined) {
+      console.error(
+        '[handleToolCall] Invalid tool_call object received:',
+        toolCall
       )
+      generalStore.addMessageToHistory({
+        role: 'system',
+        content: [
+          {
+            type: 'app_text',
+            text: `System error: Invalid tool call from AI for ${toolCall.id}.`,
+          },
+        ],
+      })
+      if (audioState.value === 'WAITING_FOR_RESPONSE')
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       return
     }
-    try {
-      await listMessages(thread.value, last)
-      console.log('Messages listed from thread.')
-    } catch (error) {
-      console.error('Failed to list messages:', error)
-    }
-  }
 
-  const sendMessageToThread = async (message: any, store = true) => {
-    if (!isInitialized.value || !thread.value || !assistant.value) {
-      console.warn('OpenAI store not ready for sendMessageToThread.')
-      return false
+    const toolStatusMessage = getToolStatusMessage(functionName)
+    generalStore.addMessageToHistory({
+      role: 'system',
+      content: [{ type: 'app_text', text: toolStatusMessage }],
+    })
+
+    if (generalStore.isTTSEnabled) {
+      try {
+        const ttsResponse = await ttsStream(toolStatusMessage)
+        if (
+          queueAudioForPlayback(ttsResponse) &&
+          audioState.value !== 'SPEAKING' &&
+          generalStore.audioQueue.length > 0
+        )
+          setAudioState('SPEAKING')
+      } catch (err) {
+        console.warn('TTS failed for tool status message:', err)
+      }
     }
+
+    let resultString: string
     try {
-      await sendMessage(
-        thread.value,
-        message as OpenAI.Beta.Threads.Messages.MessageCreateParams,
-        assistant.value,
-        store
+      resultString = await executeFunction(functionName, functionArgs as object)
+    } catch (error: any) {
+      console.error(`[handleToolCall] Error executing ${functionName}:`, error)
+      resultString = `Error executing tool ${functionName}: ${error.message || 'Unknown error'}`
+    }
+
+    const toolResponseMessage: ChatMessage = {
+      role: 'tool',
+      tool_call_id: toolCall.call_id,
+      name: functionName,
+      content: resultString,
+    }
+    generalStore.addMessageToHistory(toolResponseMessage)
+
+    let finalInstructionsForToolFollowUp =
+      settingsStore.config.assistantSystemPrompt || ''
+    let contextTextForThoughts = ''
+
+    const userMessages = generalStore.chatHistory.filter(m => m.role === 'user')
+    if (userMessages.length > 0) {
+      const latestUserMsg = userMessages[0]
+      if (typeof latestUserMsg.content === 'string') {
+        contextTextForThoughts = latestUserMsg.content
+      } else if (Array.isArray(latestUserMsg.content)) {
+        const textPart = latestUserMsg.content.find(
+          part => part.type === 'app_text'
+        )
+        if (textPart && textPart.text) {
+          contextTextForThoughts = textPart.text
+        }
+      }
+    }
+
+    if (contextTextForThoughts) {
+      try {
+        const relevantThoughtsArray = await retrieveRelevantThoughtsForPrompt(
+          contextTextForThoughts
+        )
+        let thoughtsBlock =
+          'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
+        if (relevantThoughtsArray && relevantThoughtsArray.length > 0) {
+          thoughtsBlock += relevantThoughtsArray.map(t => `- ${t}`).join('\n')
+        } else {
+          thoughtsBlock += 'No relevant thoughts...'
+        }
+        finalInstructionsForToolFollowUp =
+          thoughtsBlock +
+          '\n\n---\n\n' +
+          (settingsStore.config.assistantSystemPrompt || '')
+      } catch (error) {
+        console.error(
+          '[openAIStore handleToolCall] Error retrieving or formatting thoughts for tool follow-up:',
+          error
+        )
+      }
+    } else {
+      let thoughtsBlock =
+        'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
+      thoughtsBlock += 'No relevant thoughts...'
+      finalInstructionsForToolFollowUp =
+        thoughtsBlock +
+        '\n\n---\n\n' +
+        (settingsStore.config.assistantSystemPrompt || '')
+    }
+
+    const nextApiInput = buildApiInput()
+
+    try {
+      setAudioState('WAITING_FOR_RESPONSE')
+      const afterToolPlaceholder: ChatMessage = {
+        role: 'assistant',
+        content: [{ type: 'app_text', text: '' }],
+      }
+      afterToolPlaceholderTempId =
+        generalStore.addMessageToHistory(afterToolPlaceholder)
+
+      const continuedStream = (await createOpenAIResponse(
+        nextApiInput,
+        originalResponseIdForTool,
+        true,
+        finalInstructionsForToolFollowUp
+      )) as AsyncIterable<OpenAI.Responses.StreamEvent>
+
+      await processStreamAfterTool(continuedStream, afterToolPlaceholderTempId)
+    } catch (error: any) {
+      console.error(
+        '[handleToolCall] Error in continued stream after tool call:',
+        error
       )
-      return true
-    } catch (error) {
-      console.error('Failed to send message:', error)
-      generalStore.statusMessage = 'Error: Could not send message'
-      return false
+      const errorMsg = `Error: Tool interaction follow-up failed (${error.message})`
+      generalStore.statusMessage = errorMsg
+
+      if (afterToolPlaceholderTempId) {
+        generalStore.updateMessageContentByTempId(
+          afterToolPlaceholderTempId,
+          errorMsg
+        )
+      } else {
+        generalStore.addMessageToHistory({
+          role: 'assistant',
+          content: [{ type: 'app_text', text: errorMsg }],
+        })
+      }
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
     }
   }
 
-  const chat = async (memories: any) => {
-    if (!isInitialized.value || !thread.value || !assistant.value) {
+  async function processStreamAfterTool(
+    stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
+    messagePlaceholderTempId: string
+  ) {
+    let localCurrentSentence = ''
+    let localAssistantApiMessageId: string | null = null
+    try {
+      for await (const event of stream) {
+        if (event.type === 'response.created') {
+          currentResponseId.value = event.response.id
+          generalStore.updateMessageApiResponseIdByTempId(
+            messagePlaceholderTempId,
+            event.response.id
+          )
+        }
+        if (
+          event.type === 'response.output_item.added' &&
+          event.item.type === 'message' &&
+          event.item.role === 'assistant'
+        ) {
+          localAssistantApiMessageId = event.item.id
+          generalStore.updateMessageApiIdByTempId(
+            messagePlaceholderTempId,
+            localAssistantApiMessageId
+          )
+        }
+
+        if (
+          event.type === 'response.output_item.done' &&
+          event.item.type === 'image_generation_call'
+        ) {
+          setAudioState('GENERATING_IMAGE')
+          const imageBase64 = (
+            event.item as OpenAI.Responses.ImageGenerationCallOutput
+          ).result
+          if (imageBase64) {
+            let saveResult: {
+              success: boolean
+              fileName?: string
+              absolutePathForOpening?: string
+              error?: string
+            } | null = null
+            try {
+              saveResult = await window.ipcRenderer.invoke(
+                'image:save-generated',
+                imageBase64
+              )
+              if (
+                saveResult &&
+                saveResult.success &&
+                saveResult.fileName &&
+                saveResult.absolutePathForOpening
+              ) {
+                addContentPartToMessageByTempId(messagePlaceholderTempId, {
+                  type: 'app_generated_image_path',
+                  path: saveResult.fileName,
+                  absolutePathForOpening: saveResult.absolutePathForOpening,
+                })
+              } else {
+                const errorMessage =
+                  saveResult?.error ||
+                  'Unknown error saving image (IPC did not return success or details).'
+                console.error(
+                  'Failed to save generated image (after tool):',
+                  errorMessage,
+                  'Full saveResult:',
+                  saveResult
+                )
+                addContentPartToMessageByTempId(messagePlaceholderTempId, {
+                  type: 'app_text',
+                  text: `\n[Error saving image: ${errorMessage}]`,
+                })
+              }
+            } catch (ipcError: any) {
+              console.error(
+                'IPC invoke error for image:save-generated (after tool):',
+                ipcError
+              )
+              addContentPartToMessageByTempId(messagePlaceholderTempId, {
+                type: 'app_text',
+                text: `\n[IPC error saving image: ${ipcError.message || 'Unknown IPC error'}]`,
+              })
+            }
+          } else {
+            addContentPartToMessageByTempId(messagePlaceholderTempId, {
+              type: 'app_text',
+              text: '\n[Image generation did not return image data]',
+            })
+          }
+          if (
+            generalStore.audioQueue.length === 0 &&
+            audioState.value === 'GENERATING_IMAGE'
+          ) {
+            setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+          }
+        }
+
+        if (
+          event.type === 'response.output_text.delta' &&
+          event.item_id === localAssistantApiMessageId
+        ) {
+          const textChunk = event.delta || ''
+          localCurrentSentence += textChunk
+          generalStore.appendMessageDeltaByTempId(
+            messagePlaceholderTempId,
+            textChunk
+          )
+          if (textChunk.match(/[.!?]\s*$/) || textChunk.includes('\n')) {
+            if (localCurrentSentence.trim()) {
+              const ttsResponse = await ttsStream(localCurrentSentence.trim())
+              if (
+                queueAudioForPlayback(ttsResponse) &&
+                audioState.value !== 'SPEAKING' &&
+                audioState.value !== 'GENERATING_IMAGE'
+              )
+                setAudioState('SPEAKING')
+              localCurrentSentence = ''
+            }
+          }
+        }
+        if (event.type === 'response.completed') {
+          currentResponseId.value = event.response.id
+          const finalMessage = event.response.output?.find(
+            (o: any) =>
+              o.type === 'message' && o.id === localAssistantApiMessageId
+          ) as OpenAI.Responses.MessageResponse
+
+          if (finalMessage?.tool_calls) {
+            generalStore.updateMessageToolCallsByTempId(
+              messagePlaceholderTempId,
+              finalMessage.tool_calls
+            )
+          }
+        }
+        if (event.type === 'error') {
+          console.error('Streaming error event (after tool):', event.error)
+          const errorMsg = `Error: ${event.error?.message || 'Streaming error'}`
+          generalStore.statusMessage = errorMsg
+          generalStore.updateMessageContentByTempId(
+            messagePlaceholderTempId,
+            errorMsg
+          )
+          break
+        }
+      }
+      if (localCurrentSentence.trim()) {
+        const ttsResponse = await ttsStream(localCurrentSentence.trim())
+        if (
+          queueAudioForPlayback(ttsResponse) &&
+          audioState.value !== 'SPEAKING' &&
+          audioState.value !== 'GENERATING_IMAGE'
+        )
+          setAudioState('SPEAKING')
+      }
+    } catch (error: any) {
+      console.error('Error processing stream (after tool):', error)
+      const errorMsg = `Error: Processing response failed (${error.message})`
+      generalStore.statusMessage = errorMsg
+      generalStore.updateMessageContentByTempId(
+        messagePlaceholderTempId,
+        errorMsg
+      )
+    } finally {
+      if (
+        (audioState.value === 'WAITING_FOR_RESPONSE' ||
+          audioState.value === 'GENERATING_IMAGE') &&
+        generalStore.audioQueue.length === 0
+      ) {
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      }
+
+      const finalAssistantMessage = generalStore.chatHistory.find(
+        m =>
+          m.local_id_temp === messagePlaceholderTempId && m.role === 'assistant'
+      )
+      if (finalAssistantMessage) {
+        try {
+          let assistantTextForIndexing = ''
+          if (typeof finalAssistantMessage.content === 'string') {
+            assistantTextForIndexing = finalAssistantMessage.content
+          } else if (Array.isArray(finalAssistantMessage.content)) {
+            const textPart = finalAssistantMessage.content.find(
+              p => p.type === 'app_text'
+            )
+            if (textPart && textPart.text) {
+              assistantTextForIndexing = textPart.text
+            }
+          }
+
+          if (assistantTextForIndexing) {
+            const conversationIdForThought =
+              currentResponseId.value ||
+              messagePlaceholderTempId ||
+              'default_conversation'
+            console.log(
+              `[openAIStore processStreamAfterTool] Indexing assistant message: "${assistantTextForIndexing.substring(0, 50)}"`
+            )
+            await indexMessageForThoughts(
+              conversationIdForThought,
+              'assistant',
+              {
+                content: [{ type: 'app_text', text: assistantTextForIndexing }],
+              }
+            )
+          } else {
+            console.warn(
+              '[openAIStore processStreamAfterTool] No text content found in assistant message to index for thoughts.'
+            )
+          }
+        } catch (e) {
+          console.error(
+            '[openAIStore processStreamAfterTool] Error calling indexMessageForThoughts for assistant message:',
+            e
+          )
+        }
+      }
+    }
+  }
+
+  const chat = async () => {
+    if (!isInitialized.value) {
       generalStore.statusMessage =
         'Error: Chat not ready (AI not fully initialized).'
       setAudioState('IDLE')
-      console.warn(
-        'OpenAI store not initialized or assistant/thread missing. Cannot start chat.'
-      )
+      console.warn('OpenAI store not initialized. Cannot start chat.')
+      return
+    }
+
+    const lastMessage = generalStore.chatHistory[0]
+
+    if (
+      lastMessage &&
+      lastMessage.role === 'assistant' &&
+      lastMessage.tool_calls &&
+      lastMessage.tool_calls.length > 0
+    ) {
+      const pendingToolCallsToProcess = [...lastMessage.tool_calls]
+      const originalMessageTempId = lastMessage.local_id_temp
+
+      if (originalMessageTempId) {
+        generalStore.updateMessageToolCallsByTempId(originalMessageTempId, [])
+      } else {
+        console.warn(
+          '[Chat] Pending tool call: lastMessage had no local_id_temp. Cannot reliably clear its tool_calls.'
+        )
+        lastMessage.tool_calls = []
+      }
+
+      setAudioState('WAITING_FOR_RESPONSE')
+
+      const responseIdForTheseToolCalls = lastMessage.api_response_id
+
+      if (!responseIdForTheseToolCalls) {
+        console.error(
+          '[Chat] CRITICAL: lastMessage.api_response_id is missing for a pending tool call.',
+          JSON.parse(JSON.stringify(lastMessage))
+        )
+        generalStore.addMessageToHistory({
+          role: 'system',
+          content: [
+            {
+              type: 'app_text',
+              text: 'Error: Internal state error processing pending tool call. Missing response context.',
+            },
+          ],
+        })
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+        return
+      }
+
+      for (const pendingToolCall of pendingToolCallsToProcess) {
+        await handleToolCall(pendingToolCall, responseIdForTheseToolCalls)
+      }
       return
     }
 
     setAudioState('WAITING_FOR_RESPONSE')
+    const constructedApiInput = buildApiInput()
 
-    let currentSentence = ''
-    let messageId: string | null = null
-    let assistantResponseStarted = false
-
-    async function processChunk(chunk: any) {
-      if (
-        chunk.event === 'thread.message.created' &&
-        chunk.data.assistant_id === assistant.value &&
-        !assistantResponseStarted
-      ) {
-        messageId = chunk.data.id
-        if (messageId) {
-          assistantResponseStarted = true
-          generalStore.chatHistory.unshift({
-            id: messageId,
-            role: 'assistant',
-            content: [{ type: 'text', text: { value: '', annotations: [] } }],
-          })
-        }
-      }
-
-      if (
-        chunk.event === 'thread.message.delta' &&
-        chunk.data.delta?.content?.[0]?.type === 'text' &&
-        messageId
-      ) {
-        const textChunk = chunk.data.delta.content[0].text.value || ''
-        currentSentence += textChunk
-
-        const existingMessageIndex = generalStore.chatHistory.findIndex(
-          m => m.id === messageId
-        )
-        if (existingMessageIndex > -1) {
-          generalStore.chatHistory[
-            existingMessageIndex
-          ].content[0].text.value += textChunk
-        }
-
-        if (textChunk.match(/[.!?]\s*$/) || textChunk.endsWith('\n')) {
-          if (currentSentence.trim()) {
-            const ttsResponse = await ttsStream(currentSentence.trim())
-            const queued = generalStore.queueAudioForPlayback(ttsResponse)
-            if (queued && audioState.value !== 'SPEAKING') {
-              setAudioState('SPEAKING')
-            }
-            currentSentence = ''
-          }
-        }
-      }
-    }
-
-    async function handleToolCalls(runId: string, toolCalls: any[]) {
-      const toolOutputs: OpenAI.Beta.Threads.Runs.RunSubmitToolOutputsParams.ToolOutput[] =
-        []
-
-      for (const toolCall of toolCalls) {
-        if (toolCall.type === 'function') {
-          const functionName = toolCall.function.name
-          const functionArgs = toolCall.function.arguments
-          const toolStatusMessage = getToolStatusMessage(functionName)
-
-          generalStore.chatHistory.unshift({
-            id: 'system-' + Date.now(),
-            role: 'system',
-            content: [
-              {
-                type: 'text',
-                text: { value: toolStatusMessage, annotations: [] },
-              },
-            ],
-          })
-
-          try {
-            const ttsResponse = await ttsStream(toolStatusMessage)
-            const queued = generalStore.queueAudioForPlayback(ttsResponse)
-            if (queued && audioState.value !== 'SPEAKING') {
-              setAudioState('SPEAKING')
-            }
-          } catch (err) {
-            console.warn('TTS failed for system message:', err)
-          }
-
-          try {
-            const result = await executeFunction(functionName, functionArgs)
-            toolOutputs.push({
-              tool_call_id: toolCall.id,
-              output: result,
-            })
-          } catch (error: any) {
-            const errorMessage = `Error: ${error.message || 'Function execution failed'}`
-            toolOutputs.push({
-              tool_call_id: toolCall.id,
-              output: errorMessage,
-            })
-            generalStore.chatHistory.unshift({
-              id: 'error-' + Date.now(),
-              role: 'system',
-              content: [
-                {
-                  type: 'text',
-                  text: {
-                    value: `Error using tool: ${functionName}. Details: ${errorMessage}`,
-                    annotations: [],
-                  },
-                },
-              ],
-            })
-          }
-        }
-      }
-
-      if (toolOutputs.length > 0 && runId) {
-        try {
-          const continuedRunStream = await submitToolOutputs(
-            thread.value,
-            runId,
-            toolOutputs
-          )
-          await processRunStream(continuedRunStream)
-        } catch (error) {
-          console.error('Error submitting tool outputs:', error)
-          generalStore.statusMessage = 'Error: Tool submission failed'
-          setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-          generalStore.chatHistory.unshift({
-            id: 'error-' + Date.now(),
-            role: 'assistant',
-            content: [
-              {
-                type: 'text',
-                text: {
-                  value: `I encountered an issue using my tools. Please try again.`,
-                  annotations: [],
-                },
-              },
-            ],
-          })
-        }
-      } else if (toolOutputs.length === 0 && runId) {
-        if (
-          audioState.value === 'WAITING_FOR_RESPONSE' &&
-          generalStore.audioQueue.length === 0
-        ) {
-          setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-        }
-      }
-    }
-
-    async function processRunStream(
-      runStream: OpenAI.Beta.AssistantStreamManager<OpenAI.Beta.AssistantStreamEvent>
+    if (
+      constructedApiInput.length === 0 &&
+      !settingsStore.config.assistantSystemPrompt
     ) {
-      let runId: string | null = null
-      try {
-        for await (const chunk of runStream) {
-          if (chunk.data?.id && chunk.event.startsWith('thread.run.')) {
-            runId = chunk.data.id
-          }
-          await processChunk(chunk)
-          if (
-            chunk.event === 'thread.run.requires_action' &&
-            chunk.data.required_action?.type === 'submit_tool_outputs' &&
-            runId
-          ) {
-            await handleToolCalls(
-              runId,
-              chunk.data.required_action.submit_tool_outputs.tool_calls
-            )
-            return
-          }
-          if (chunk.event === 'thread.run.failed') {
-            console.error('Run failed:', chunk.data)
-            generalStore.statusMessage = `Error: Assistant run failed. ${chunk.data?.last_error?.message || ''}`
-            break
-          }
-          if (chunk.event === 'thread.run.completed') {
-            console.log('Run completed successfully.')
-          }
-        }
-        if (currentSentence.trim()) {
-          const ttsResponse = await ttsStream(currentSentence.trim())
-          const queued = generalStore.queueAudioForPlayback(ttsResponse)
-          if (queued && audioState.value !== 'SPEAKING') {
-            setAudioState('SPEAKING')
-          }
-        }
-      } catch (error) {
-        console.error('Error processing run stream:', error)
-        generalStore.statusMessage = 'Error: Processing response failed'
-        generalStore.chatHistory.unshift({
-          id: 'error-' + Date.now(),
-          role: 'assistant',
-          content: [
-            {
-              type: 'text',
-              text: {
-                value: `I had trouble processing that. Please try again.`,
-                annotations: [],
-              },
-            },
-          ],
-        })
-      } finally {
-        if (
-          audioState.value === 'WAITING_FOR_RESPONSE' &&
-          generalStore.audioQueue.length === 0
-        ) {
-          setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-        }
-        generalStore.storeMessage = false
-      }
+      console.warn(
+        'Chat called with empty history and no system prompt. Aborting.'
+      )
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      return
     }
+
+    let finalInstructions = settingsStore.config.assistantSystemPrompt || ''
+    let currentUserInputTextForThoughts = ''
+
+    const latestMessageInHistory = generalStore.chatHistory[0]
+    if (latestMessageInHistory && latestMessageInHistory.role === 'user') {
+      if (typeof latestMessageInHistory.content === 'string') {
+        currentUserInputTextForThoughts = latestMessageInHistory.content
+      } else if (Array.isArray(latestMessageInHistory.content)) {
+        const textPart = latestMessageInHistory.content.find(
+          part => part.type === 'app_text'
+        )
+        if (textPart && textPart.text) {
+          currentUserInputTextForThoughts = textPart.text
+        }
+      }
+    } else {
+      console.warn(
+        '[openAIStore chat] Last message not from user, or no text found for thoughts query.'
+      )
+    }
+
+    if (currentUserInputTextForThoughts) {
+      try {
+        const relevantThoughtsArray = await retrieveRelevantThoughtsForPrompt(
+          currentUserInputTextForThoughts
+        )
+        let thoughtsBlock =
+          'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
+        if (relevantThoughtsArray && relevantThoughtsArray.length > 0) {
+          thoughtsBlock += relevantThoughtsArray.map(t => `- ${t}`).join('\n')
+        } else {
+          thoughtsBlock += 'No relevant thoughts...'
+        }
+        finalInstructions =
+          thoughtsBlock +
+          '\n\n---\n\n' +
+          (settingsStore.config.assistantSystemPrompt || '')
+      } catch (error) {
+        console.error(
+          '[openAIStore chat] Error retrieving or formatting thoughts:',
+          error
+        )
+      }
+    } else {
+      let thoughtsBlock =
+        'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
+      thoughtsBlock += 'No relevant thoughts...'
+      finalInstructions =
+        thoughtsBlock +
+        '\n\n---\n\n' +
+        (settingsStore.config.assistantSystemPrompt || '')
+    }
+
+    const assistantMessagePlaceholder: ChatMessage = {
+      role: 'assistant',
+      content: [{ type: 'app_text', text: '' }],
+    }
+    const placeholderTempId = generalStore.addMessageToHistory(
+      assistantMessagePlaceholder
+    )
 
     try {
-      const runStream = await runAssistant(
-        thread.value,
-        assistant.value,
-        memories
+      const streamResult = await createOpenAIResponse(
+        constructedApiInput,
+        currentResponseId.value,
+        true,
+        finalInstructions
       )
-      await processRunStream(runStream)
-    } catch (error) {
-      console.error('Error starting assistant run:', error)
-      generalStore.statusMessage = 'Error: Could not start assistant'
-      setAudioState('IDLE')
-      generalStore.chatHistory.unshift({
-        id: 'error-' + Date.now(),
-        role: 'assistant',
-        content: [
-          {
-            type: 'text',
-            text: {
-              value: `I couldn't start processing your request. Please check the connection or try again.`,
-              annotations: [],
-            },
-          },
-        ],
-      })
+      await processStream(
+        streamResult as AsyncIterable<OpenAI.Responses.StreamEvent>,
+        placeholderTempId
+      )
+    } catch (error: any) {
+      console.error('Error starting OpenAI response stream:', error)
+      const errorMsg = `Error: Could not start assistant (${error.message})`
+      generalStore.statusMessage = errorMsg
+
+      if (placeholderTempId)
+        generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
+      else
+        generalStore.addMessageToHistory({
+          role: 'assistant',
+          content: [{ type: 'app_text', text: errorMsg }],
+        })
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
     }
   }
 
@@ -440,129 +1021,43 @@ export const useConversationStore = defineStore('conversation', () => {
     audioBuffer: Buffer
   ): Promise<string> => {
     try {
-      const response = await transcribeAudio(audioBuffer)
-      return response || ''
+      return await transcribeAudio(audioBuffer)
     } catch (error) {
-      console.error('Transcription failed:', error)
       generalStore.statusMessage = 'Error: Transcription service failed'
+      console.error('Transcription service error:', error)
       return ''
-    }
-  }
-
-  const createOpenAIPrompt = async (
-    newMessage: string | any
-  ): Promise<{
-    message: OpenAI.Beta.Threads.Messages.MessageCreateParams | null
-    history: string
-  }> => {
-    let thoughtsStringForPrompt = ''
-    let userMessagePayload: OpenAI.Beta.Threads.Messages.MessageCreateParams
-
-    if (typeof newMessage === 'string') {
-      userMessagePayload = { role: 'user', content: newMessage }
-    } else if (
-      typeof newMessage === 'object' &&
-      newMessage.role === 'user' &&
-      (typeof newMessage.content === 'string' ||
-        Array.isArray(newMessage.content))
-    ) {
-      userMessagePayload = { role: 'user', content: newMessage.content }
-    } else {
-      console.error(
-        '[OpenAIStore createOpenAIPrompt] Invalid message format provided to createOpenAIPrompt:',
-        JSON.stringify(newMessage, null, 2)
-      )
-      return { message: null, history: [] }
-    }
-
-    let textContentForThoughtRetrieval = ''
-    if (typeof userMessagePayload.content === 'string') {
-      textContentForThoughtRetrieval = userMessagePayload.content
-    } else if (Array.isArray(userMessagePayload.content)) {
-      textContentForThoughtRetrieval = userMessagePayload.content
-        .filter((part: any) => part.type === 'text')
-        .map((part: any, index: number) => {
-          let value = ''
-          if (part.text && typeof part.text === 'string') {
-            value = part.text
-          } else if (part.text && typeof part.text.value === 'string') {
-            value = part.text.value
-          } else {
-            console.warn(
-              `[OpenAIStore createOpenAIPrompt] part.text for part ${index} is not in an expected string format:`,
-              JSON.stringify(part.text)
-            )
-          }
-          return value
-        })
-        .join(' ')
-    }
-
-    if (textContentForThoughtRetrieval.trim()) {
-      try {
-        let relevantThoughtTexts = await retrieveRelevantThoughts(
-          textContentForThoughtRetrieval
-        )
-
-        const currentQueryText = textContentForThoughtRetrieval
-          .toLowerCase()
-          .trim()
-        relevantThoughtTexts = relevantThoughtTexts.filter(thought => {
-          return thought.toLowerCase().trim() !== currentQueryText
-        })
-
-        if (relevantThoughtTexts.length > 0) {
-          thoughtsStringForPrompt = relevantThoughtTexts
-            .map(text => `- ${text}`)
-            .join('\n')
-        }
-      } catch (error) {
-        console.error(
-          '[OpenAIStore createOpenAIPrompt] Failed to retrieve relevant thoughts for prompt:',
-          error
-        )
-        thoughtsStringForPrompt = ''
-      }
-    } else {
-      console.warn(
-        '[OpenAIStore createOpenAIPrompt] textContentForThoughtRetrieval was empty or whitespace. Skipping thought retrieval.'
-      )
-    }
-
-    return {
-      message: userMessagePayload,
-      history: thoughtsStringForPrompt,
     }
   }
 
   const uploadScreenshotToOpenAI = async (
     screenshotDataURI: string
   ): Promise<string | null> => {
-    if (!screenshotDataURI) return null
-    try {
-      const fileId = await uploadScreenshot(screenshotDataURI)
-      return fileId
-    } catch (error) {
-      console.error('Error uploading screenshot:', error)
-      generalStore.statusMessage = 'Error: Screenshot upload failed'
+    if (!screenshotDataURI) {
+      console.warn(
+        '[uploadScreenshotToOpenAI] Received empty screenshotDataURI.'
+      )
       return null
     }
+
+    if (screenshotDataURI.startsWith('data:image/')) {
+      return screenshotDataURI
+    }
+
+    console.warn(
+      '[uploadScreenshotToOpenAI] Provided URI is not a data URI. URI starts with:',
+      screenshotDataURI.substring(0, 100) + '...'
+    )
+    return null
   }
 
   function getToolStatusMessage(toolName: string): string {
     switch (toolName) {
-      case 'perform_web_search':
-        return '🔍 Searching the web...'
-      case 'get_weather_forecast':
-        return '🌦️ Checking the skies...'
       case 'get_current_datetime':
         return '🕒 Looking at the clock...'
       case 'open_path':
         return '📂 Opening that for you...'
       case 'manage_clipboard':
         return '📋 Working with your clipboard...'
-      case 'get_website_context':
-        return '🌐 Reading the page...'
       case 'search_torrents':
         return '🧲 Looking for torrents...'
       case 'add_torrent_to_qb':
@@ -587,181 +1082,41 @@ export const useConversationStore = defineStore('conversation', () => {
         return '📧 Searching emails...'
       case 'get_email_content':
         return '📧 Reading email content...'
+
       default:
         return `⚙️ Using tool: ${toolName}...`
     }
   }
 
-  async function fetchAssistants(): Promise<LocalAssistantStore[]> {
-    try {
-      const assistantsPage = await listAssistantsAPI({ limit: 100 })
-      return assistantsPage.data.map(a => ({
-        id: a.id,
-        name: a.name,
-        model: a.model,
-      }))
-    } catch (error) {
-      console.error('Failed to fetch assistants:', error)
-      generalStore.statusMessage = 'Error: Could not fetch your assistants.'
-      return []
-    }
-  }
-
-  async function createNewAssistant(
-    params: LocalAssistantCreateParams
-  ): Promise<LocalAssistantStore | null> {
-    try {
-      const newAssistant = await createAssistantAPI(params)
-      console.log('Assistant created:', newAssistant)
-      return {
-        id: newAssistant.id,
-        name: newAssistant.name,
-        model: newAssistant.model,
-      }
-    } catch (error: any) {
-      console.error('Failed to create assistant:', error)
-      generalStore.statusMessage = `Error: Could not create new assistant. ${error.message}`
-      return null
-    }
-  }
-
-  async function fetchAssistantDetails(
-    assistantId: string
-  ): Promise<any | null> {
-    try {
-      const detailedAssistant = await retrieveAssistantAPI(assistantId)
-      return detailedAssistant
-    } catch (error: any) {
-      console.error('Failed to fetch assistant details:', error)
-      generalStore.statusMessage = `Error: Could not fetch details for assistant ${assistantId}. ${error.message}`
-      return null
-    }
-  }
-
-  async function updateExistingAssistant(
-    assistantId: string,
-    params: LocalAssistantUpdateParams
-  ): Promise<LocalAssistantStore | null> {
-    try {
-      const updatedAssistant = await updateAssistantAPI(assistantId, params)
-      console.log('Assistant updated:', updatedAssistant)
-      return {
-        id: updatedAssistant.id,
-        name: updatedAssistant.name,
-        model: updatedAssistant.model,
-      }
-    } catch (error: any) {
-      console.error('Failed to update assistant:', error)
-      generalStore.statusMessage = `Error: Could not update assistant ${assistantId}. ${error.message}`
-      return null
-    }
-  }
-
-  async function deleteExistingAssistant(
-    assistantId: string
-  ): Promise<boolean> {
-    try {
-      await deleteAssistantAPI(assistantId)
-      console.log('Assistant deleted:', assistantId)
-      if (assistant.value === assistantId) {
-        assistant.value = ''
-        isInitialized.value = false
-        thread.value = ''
-        generalStore.chatHistory = []
-        if (
-          settingsStore.isProduction &&
-          settingsStore.settings.VITE_OPENAI_ASSISTANT_ID === assistantId
-        ) {
-          settingsStore.updateSetting('VITE_OPENAI_ASSISTANT_ID', '')
-        }
-      }
-      return true
-    } catch (error: any) {
-      console.error('Failed to delete assistant:', error)
-      generalStore.statusMessage = `Error: Could not delete assistant ${assistantId}. ${error.message}`
-      return false
-    }
-  }
-
   async function fetchModels() {
+    if (!useSettingsStore().config.VITE_OPENAI_API_KEY) {
+      console.warn('Cannot fetch models: OpenAI API Key is missing.')
+      availableModels.value = []
+      return
+    }
+    const openai = getOpenAIClient()
     try {
-      const modelsData = await listModelsAPI()
-      availableModels.value = modelsData
-        .filter(model => model.id.startsWith('gpt-'))
-        .map(m => ({ id: m.id }))
-      console.log('Available models fetched:', availableModels.value.length)
-    } catch (error) {
-      console.error('Failed to fetch models:', error)
-      generalStore.statusMessage = 'Error: Could not fetch AI models.'
+      const modelsPage = await openai.models.list()
+      availableModels.value = modelsPage.data
+        .filter(
+          model => model.id.startsWith('gpt-') || model.id.includes('image')
+        )
+        .sort((a, b) => a.id.localeCompare(b.id))
+    } catch (error: any) {
+      console.error('Failed to fetch models:', error.message)
+      generalStore.statusMessage = `Error: Could not fetch AI models (${error.message})`
       availableModels.value = []
     }
   }
 
-  async function setActiveAssistant(newAssistantId: string): Promise<boolean> {
-    if (
-      assistant.value === newAssistantId &&
-      isInitialized.value &&
-      thread.value
-    ) {
-      console.log(
-        `Assistant ${newAssistantId} is already active and initialized with thread ${thread.value}.`
-      )
-      return true
-    }
-
-    generalStore.statusMessage = `Setting active assistant to ${newAssistantId}...`
-    console.log(`Attempting to set active assistant to ${newAssistantId}`)
-
-    isInitialized.value = false
-    thread.value = ''
-    generalStore.chatHistory = []
-    assistant.value = ''
-
-    try {
-      const assistantData = await retrieveAssistantAPI(newAssistantId)
-      assistant.value = assistantData.id
-
-      if (settingsStore.isProduction) {
-        settingsStore.updateSetting('VITE_OPENAI_ASSISTANT_ID', newAssistantId)
-      }
-
-      await createNewThread()
-      isInitialized.value = true
-      generalStore.statusMessage = 'Assistant changed. Ready for chat.'
-      console.log(
-        `Switched to assistant ${newAssistantId}. New thread: ${thread.value}`
-      )
-      return true
-    } catch (error: any) {
-      console.error(
-        `Failed to switch to assistant ${newAssistantId}:`,
-        error.message
-      )
-      generalStore.statusMessage = `Error: Could not switch to assistant. ${error.message}`
-      isInitialized.value = false
-      return false
-    }
-  }
-
   return {
-    assistant,
-    thread,
     isInitialized,
     availableModels,
     initialize,
-    createNewThread,
-    sendMessageToThread,
     chat,
     transcribeAudioMessage,
-    createOpenAIPrompt,
     uploadScreenshotToOpenAI,
-    getMessages,
-    fetchAssistants,
-    createNewAssistant,
-    fetchAssistantDetails,
-    updateExistingAssistant,
-    deleteExistingAssistant,
     fetchModels,
-    setActiveAssistant,
+    currentResponseId,
   }
 })

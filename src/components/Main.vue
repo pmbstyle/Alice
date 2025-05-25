@@ -61,6 +61,11 @@ import { bg } from '../utils/assetsImport'
 
 import { useGeneralStore } from '../stores/generalStore'
 import { useConversationStore } from '../stores/openAIStore'
+import { indexMessageForThoughts } from '../api/openAI/assistant'
+import type {
+  ChatMessage,
+  AppChatMessageContentPart,
+} from '../stores/openAIStore'
 import { useAudioProcessing } from '../composables/useAudioProcessing'
 import { useAudioPlayback } from '../composables/useAudioPlayback'
 import { useScreenshot } from '../composables/useScreenshot'
@@ -87,32 +92,23 @@ const {
   chatInput,
   openSidebar,
   isMinimized,
-  storeMessage,
   isTTSEnabled,
+  isRecordingRequested,
   takingScreenShot,
 } = storeToRefs(generalStore)
 const { setAudioState } = generalStore
-const {
-  createOpenAIPrompt,
-  sendMessageToThread,
-  chat,
-  uploadScreenshotToOpenAI,
-} = conversationStore
 
 const isElectron = typeof window !== 'undefined' && (window as any).electron
 const audioPlayerElement = vueRef<HTMLAudioElement | null>(null)
 const aiVideoElement = vueRef<HTMLVideoElement | null>(null)
 
+let isProcessingRequest = false
+
 onMounted(async () => {
   audioPlayer.value = audioPlayerElement.value
   aiVideo.value = aiVideoElement.value
 
-  if (!audioPlayer.value) {
-    console.error('Audio player element not found after mount!')
-  }
-  if (!aiVideo.value) {
-    console.error('AI video element not found after mount!')
-  } else {
+  if (aiVideo.value) {
     aiVideo.value
       .play()
       .catch(e => console.warn('Initial video play failed:', e))
@@ -126,7 +122,6 @@ onMounted(async () => {
 })
 
 onUnmounted(() => {
-  console.log('Main component unmounted.')
   if (isElectron) {
     cleanupScreenshotListeners()
   }
@@ -148,36 +143,50 @@ const handleToggleRecording = () => {
 }
 
 const handleProcessingComplete = (transcription: string) => {
-  console.log(
-    '[Main.vue] Processing complete event received with transcription:',
-    transcription
-  )
+  const meaningfulTranscription =
+    transcription && transcription.trim().length > 1
+
+  if (isProcessingRequest) {
+    return
+  }
+
   if (
-    transcription &&
-    transcription.trim() &&
-    audioState.value === 'PROCESSING_AUDIO'
+    meaningfulTranscription &&
+    (audioState.value === 'PROCESSING_AUDIO' ||
+      audioState.value === 'LISTENING')
   ) {
-    processRequest(transcription)
+    generalStore.recognizedText = transcription
+    processRequest(transcription, 'VOICE')
   } else {
-    console.warn(
-      "[Main.vue] Transcription received, but state wasn't PROCESSING_AUDIO or text empty. State:",
-      audioState.value
-    )
+    if (
+      audioState.value !== 'SPEAKING' &&
+      audioState.value !== 'WAITING_FOR_RESPONSE'
+    ) {
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+    }
   }
 }
 
 const processRequestFromSidebar = (text: string) => {
+  if (isProcessingRequest) {
+    generalStore.statusMessage = 'Processing previous request...'
+    setTimeout(() => {
+      generalStore.setAudioState(audioState.value)
+    }, 2000)
+    return
+  }
   if (text && text.trim()) {
-    if (audioState.value === 'IDLE' || audioState.value === 'LISTENING') {
-      addMessageToHistory('user', text)
-      processRequest(text)
-      chatInput.value = ''
+    if (
+      audioState.value === 'IDLE' ||
+      audioState.value === 'LISTENING' ||
+      audioState.value === 'WAITING_FOR_RESPONSE' ||
+      audioState.value === 'SPEAKING'
+    ) {
+      generalStore.recognizedText = ''
+      processRequest(text, 'SIDEBAR_TEXT')
     } else {
-      console.warn(
-        'Cannot process sidebar request, system busy. State:',
-        audioState.value
-      )
       generalStore.statusMessage = 'Busy, please wait...'
+
       setTimeout(() => {
         if (generalStore.statusMessage === 'Busy, please wait...')
           generalStore.setAudioState(audioState.value)
@@ -186,85 +195,77 @@ const processRequestFromSidebar = (text: string) => {
   }
 }
 
-const addMessageToHistory = (
-  role: 'user' | 'assistant' | 'system',
+const processRequest = async (
   text: string,
-  id?: string
+  source: 'VOICE' | 'SIDEBAR_TEXT'
 ) => {
-  generalStore.chatHistory.unshift({
-    id: id || `temp-${Date.now()}`,
-    role: role,
-    content: [{ type: 'text', text: { value: text, annotations: [] } }],
-  })
-}
-
-const processRequest = async (text: string) => {
-  console.log(`[Main.vue] Processing request: "${text}"`)
-
-  let messageContent: any[] = [{ type: 'text', text: text }]
-
-  if (screenshotReady.value && screenShot.value) {
-    console.log('[Main.vue] Screenshot ready, attempting upload.')
-    try {
-      const fileId = await uploadScreenshotToOpenAI(screenShot.value)
-      if (fileId) {
-        messageContent.push({
-          type: 'image_file',
-          image_file: { file_id: fileId },
-        })
-        console.log('[Main.vue] Screenshot added to message content.')
-      } else {
-        console.error(
-          '[Main.vue] Screenshot upload failed, proceeding without image.'
-        )
-        addMessageToHistory('system', '(System: Failed to upload screenshot)')
-      }
-    } catch (error) {
-      console.error('[Main.vue] Error during screenshot upload:', error)
-      addMessageToHistory('system', '(System: Error uploading screenshot)')
-    } finally {
-      screenshotReady.value = false
-      screenShot.value = ''
-    }
-  }
-  const userMessagePayload = {
-    role: 'user',
-    content: messageContent,
-  }
-
-  const alreadyAdded =
-    generalStore.chatHistory[0]?.role === 'user' &&
-    generalStore.chatHistory[0]?.content[0]?.text?.value === text
-  if (!alreadyAdded) {
-    addMessageToHistory('user', text)
-  }
-
-  const prompt = await createOpenAIPrompt(
-    userMessagePayload,
-    storeMessage.value
-  )
-
-  if (!prompt || !prompt.message) {
-    console.error('[Main.vue] Failed to create prompt.')
-    setAudioState(isTTSEnabled.value ? 'LISTENING' : 'IDLE')
-    addMessageToHistory('system', '(System: Error preparing request)')
+  if (isProcessingRequest) {
     return
   }
-
-  const messageSent = await sendMessageToThread(
-    prompt.message,
-    storeMessage.value
-  )
-
-  if (!messageSent) {
-    console.error('[Main.vue] Failed to send message to thread.')
-    setAudioState(isTTSEnabled.value ? 'LISTENING' : 'IDLE')
-    addMessageToHistory('system', '(System: Error sending message)')
-    return
-  }
+  isProcessingRequest = true
 
   setAudioState('WAITING_FOR_RESPONSE')
-  await chat(prompt.history)
+
+  const appContentParts: AppChatMessageContentPart[] = [
+    { type: 'app_text', text: text },
+  ]
+
+  if (screenshotReady.value && screenShot.value) {
+    appContentParts.push({ type: 'app_image_uri', uri: screenShot.value })
+
+    screenshotReady.value = false
+    screenShot.value = ''
+  }
+
+  const userMessage: ChatMessage = {
+    role: 'user',
+    content: appContentParts,
+  }
+
+  try {
+    let userTextForIndexing = ''
+    if (typeof userMessage.content === 'string') {
+      userTextForIndexing = userMessage.content
+    } else if (Array.isArray(userMessage.content)) {
+      const textPart = userMessage.content.find(p => p.type === 'app_text')
+      if (textPart && textPart.text) {
+        userTextForIndexing = textPart.text
+      }
+    }
+
+    if (userTextForIndexing) {
+      const conversationIdForThought =
+        conversationStore.currentResponseId || 'default_conversation'
+
+      console.log(
+        `[Main.vue] Indexing user message: "${userTextForIndexing.substring(0, 50)}"`
+      )
+      await indexMessageForThoughts(conversationIdForThought, 'user', {
+        content: appContentParts,
+      })
+    } else {
+      console.warn(
+        '[Main.vue] No text content found in user message to index for thoughts.'
+      )
+    }
+  } catch (e) {
+    console.error(
+      '[Main.vue] Error calling indexMessageForThoughts for user message:',
+      e
+    )
+  }
+
+  generalStore.addMessageToHistory(userMessage)
+  try {
+    await conversationStore.chat()
+  } catch (e) {
+    console.error(
+      `[Main.vue processRequest (${source})] Error during conversationStore.chat():`,
+      e
+    )
+  } finally {
+    isProcessingRequest = false
+  }
 }
 </script>
 

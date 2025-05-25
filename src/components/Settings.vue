@@ -289,30 +289,6 @@
         </legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
           <div>
-            <label for="tavily-key" class="block mb-1 text-sm"
-              >Tavily API Key (Web Search)</label
-            >
-            <input
-              id="tavily-key"
-              type="password"
-              v-model="currentSettings.VITE_TAVILY_API_KEY"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-            />
-          </div>
-          <div>
-            <label for="openweather-key" class="block mb-1 text-sm"
-              >OpenWeatherMap API Key</label
-            >
-            <input
-              id="openweather-key"
-              type="password"
-              v-model="currentSettings.VITE_OPENWEATHERMAP_API_KEY"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-            />
-          </div>
-          <div>
             <label for="jackett-url" class="block mb-1 text-sm"
               >Jackett URL (Torrent Search)</label
             >
@@ -500,8 +476,6 @@ const availableModelsForSelect = computed(() => {
 })
 
 const toolDependencies: Record<string, (keyof AliceSettings)[]> = {
-  perform_web_search: ['VITE_TAVILY_API_KEY'],
-  get_weather_forecast: ['VITE_OPENWEATHERMAP_API_KEY'],
   search_torrents: ['VITE_JACKETT_API_KEY', 'VITE_JACKETT_URL'],
   add_torrent_to_qb: ['VITE_QB_URL', 'VITE_QB_USERNAME', 'VITE_QB_PASSWORD'],
   get_calendar_events: ['GOOGLE_AUTH'],
@@ -515,9 +489,6 @@ const toolDependencies: Record<string, (keyof AliceSettings)[]> = {
 
 function betterToolName(name: string): string {
   const nameMap: Record<string, string> = {
-    perform_web_search: 'Web Search',
-    get_website_context: 'Read Website Content',
-    get_weather_forecast: 'Weather Forecast',
     get_current_datetime: 'Current Date & Time',
     open_path: 'Open Apps/URLs',
     manage_clipboard: 'Clipboard Read/Write',

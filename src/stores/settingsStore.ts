@@ -13,8 +13,6 @@ export interface AliceSettings {
   assistantTopP: number
   assistantTools: string[]
 
-  VITE_TAVILY_API_KEY: string
-  VITE_OPENWEATHERMAP_API_KEY: string
   VITE_JACKETT_API_KEY: string
   VITE_JACKETT_URL: string
   VITE_QB_URL: string
@@ -32,8 +30,6 @@ const defaultSettings: AliceSettings = {
   assistantTopP: 1.0,
   assistantTools: ['get_current_datetime', 'perform_web_search'],
 
-  VITE_TAVILY_API_KEY: '',
-  VITE_OPENWEATHERMAP_API_KEY: '',
   VITE_JACKETT_API_KEY: '',
   VITE_JACKETT_URL: '',
   VITE_QB_URL: '',
@@ -51,8 +47,6 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   assistantTopP: 'Assistant Top P',
   assistantTools: 'Enabled Assistant Tools',
 
-  VITE_TAVILY_API_KEY: 'Tavily API Key (Web Search)',
-  VITE_OPENWEATHERMAP_API_KEY: 'OpenWeatherMap API Key',
   VITE_JACKETT_API_KEY: 'Jackett API Key (Torrents)',
   VITE_JACKETT_URL: 'Jackett URL (Torrents)',
   VITE_QB_URL: 'qBittorrent URL',

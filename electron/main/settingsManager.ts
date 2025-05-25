@@ -11,8 +11,6 @@ export interface AppSettings {
   VITE_OPENAI_PROJECT?: string
   VITE_OPENAI_ASSISTANT_ID?: string
   VITE_GROQ_API_KEY?: string
-  VITE_TAVILY_API_KEY?: string
-  VITE_OPENWEATHERMAP_API_KEY?: string
   VITE_JACKETT_API_KEY?: string
   VITE_JACKETT_URL?: string
   VITE_QB_URL?: string

@@ -2,17 +2,9 @@ import axios from 'axios'
 import { useSettingsStore } from '../stores/settingsStore'
 import { embedTextForThoughts } from '../api/openAI/assistant'
 
-interface WebSearchArgs {
-  query: string
-}
 
 interface Crawl4AiArgs {
   url: string
-}
-
-interface WeatherArgs {
-  location: string
-  unit?: 'metric' | 'imperial'
 }
 
 interface FunctionResult {
@@ -163,206 +155,6 @@ async function recall_memories(args: GetRecentMemoriesArgs) {
     return {
       success: false,
       error: error.message || 'Error fetching memories.',
-    }
-  }
-}
-
-/**
- * Performs a web search using the Tavily API.
- */
-async function perform_web_search(
-  args: WebSearchArgs
-): Promise<FunctionResult> {
-  const settings = useSettingsStore().config
-  const TAVILY_API_KEY = settings.VITE_TAVILY_API_KEY
-  if (!TAVILY_API_KEY) {
-    return { success: false, error: 'Tavily API key is not configured.' }
-  }
-  if (!args.query) {
-    return { success: false, error: 'Search query is missing.' }
-  }
-
-  console.log(`Performing web search for: ${args.query}`)
-  try {
-    const response = await axios.post(
-      'https://api.tavily.com/search',
-      {
-        api_key: TAVILY_API_KEY,
-        query: args.query,
-        search_depth: 'basic',
-        include_answer: true,
-        max_results: 5,
-      },
-      { timeout: 10000 }
-    )
-
-    const answer = response.data.answer
-    const results = response.data.results?.map((res: any) => ({
-      title: res.title,
-      url: res.url,
-      snippet: res.content,
-    }))
-
-    const responseData = answer
-      ? { answer: answer, sources: results }
-      : { results: results || 'No results found.' }
-
-    console.log('Web search successful.')
-    return { success: true, data: responseData }
-  } catch (error: any) {
-    console.error('Tavily API error:', error.response?.data || error.message)
-    return {
-      success: false,
-      error: `Failed to perform web search: ${error.response?.data?.error || error.message}`,
-    }
-  }
-}
-
-/**
- * Gets context from a website using the Tavily Extract API.
- */
-async function get_website_context(
-  args: Crawl4AiArgs
-): Promise<FunctionResult> {
-  const settings = useSettingsStore().config
-  const TAVILY_API_KEY = settings.VITE_TAVILY_API_KEY
-
-  if (!TAVILY_API_KEY) {
-    return {
-      success: false,
-      error: 'Tavily API key is not configured.',
-    }
-  }
-
-  if (!args.url) {
-    return { success: false, error: 'URL is missing.' }
-  }
-
-  console.log(`Fetching data from: ${args.url}`)
-  try {
-    const response = await axios.post(
-      'https://api.tavily.com/extract',
-      {
-        urls: args.url,
-        include_images: false,
-        extract_depth: 'basic',
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${TAVILY_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 10000,
-      }
-    )
-
-    if (
-      !response.data ||
-      !response.data.results ||
-      response.data.results.length === 0
-    ) {
-      return {
-        success: false,
-        error: 'No content was extracted from the URL',
-      }
-    }
-
-    const result = response.data.results[0]
-    const content = result.raw_content
-
-    if (!content) {
-      return {
-        success: false,
-        error: 'Extraction completed but no content was returned',
-      }
-    }
-
-    console.log(`Successfully extracted ${content.length} chars of content`)
-
-    return {
-      success: true,
-      data: content,
-    }
-  } catch (error: any) {
-    console.error(
-      'Error fetching website context:',
-      error.response?.data || error.message
-    )
-    return {
-      success: false,
-      error: `Failed to fetch website context: ${error.response?.data?.error || error.message}`,
-    }
-  }
-}
-
-/**
- * Gets the current weather forecast using the OpenWeatherMap API.
- */
-async function get_weather_forecast(
-  args: WeatherArgs
-): Promise<FunctionResult> {
-  const settings = useSettingsStore().config
-  const OPENWEATHERMAP_API_KEY = settings.VITE_OPENWEATHERMAP_API_KEY
-
-  if (!OPENWEATHERMAP_API_KEY) {
-    return {
-      success: false,
-      error: 'OpenWeatherMap API key is not configured.',
-    }
-  }
-  if (!args.location) {
-    return {
-      success: false,
-      error: 'Location is missing for weather forecast.',
-    }
-  }
-
-  const units = args.unit === 'imperial' ? 'imperial' : 'metric'
-  const unitSymbol = units === 'metric' ? '°C' : '°F'
-
-  console.log(`Fetching weather for: ${args.location} (Units: ${units})`)
-  try {
-    const response = await axios.get(
-      'https://api.openweathermap.org/data/2.5/weather',
-      {
-        params: {
-          q: args.location,
-          appid: OPENWEATHERMAP_API_KEY,
-          units: units,
-        },
-        timeout: 5000,
-      }
-    )
-
-    const weatherData = response.data
-    const result = {
-      location: weatherData.name,
-      country: weatherData.sys?.country,
-      description: weatherData.weather[0]?.description || 'N/A',
-      temperature: `${Math.round(weatherData.main?.temp)}${unitSymbol}`,
-      feels_like: `${Math.round(weatherData.main?.feels_like)}${unitSymbol}`,
-      humidity: `${weatherData.main?.humidity}%`,
-      wind_speed: weatherData.wind?.speed,
-    }
-
-    console.log('Weather fetch successful.')
-    return { success: true, data: result }
-  } catch (error: any) {
-    console.error(
-      'OpenWeatherMap API error:',
-      error.response?.data || error.message
-    )
-    let errorMessage = `Failed to get weather for ${args.location}`
-    if (error.response?.status === 404) {
-      errorMessage = `Could not find location: ${args.location}`
-    } else if (error.response?.data?.message) {
-      errorMessage += `: ${error.response.data.message}`
-    } else {
-      errorMessage += `: ${error.message}`
-    }
-    return {
-      success: false,
-      error: errorMessage,
     }
   }
 }
@@ -1018,12 +810,9 @@ const functionRegistry: {
   save_memory: save_memory,
   delete_memory: delete_memory,
   recall_memories: recall_memories,
-  perform_web_search: perform_web_search,
-  get_weather_forecast: get_weather_forecast,
   get_current_datetime: get_current_datetime,
   open_path: open_path,
   manage_clipboard: manage_clipboard,
-  get_website_context: get_website_context,
   search_torrents: search_torrents,
   add_torrent_to_qb: add_torrent_to_qb,
   get_calendar_events,
@@ -1039,12 +828,9 @@ const functionSchemas = {
   save_memory: { required: ['content'] },
   delete_memory: { required: ['id'] },
   recall_memories: { required: [] },
-  perform_web_search: { required: ['query'] },
-  get_weather_forecast: { required: ['location'] },
   get_current_datetime: { required: ['format'] },
   open_path: { required: ['target'] },
   manage_clipboard: { required: ['action'] },
-  get_website_context: { required: ['url'] },
   search_torrents: { required: ['query'] },
   add_torrent_to_qb: { required: ['magnet'] },
   get_calendar_events: { required: [] },

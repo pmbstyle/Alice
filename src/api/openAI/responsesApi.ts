@@ -16,9 +16,14 @@ interface OpenAIResponsesApiImageTool {
   type: 'image_generation'
 }
 
+interface OpenAIResponsesApiWebSearchPreviewTool {
+  type: 'web_search_preview'
+}
+
 type OpenAIResponsesApiTool =
   | OpenAIResponsesApiFunctionTool
   | OpenAIResponsesApiImageTool
+  | OpenAIResponsesApiWebSearchPreviewTool
 
 export const getOpenAIClient = (): OpenAI => {
   const settings = useSettingsStore().config
@@ -69,6 +74,10 @@ export const createOpenAIResponse = async (
     type: 'image_generation',
   } as OpenAIResponsesApiImageTool)
 
+  finalToolsForApi.push({
+    type: 'web_search_preview',
+  } as OpenAIResponsesApiWebSearchPreviewTool)
+
   const params: OpenAI.Responses.ResponseCreateParams = {
     model: settings.assistantModel || 'gpt-4.1-mini',
     input: input,
@@ -84,7 +93,7 @@ export const createOpenAIResponse = async (
     store: true,
     truncation: 'auto',
   }
-  console.log('[REQUEST PARAMS]', JSON.stringify(params, null, 2))
+  //console.log('[REQUEST PARAMS]', JSON.stringify(params, null, 2))
 
   if (stream) {
     return openai.responses.create(params as any)

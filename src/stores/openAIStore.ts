@@ -17,6 +17,7 @@ import { useGeneralStore } from './generalStore'
 import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
 
+
 export interface AppChatMessageContentPart {
   type: 'app_text' | 'app_image_uri' | 'app_generated_image_path'
   text?: string
@@ -1051,18 +1052,12 @@ export const useConversationStore = defineStore('conversation', () => {
 
   function getToolStatusMessage(toolName: string): string {
     switch (toolName) {
-      case 'perform_web_search':
-        return '🔍 Searching the web...'
-      case 'get_weather_forecast':
-        return '🌦️ Checking the skies...'
       case 'get_current_datetime':
         return '🕒 Looking at the clock...'
       case 'open_path':
         return '📂 Opening that for you...'
       case 'manage_clipboard':
         return '📋 Working with your clipboard...'
-      case 'get_website_context':
-        return '🌐 Reading the page...'
       case 'search_torrents':
         return '🧲 Looking for torrents...'
       case 'add_torrent_to_qb':

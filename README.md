@@ -38,14 +38,13 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   
   Data retrieval:
   - Web search
-  - Website content extraction
   - Google calendar integration
   - Gmail integration
   - Torrent search
-  - Weather checking
   - Current date and time awareness
 
   Computer and software use:
+  - Image generation
   - Open applications
   - Open URLs
   - Read/write clipboard content
@@ -78,7 +77,6 @@ Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupI
 
 Tools:
 
-- [TavilyAI](https://tavily.com) (Web search and crawler)
 - [Jackett](https://github.com/Jackett/Jackett) (Torrent search aggregation)
 - [qBittorrent](https://www.qbittorrent.org/) (Torrent client for downloads)
 

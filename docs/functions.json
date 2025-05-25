@@ -1,44 +1,6 @@
 [
   {
     "type": "function",
-    "name": "perform_web_search",
-    "description": "Searches the web for information on a given query. Use this for current events, general knowledge questions, or topics not covered by other tools. Use this tool for browsing the web and when you don't know something or need additional context or data.",
-    "strict": false,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "The specific search query or question to look up on the web."
-        }
-      },
-      "required": [
-        "query"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "type": "function",
-    "name": "get_weather_forecast",
-    "description": "Fetches the current weather forecast for a specific location. Use this toll if you know the location and want to get only current weather.",
-    "strict": false,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "location": {
-          "type": "string",
-          "description": "The city name (e.g., \"London\", \"Paris, FR\", \"Tokyo\"). Include state or country if ambiguous."
-        }
-      },
-      "required": [
-        "location"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "type": "function",
     "name": "get_current_datetime",
     "description": "Call this function whenever discussing current events, recent developments, or when time-sensitive information is needed. This function returns the current date, time, and other temporal information needed to provide accurate, up-to-date responses.",
     "strict": true,
@@ -105,25 +67,6 @@
       },
       "required": [
         "action"
-      ],
-      "additionalProperties": false
-    }
-  },
-  {
-    "type": "function",
-    "name": "get_website_context",
-    "description": "Extracts the main content from a specified URL. Use this tool to get the text content from a webpage, allowing Alice to analyze, summarize, or answer questions about information found online.",
-    "strict": false,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "description": "The full URL of the webpage to extract content from (e.g., https://www.example.com/article)."
-        }
-      },
-      "required": [
-        "url"
       ],
       "additionalProperties": false
     }

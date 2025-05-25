@@ -18,9 +18,10 @@ import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
 
 export interface AppChatMessageContentPart {
-  type: 'app_text' | 'app_image_uri'
+  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path'
   text?: string
   uri?: string
+  path?: string
 }
 
 export interface ChatMessage {
@@ -37,7 +38,11 @@ export interface ChatMessage {
 export const useConversationStore = defineStore('conversation', () => {
   const generalStore = useGeneralStore()
   const settingsStore = useSettingsStore()
-  const { setAudioState, queueAudioForPlayback } = generalStore
+  const {
+    setAudioState,
+    queueAudioForPlayback,
+    addContentPartToMessageByTempId,
+  } = generalStore
   const { isRecordingRequested, audioState } = storeToRefs(generalStore)
 
   const currentResponseId = ref<string | null>(null)
@@ -128,7 +133,7 @@ export const useConversationStore = defineStore('conversation', () => {
         const currentApiRole = msg.role as 'user' | 'assistant' | 'developer'
         apiItemPartial = { role: currentApiRole, content: [] }
 
-        if (msg.name && currentApiRole !== 'tool') {
+        if (msg.name) {
           ;(apiItemPartial as any).name = msg.name
         }
 
@@ -155,11 +160,10 @@ export const useConversationStore = defineStore('conversation', () => {
               } else if (appPart.type === 'app_image_uri') {
                 if (!appPart.uri) {
                   console.warn(
-                    '[buildApiInput]   app_image_uri found but appPart.uri is empty/null. Skipping this part.'
+                    '[buildApiInput] app_image_uri found but appPart.uri is empty/null. Skipping this part.'
                   )
                   return null
                 }
-
                 if (
                   isThisTheLastUserMessageWithPotentialNewImage &&
                   (currentApiRole === 'user' || currentApiRole === 'developer')
@@ -178,13 +182,18 @@ export const useConversationStore = defineStore('conversation', () => {
                   }
                 } else {
                   console.warn(
-                    `[buildApiInput]   app_image_uri found for role ${currentApiRole} (not current user turn or not user/dev role). Skipping image data.`
+                    `[buildApiInput] app_image_uri found for role ${currentApiRole} (not current user turn or not user/dev role). Skipping image data.`
                   )
                   return null
                 }
+              } else if (appPart.type === 'app_generated_image_path') {
+                if (currentApiRole === 'assistant') {
+                  return null
+                }
+                return null
               }
               console.warn(
-                `[buildApiInput]   Unknown appPart type: ${appPart.type}. Skipping this part.`
+                `[buildApiInput] Unknown appPart type: ${appPart.type}. Skipping this part.`
               )
               return null
             })
@@ -205,7 +214,6 @@ export const useConversationStore = defineStore('conversation', () => {
         }
         apiItemPartial.content = messageContentParts
       }
-
       apiInput.push(apiItemPartial as OpenAI.Responses.Request.InputItemLike)
     }
     return apiInput
@@ -244,6 +252,77 @@ export const useConversationStore = defineStore('conversation', () => {
                 currentAssistantApiMessageId
               )
             }
+          }
+        }
+
+        if (
+          event.type === 'response.output_item.done' &&
+          event.item.type === 'image_generation_call'
+        ) {
+          setAudioState('GENERATING_IMAGE')
+          const imageBase64 = (
+            event.item as OpenAI.Responses.ImageGenerationCallOutput
+          ).result
+          if (imageBase64) {
+            let saveResult: {
+              success: boolean
+              fileName?: string
+              absolutePathForOpening?: string
+              error?: string
+            } | null = null
+            try {
+              saveResult = await window.ipcRenderer.invoke(
+                'image:save-generated',
+                imageBase64
+              )
+
+              if (
+                saveResult &&
+                saveResult.success &&
+                saveResult.fileName &&
+                saveResult.absolutePathForOpening
+              ) {
+                addContentPartToMessageByTempId(placeholderTempId, {
+                  type: 'app_generated_image_path',
+                  path: saveResult.fileName,
+                  absolutePathForOpening: saveResult.absolutePathForOpening,
+                })
+              } else {
+                const errorMessage =
+                  saveResult?.error ||
+                  'Unknown error saving image (IPC did not return success or details).'
+                console.error(
+                  'Failed to save generated image:',
+                  errorMessage,
+                  'Full saveResult:',
+                  saveResult
+                )
+                addContentPartToMessageByTempId(placeholderTempId, {
+                  type: 'app_text',
+                  text: `\n[Error saving image: ${errorMessage}]`,
+                })
+              }
+            } catch (ipcError: any) {
+              console.error(
+                'IPC invoke error for image:save-generated:',
+                ipcError
+              )
+              addContentPartToMessageByTempId(placeholderTempId, {
+                type: 'app_text',
+                text: `\n[IPC error saving image: ${ipcError.message || 'Unknown IPC error'}]`,
+              })
+            }
+          } else {
+            addContentPartToMessageByTempId(placeholderTempId, {
+              type: 'app_text',
+              text: '\n[Image generation did not return image data]',
+            })
+          }
+          if (
+            generalStore.audioQueue.length === 0 &&
+            audioState.value === 'GENERATING_IMAGE'
+          ) {
+            setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
           }
         }
 
@@ -301,7 +380,8 @@ export const useConversationStore = defineStore('conversation', () => {
               const ttsResponse = await ttsStream(currentSentence.trim())
               if (
                 queueAudioForPlayback(ttsResponse) &&
-                audioState.value !== 'SPEAKING'
+                audioState.value !== 'SPEAKING' &&
+                audioState.value !== 'GENERATING_IMAGE'
               )
                 setAudioState('SPEAKING')
               currentSentence = ''
@@ -328,6 +408,7 @@ export const useConversationStore = defineStore('conversation', () => {
           const errorMsg = `Error: ${event.error?.message || 'Streaming error'}`
           generalStore.statusMessage = errorMsg
           generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
+
           break
         }
       }
@@ -335,7 +416,8 @@ export const useConversationStore = defineStore('conversation', () => {
         const ttsResponse = await ttsStream(currentSentence.trim())
         if (
           queueAudioForPlayback(ttsResponse) &&
-          audioState.value !== 'SPEAKING'
+          audioState.value !== 'SPEAKING' &&
+          audioState.value !== 'GENERATING_IMAGE'
         )
           setAudioState('SPEAKING')
       }
@@ -346,10 +428,56 @@ export const useConversationStore = defineStore('conversation', () => {
       generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
     } finally {
       if (
-        audioState.value === 'WAITING_FOR_RESPONSE' &&
+        (audioState.value === 'WAITING_FOR_RESPONSE' ||
+          audioState.value === 'GENERATING_IMAGE') &&
         generalStore.audioQueue.length === 0
       ) {
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      }
+
+      const finalAssistantMessage = generalStore.chatHistory.find(
+        m => m.local_id_temp === placeholderTempId && m.role === 'assistant'
+      )
+      if (finalAssistantMessage) {
+        try {
+          let assistantTextForIndexing = ''
+          if (typeof finalAssistantMessage.content === 'string') {
+            assistantTextForIndexing = finalAssistantMessage.content
+          } else if (Array.isArray(finalAssistantMessage.content)) {
+            const textPart = finalAssistantMessage.content.find(
+              p => p.type === 'app_text'
+            )
+            if (textPart && textPart.text) {
+              assistantTextForIndexing = textPart.text
+            }
+          }
+
+          if (assistantTextForIndexing) {
+            const conversationIdForThought =
+              currentResponseId.value ||
+              placeholderTempId ||
+              'default_conversation'
+            console.log(
+              `[openAIStore processStream] Indexing assistant message: "${assistantTextForIndexing.substring(0, 50)}"`
+            )
+            await indexMessageForThoughts(
+              conversationIdForThought,
+              'assistant',
+              {
+                content: [{ type: 'app_text', text: assistantTextForIndexing }],
+              }
+            )
+          } else {
+            console.warn(
+              '[openAIStore processStream] No text content found in assistant message to index for thoughts.'
+            )
+          }
+        } catch (e) {
+          console.error(
+            '[openAIStore processStream] Error calling indexMessageForThoughts for assistant message:',
+            e
+          )
+        }
       }
     }
   }
@@ -438,18 +566,9 @@ export const useConversationStore = defineStore('conversation', () => {
 
     if (contextTextForThoughts) {
       try {
-        console.log(
-          '[openAIStore handleToolCall] Retrieving thoughts for tool follow-up, context:',
-          contextTextForThoughts
-        )
         const relevantThoughtsArray = await retrieveRelevantThoughtsForPrompt(
           contextTextForThoughts
         )
-        console.log(
-          '[openAIStore handleToolCall] Retrieved thoughts for tool follow-up:',
-          relevantThoughtsArray
-        )
-
         let thoughtsBlock =
           'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
         if (relevantThoughtsArray && relevantThoughtsArray.length > 0) {
@@ -466,15 +585,15 @@ export const useConversationStore = defineStore('conversation', () => {
           '[openAIStore handleToolCall] Error retrieving or formatting thoughts for tool follow-up:',
           error
         )
-        finalInstructionsForToolFollowUp =
-          settingsStore.config.assistantSystemPrompt || ''
       }
     } else {
-      console.warn(
-        '[openAIStore handleToolCall] No context text found to fetch thoughts for tool follow-up.'
-      )
+      let thoughtsBlock =
+        'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
+      thoughtsBlock += 'No relevant thoughts...'
       finalInstructionsForToolFollowUp =
-        settingsStore.config.assistantSystemPrompt || ''
+        thoughtsBlock +
+        '\n\n---\n\n' +
+        (settingsStore.config.assistantSystemPrompt || '')
     }
 
     const nextApiInput = buildApiInput()
@@ -503,12 +622,10 @@ export const useConversationStore = defineStore('conversation', () => {
       )
       const errorMsg = `Error: Tool interaction follow-up failed (${error.message})`
       generalStore.statusMessage = errorMsg
-      const lastMessage = generalStore.chatHistory.find(
-        m => m.local_id_temp === afterToolPlaceholderTempId
-      )
-      if (lastMessage) {
+
+      if (afterToolPlaceholderTempId) {
         generalStore.updateMessageContentByTempId(
-          lastMessage.local_id_temp!,
+          afterToolPlaceholderTempId,
           errorMsg
         )
       } else {
@@ -547,6 +664,77 @@ export const useConversationStore = defineStore('conversation', () => {
             localAssistantApiMessageId
           )
         }
+
+        if (
+          event.type === 'response.output_item.done' &&
+          event.item.type === 'image_generation_call'
+        ) {
+          setAudioState('GENERATING_IMAGE')
+          const imageBase64 = (
+            event.item as OpenAI.Responses.ImageGenerationCallOutput
+          ).result
+          if (imageBase64) {
+            let saveResult: {
+              success: boolean
+              fileName?: string
+              absolutePathForOpening?: string
+              error?: string
+            } | null = null
+            try {
+              saveResult = await window.ipcRenderer.invoke(
+                'image:save-generated',
+                imageBase64
+              )
+              if (
+                saveResult &&
+                saveResult.success &&
+                saveResult.fileName &&
+                saveResult.absolutePathForOpening
+              ) {
+                addContentPartToMessageByTempId(messagePlaceholderTempId, {
+                  type: 'app_generated_image_path',
+                  path: saveResult.fileName,
+                  absolutePathForOpening: saveResult.absolutePathForOpening,
+                })
+              } else {
+                const errorMessage =
+                  saveResult?.error ||
+                  'Unknown error saving image (IPC did not return success or details).'
+                console.error(
+                  'Failed to save generated image (after tool):',
+                  errorMessage,
+                  'Full saveResult:',
+                  saveResult
+                )
+                addContentPartToMessageByTempId(messagePlaceholderTempId, {
+                  type: 'app_text',
+                  text: `\n[Error saving image: ${errorMessage}]`,
+                })
+              }
+            } catch (ipcError: any) {
+              console.error(
+                'IPC invoke error for image:save-generated (after tool):',
+                ipcError
+              )
+              addContentPartToMessageByTempId(messagePlaceholderTempId, {
+                type: 'app_text',
+                text: `\n[IPC error saving image: ${ipcError.message || 'Unknown IPC error'}]`,
+              })
+            }
+          } else {
+            addContentPartToMessageByTempId(messagePlaceholderTempId, {
+              type: 'app_text',
+              text: '\n[Image generation did not return image data]',
+            })
+          }
+          if (
+            generalStore.audioQueue.length === 0 &&
+            audioState.value === 'GENERATING_IMAGE'
+          ) {
+            setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+          }
+        }
+
         if (
           event.type === 'response.output_text.delta' &&
           event.item_id === localAssistantApiMessageId
@@ -562,7 +750,8 @@ export const useConversationStore = defineStore('conversation', () => {
               const ttsResponse = await ttsStream(localCurrentSentence.trim())
               if (
                 queueAudioForPlayback(ttsResponse) &&
-                audioState.value !== 'SPEAKING'
+                audioState.value !== 'SPEAKING' &&
+                audioState.value !== 'GENERATING_IMAGE'
               )
                 setAudioState('SPEAKING')
               localCurrentSentence = ''
@@ -575,6 +764,7 @@ export const useConversationStore = defineStore('conversation', () => {
             (o: any) =>
               o.type === 'message' && o.id === localAssistantApiMessageId
           ) as OpenAI.Responses.MessageResponse
+
           if (finalMessage?.tool_calls) {
             generalStore.updateMessageToolCallsByTempId(
               messagePlaceholderTempId,
@@ -597,7 +787,8 @@ export const useConversationStore = defineStore('conversation', () => {
         const ttsResponse = await ttsStream(localCurrentSentence.trim())
         if (
           queueAudioForPlayback(ttsResponse) &&
-          audioState.value !== 'SPEAKING'
+          audioState.value !== 'SPEAKING' &&
+          audioState.value !== 'GENERATING_IMAGE'
         )
           setAudioState('SPEAKING')
       }
@@ -611,13 +802,16 @@ export const useConversationStore = defineStore('conversation', () => {
       )
     } finally {
       if (
-        audioState.value === 'WAITING_FOR_RESPONSE' &&
+        (audioState.value === 'WAITING_FOR_RESPONSE' ||
+          audioState.value === 'GENERATING_IMAGE') &&
         generalStore.audioQueue.length === 0
       ) {
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       }
+
       const finalAssistantMessage = generalStore.chatHistory.find(
-        m => m.local_id_temp === placeholderTempId && m.role === 'assistant'
+        m =>
+          m.local_id_temp === messagePlaceholderTempId && m.role === 'assistant'
       )
       if (finalAssistantMessage) {
         try {
@@ -636,31 +830,29 @@ export const useConversationStore = defineStore('conversation', () => {
           if (assistantTextForIndexing) {
             const conversationIdForThought =
               currentResponseId.value ||
-              placeholderTempId ||
+              messagePlaceholderTempId ||
               'default_conversation'
             console.log(
-              `[openAIStore processStream] Indexing assistant message: "${assistantTextForIndexing.substring(0, 50)}"`
+              `[openAIStore processStreamAfterTool] Indexing assistant message: "${assistantTextForIndexing.substring(0, 50)}"`
             )
             await indexMessageForThoughts(
               conversationIdForThought,
               'assistant',
-              { content: finalAssistantMessage.content }
+              {
+                content: [{ type: 'app_text', text: assistantTextForIndexing }],
+              }
             )
           } else {
             console.warn(
-              '[openAIStore processStream] No text content found in assistant message to index.'
+              '[openAIStore processStreamAfterTool] No text content found in assistant message to index for thoughts.'
             )
           }
         } catch (e) {
           console.error(
-            '[openAIStore processStream] Error calling indexMessageForThoughts for assistant message:',
+            '[openAIStore processStreamAfterTool] Error calling indexMessageForThoughts for assistant message:',
             e
           )
         }
-      } else {
-        console.warn(
-          `[openAIStore processStream] Could not find final assistant message with tempId ${placeholderTempId} to index.`
-        )
       }
     }
   }
@@ -759,18 +951,9 @@ export const useConversationStore = defineStore('conversation', () => {
 
     if (currentUserInputTextForThoughts) {
       try {
-        console.log(
-          '[openAIStore chat] Retrieving thoughts for input:',
-          currentUserInputTextForThoughts
-        )
         const relevantThoughtsArray = await retrieveRelevantThoughtsForPrompt(
           currentUserInputTextForThoughts
         )
-        console.log(
-          '[openAIStore chat] Retrieved thoughts:',
-          relevantThoughtsArray
-        )
-
         let thoughtsBlock =
           'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
         if (relevantThoughtsArray && relevantThoughtsArray.length > 0) {
@@ -787,12 +970,8 @@ export const useConversationStore = defineStore('conversation', () => {
           '[openAIStore chat] Error retrieving or formatting thoughts:',
           error
         )
-        finalInstructions = settingsStore.config.assistantSystemPrompt || ''
       }
     } else {
-      console.log(
-        '[openAIStore chat] No specific user input for thoughts, adding default thoughts block.'
-      )
       let thoughtsBlock =
         'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
       thoughtsBlock += 'No relevant thoughts...'
@@ -825,6 +1004,7 @@ export const useConversationStore = defineStore('conversation', () => {
       console.error('Error starting OpenAI response stream:', error)
       const errorMsg = `Error: Could not start assistant (${error.message})`
       generalStore.statusMessage = errorMsg
+
       if (placeholderTempId)
         generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
       else
@@ -861,6 +1041,7 @@ export const useConversationStore = defineStore('conversation', () => {
     if (screenshotDataURI.startsWith('data:image/')) {
       return screenshotDataURI
     }
+
     console.warn(
       '[uploadScreenshotToOpenAI] Provided URI is not a data URI. URI starts with:',
       screenshotDataURI.substring(0, 100) + '...'
@@ -906,6 +1087,7 @@ export const useConversationStore = defineStore('conversation', () => {
         return '📧 Searching emails...'
       case 'get_email_content':
         return '📧 Reading email content...'
+
       default:
         return `⚙️ Using tool: ${toolName}...`
     }
@@ -922,11 +1104,7 @@ export const useConversationStore = defineStore('conversation', () => {
       const modelsPage = await openai.models.list()
       availableModels.value = modelsPage.data
         .filter(
-          model =>
-            model.id.startsWith('gpt-')
-            // model.id.startsWith('o1-') || //not yet ready for thinking models
-            // model.id.startsWith('o3-') ||
-            // model.id.startsWith('o4-')
+          model => model.id.startsWith('gpt-') || model.id.includes('image')
         )
         .sort((a, b) => a.id.localeCompare(b.id))
     } catch (error: any) {

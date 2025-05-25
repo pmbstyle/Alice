@@ -1,7 +1,6 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { setVideo } from '../utils/videoProcess'
-import type { ChatMessage, AppChatMessageContentPart } from './openAIStore'
 
 export type AudioState =
   | 'IDLE'
@@ -10,6 +9,26 @@ export type AudioState =
   | 'WAITING_FOR_RESPONSE'
   | 'SPEAKING'
   | 'CONFIG'
+  | 'GENERATING_IMAGE'
+
+export interface AppChatMessageContentPart {
+  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path'
+  text?: string
+  uri?: string
+  path?: string
+  absolutePathForOpening?: string
+}
+
+export interface ChatMessage {
+  local_id_temp?: string
+  api_message_id?: string
+  api_response_id?: string
+  role: 'user' | 'assistant' | 'system' | 'developer' | 'tool'
+  content: string | AppChatMessageContentPart[]
+  tool_call_id?: string
+  name?: string
+  tool_calls?: any[]
+}
 
 export const useGeneralStore = defineStore('general', () => {
   const audioState = ref<AudioState>('IDLE')
@@ -52,6 +71,9 @@ export const useGeneralStore = defineStore('general', () => {
       case 'CONFIG':
         statusMessage.value = 'Setting up...'
         break
+      case 'GENERATING_IMAGE':
+        statusMessage.value = 'Creating image...'
+        break
       default:
         statusMessage.value = 'Unknown state'
         break
@@ -69,6 +91,7 @@ export const useGeneralStore = defineStore('general', () => {
             break
           case 'PROCESSING_AUDIO':
           case 'WAITING_FOR_RESPONSE':
+          case 'GENERATING_IMAGE':
             targetVideoType = 'PROCESSING'
             break
           case 'CONFIG':
@@ -121,7 +144,6 @@ export const useGeneralStore = defineStore('general', () => {
     }
 
     chatHistory.value.unshift(messageToStore)
-
     return localId
   }
 
@@ -140,10 +162,10 @@ export const useGeneralStore = defineStore('general', () => {
     const index = findMessageIndexByTempId(tempId)
     if (index !== -1) {
       const message = chatHistory.value[index]
-      if (!Array.isArray(message.content)) {
-        message.content = [
-          { type: 'app_text', text: message.content as string },
-        ]
+      if (typeof message.content === 'string') {
+        message.content = [{ type: 'app_text', text: message.content }]
+      } else if (!Array.isArray(message.content)) {
+        message.content = []
       }
 
       let firstTextPart = message.content.find(p => p.type === 'app_text') as
@@ -158,6 +180,27 @@ export const useGeneralStore = defineStore('general', () => {
     } else {
       console.warn(
         `[GeneralStore appendMessageDelta] Message with tempId ${tempId} not found for delta: "${delta.substring(0, 30)}..."`
+      )
+    }
+  }
+
+  const addContentPartToMessageByTempId = (
+    tempId: string,
+    part: AppChatMessageContentPart
+  ) => {
+    const index = findMessageIndexByTempId(tempId)
+    if (index !== -1) {
+      const message = chatHistory.value[index]
+      if (typeof message.content === 'string') {
+        message.content = [{ type: 'app_text', text: message.content }, part]
+      } else if (Array.isArray(message.content)) {
+        message.content.push(part)
+      } else {
+        message.content = [part]
+      }
+    } else {
+      console.warn(
+        `[GeneralStore addContentPartToMessageByTempId] Message with tempId ${tempId} not found.`
       )
     }
   }
@@ -253,6 +296,7 @@ export const useGeneralStore = defineStore('general', () => {
     addMessageToHistory,
     updateMessageApiIdByTempId,
     appendMessageDeltaByTempId,
+    addContentPartToMessageByTempId,
     updateMessageContentByTempId,
     updateMessageApiResponseIdByTempId,
     addToolCallToMessageByTempId,

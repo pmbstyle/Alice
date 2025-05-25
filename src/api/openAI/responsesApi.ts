@@ -5,6 +5,21 @@ import {
   type ApiRequestBodyFunctionTool,
 } from '../../utils/assistantTools'
 
+interface OpenAIResponsesApiFunctionTool {
+  type: 'function'
+  name: string
+  description?: string
+  parameters: OpenAI.FunctionTool.Parameters
+}
+
+interface OpenAIResponsesApiImageTool {
+  type: 'image_generation'
+}
+
+type OpenAIResponsesApiTool =
+  | OpenAIResponsesApiFunctionTool
+  | OpenAIResponsesApiImageTool
+
 export const getOpenAIClient = (): OpenAI => {
   const settings = useSettingsStore().config
   if (!settings.VITE_OPENAI_API_KEY) {
@@ -26,15 +41,22 @@ export const createOpenAIResponse = async (
   const openai = getOpenAIClient()
   const settings = useSettingsStore().config
 
-  const activeTools: ApiRequestBodyFunctionTool[] = []
+  const finalToolsForApi: OpenAIResponsesApiTool[] = []
+
   if (settings.assistantTools && settings.assistantTools.length > 0) {
     for (const toolNameFromSettings of settings.assistantTools) {
       const toolDefinition = PREDEFINED_OPENAI_TOOLS.find(
-        tool => tool.name === toolNameFromSettings
+        (tool: ApiRequestBodyFunctionTool) => tool.name === toolNameFromSettings
       )
 
       if (toolDefinition) {
-        activeTools.push(toolDefinition)
+        const { name, description, parameters } = toolDefinition
+        finalToolsForApi.push({
+          type: 'function',
+          name,
+          description,
+          parameters,
+        } as OpenAIResponsesApiFunctionTool)
       } else {
         console.warn(
           `Tool definition for '${toolNameFromSettings}' not found in PREDEFINED_OPENAI_TOOLS.`
@@ -43,7 +65,11 @@ export const createOpenAIResponse = async (
     }
   }
 
-  const params: any = {
+  finalToolsForApi.push({
+    type: 'image_generation',
+  } as OpenAIResponsesApiImageTool)
+
+  const params: OpenAI.Responses.ResponseCreateParams = {
     model: settings.assistantModel || 'gpt-4.1-mini',
     input: input,
     instructions:
@@ -52,17 +78,18 @@ export const createOpenAIResponse = async (
         : settings.assistantSystemPrompt || undefined,
     temperature: settings.assistantTemperature ?? 1.0,
     top_p: settings.assistantTopP ?? 1.0,
-    tools: activeTools.length > 0 ? activeTools : undefined,
+    tools: finalToolsForApi.length > 0 ? finalToolsForApi : undefined,
     previous_response_id: previousResponseId || undefined,
     stream: stream,
     store: true,
     truncation: 'auto',
   }
   console.log('[REQUEST PARAMS]', JSON.stringify(params, null, 2))
+
   if (stream) {
-    return openai.responses.create(params)
+    return openai.responses.create(params as any)
   } else {
-    return openai.responses.create(params)
+    return openai.responses.create(params as any)
   }
 }
 

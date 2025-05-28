@@ -14,7 +14,7 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
 
 - 🗣️ **Voice recognition**
   
-  Speak to Alice using voice with fast Voice Activity Detection (VAD), transcribed via Groq's Whisper API.
+  Speak to Alice using voice with fast Voice Activity Detection (VAD), transcribed via Groq's whisper-large-v3 API.
   
 - 💬 **Text-to-speech**
   
@@ -30,9 +30,14 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   
   - **Thoughts:** Past conversation fragments embedded in a local Hnswlib vector database for quick context inspiration.  
   - **Memories:** Long-term structured facts stored in a local database, retrievable on demand via memory tools.
+    
 - 🎞️ **Animated assistant appearance**
   
   Several video states (standby, thinking, speaking) are used to make interactions lively.
+  
+- 🪪 **Advanced system prompt**
+
+  Alice comes with a high-quality system prompt that allows a seamless user experience and tool usage. The system prompt can be updated in settings.
   
 - ⚙️ **Function calling**
   
@@ -59,6 +64,7 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   - System prompt
   - Temperature
   - Top P
+  - Microphone toggle hot key
   - Available tools
   - MCP servers
   - Google integration
@@ -79,6 +85,7 @@ Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupI
 - [OpenAI API](https://platform.openai.com/docs/api-reference/introduction) (GPT-4.1-mini, TTS, Vision)
 - [Groq API](https://console.groq.com/) (Whisper: speech-to-text)
 - [Hnswlib](https://github.com/nmslib/hnswlib) (Vector database for thought retrieval)
+- [VAD](https://github.com/ricky0123/vad) (Voice Activity Detection)
 - [ChatGPT 4o](https://chat.openai.com) (Native image generation: Alice image)
 - [Kling 1.6 Pro (fal.ai)](https://fal.ai/) (Image-to-video animation: Alice's animated states)
 
@@ -100,7 +107,7 @@ Tools:
 
 ## Local build for production
 
-1. Create `app-config.json` file in the root directory with the following content to use Google integration (optional):
+Create `app-config.json` file in the root directory with the following content to use Google integration (optional):
 
 ```json
 

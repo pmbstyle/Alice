@@ -132,7 +132,7 @@
                 max="1"
                 step="0.1"
                 v-model.number="currentSettings.assistantTopP"
-                class="range range-secondary"
+                class="range range-success"
               />
             </div>
           </div>
@@ -188,6 +188,50 @@
                 </label>
               </div>
             </div>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset
+        class="fieldset bg-gray-900/90 border-yellow-500/50 rounded-box w-full border p-4"
+      >
+        <legend class="fieldset-legend">Global Hotkeys</legend>
+        <div class="p-2 space-y-4">
+          <div>
+            <label for="mic-toggle-hotkey" class="block mb-1 text-sm"
+              >Microphone Toggle Hotkey</label
+            >
+            <div class="flex items-center justify-between">
+              <kbd class="kbd kbd-xl">{{formatAccelerator(currentSettings.microphoneToggleHotkey)}}</kbd>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  @click="startRecordingHotkey('microphoneToggleHotkey')"
+                  class="btn btn-secondary btn-active btn-sm"
+                  :disabled="isRecordingHotkeyFor === 'microphoneToggleHotkey'"
+                >
+                  {{
+                    isRecordingHotkeyFor === 'microphoneToggleHotkey'
+                      ? 'Recording...'
+                      : 'Record'
+                  }}
+                </button>
+                <button
+                  type="button"
+                  @click="clearHotkey('microphoneToggleHotkey')"
+                  class="btn btn-warning btn-outline btn-sm"
+                  :disabled="!currentSettings.microphoneToggleHotkey"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <p
+              v-if="isRecordingHotkeyFor === 'microphoneToggleHotkey'"
+              class="text-xs text-yellow-400 mt-1"
+            >
+              Press the desired key combination. Press Esc to cancel.
+            </p>
           </div>
         </div>
       </fieldset>
@@ -489,6 +533,9 @@ const conversationStore = useConversationStore()
 
 const currentSettings = ref<AliceSettings>({ ...settingsStore.config })
 
+const isRecordingHotkeyFor = ref<keyof AliceSettings | null>(null)
+const activeRecordingKeys = ref<Set<string>>(new Set())
+
 const { availableModels } = storeToRefs(conversationStore)
 
 const googleAuthStatus = reactive({
@@ -512,11 +559,10 @@ const availableToolsForSelect = computed(() => {
 
 const availableModelsForSelect = computed(() => {
   return availableModels.value.filter(
-    model =>
-      model.id.startsWith('gpt-')
-      // model.id.startsWith('o1-') || //thinking handling is not available yet
-      // model.id.startsWith('o3-') ||
-      // model.id.startsWith('o4-')
+    model => model.id.startsWith('gpt-')
+    // model.id.startsWith('o1-') || //thinking handling is not available yet
+    // model.id.startsWith('o3-') ||
+    // model.id.startsWith('o4-')
   )
 })
 
@@ -644,6 +690,129 @@ function handleGoogleAuthError(event: any, errorMsg: string) {
   googleAuthStatus.message = null
 }
 
+const modifierKeys = [
+  'Control',
+  'Alt',
+  'Shift',
+  'Meta',
+  'Command',
+  'Cmd',
+  'Option',
+  'Super',
+]
+const keyToAcceleratorMap: Record<string, string> = {
+  Control: 'Control',
+  Alt: 'Alt',
+  Shift: 'Shift',
+  Meta: 'Super',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  Escape: 'Esc',
+  Enter: 'Return',
+  Delete: 'Delete',
+  Backspace: 'Backspace',
+  Tab: 'Tab',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+  Home: 'Home',
+  End: 'End',
+  Insert: 'Insert',
+  Space: 'Space',
+  '+': 'Plus',
+}
+
+function electronAcceleratorForKey(key: string): string {
+  if (key.length === 1 && key.match(/[a-z0-9]/i)) {
+    return key.toUpperCase()
+  }
+  return keyToAcceleratorMap[key] || key
+}
+
+function formatAccelerator(accelerator: string | undefined): string {
+  if (!accelerator) return ''
+  return accelerator.replace(/\+/g, ' + ')
+}
+
+const handleHotkeyKeyDown = (event: KeyboardEvent) => {
+  if (!isRecordingHotkeyFor.value) return
+
+  event.preventDefault()
+  event.stopPropagation()
+
+  const key = event.key
+  if (key === 'Escape') {
+    stopRecordingHotkey()
+    return
+  }
+
+  if (
+    modifierKeys.includes(key) ||
+    modifierKeys.map(m => m.toLowerCase()).includes(key.toLowerCase())
+  ) {
+    activeRecordingKeys.value.add(
+      electronAcceleratorForKey(
+        key === 'Meta' && navigator.platform.toUpperCase().indexOf('MAC') >= 0
+          ? 'Command'
+          : key === 'Meta'
+            ? 'Super'
+            : key
+      )
+    )
+  } else {
+    const mainKey = electronAcceleratorForKey(key)
+    activeRecordingKeys.value.add(mainKey)
+    const acceleratorParts = Array.from(activeRecordingKeys.value)
+
+    const order = ['Control', 'Alt', 'Shift', 'Super', 'Command']
+    acceleratorParts.sort((a, b) => {
+      const aIsModifier = order.includes(a)
+      const bIsModifier = order.includes(b)
+      if (aIsModifier && !bIsModifier) return -1
+      if (!aIsModifier && bIsModifier) return 1
+      if (aIsModifier && bIsModifier) return order.indexOf(a) - order.indexOf(b)
+      return a.localeCompare(b)
+    })
+
+    const newHotkey = acceleratorParts.join('+')
+    if (isRecordingHotkeyFor.value) {
+      currentSettings.value[isRecordingHotkeyFor.value] = newHotkey
+    }
+    stopRecordingHotkey()
+  }
+
+  if (isRecordingHotkeyFor.value) {
+    const tempAccelerator = Array.from(activeRecordingKeys.value).join('+')
+
+    const inputElement = document.getElementById(
+      'mic-toggle-hotkey'
+    ) as HTMLInputElement
+    if (inputElement) {
+      inputElement.value = formatAccelerator(tempAccelerator)
+    }
+  }
+}
+
+const startRecordingHotkey = (settingKey: keyof AliceSettings) => {
+  isRecordingHotkeyFor.value = settingKey
+  activeRecordingKeys.value.clear()
+  window.addEventListener('keydown', handleHotkeyKeyDown, true)
+}
+
+const stopRecordingHotkey = () => {
+  window.removeEventListener('keydown', handleHotkeyKeyDown, true)
+  isRecordingHotkeyFor.value = null
+  activeRecordingKeys.value.clear()
+}
+
+const clearHotkey = (settingKey: keyof AliceSettings) => {
+  if (isRecordingHotkeyFor.value === settingKey) {
+    stopRecordingHotkey()
+  }
+  currentSettings.value[settingKey] = ''
+}
+
 onMounted(async () => {
   if (!settingsStore.initialLoadAttempted) {
     await settingsStore.loadSettings()
@@ -704,6 +873,9 @@ watch(
 )
 
 const handleSaveAndTestSettings = async () => {
+  if (isRecordingHotkeyFor.value) {
+    stopRecordingHotkey()
+  }
   if (
     currentSettings.value.mcpServersConfig &&
     currentSettings.value.mcpServersConfig.trim() !== '' &&

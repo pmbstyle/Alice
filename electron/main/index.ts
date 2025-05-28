@@ -8,6 +8,7 @@ import {
   desktopCapturer,
   clipboard,
   protocol,
+  globalShortcut,
 } from 'electron'
 import { loadSettings, saveSettings, AppSettings } from './settingsManager'
 import {
@@ -74,6 +75,57 @@ const indexHtml = path.join(RENDERER_DIST, 'index.html')
 let screenshotDataURL: string | null = null
 
 let isHandlingQuit = false
+
+let currentMicToggleHotkey: string | null = null
+
+function registerMicrophoneToggleHotkey(accelerator: string | undefined) {
+  if (currentMicToggleHotkey) {
+    globalShortcut.unregister(currentMicToggleHotkey)
+    console.log(
+      `[HotkeyManager] Unregistered hotkey: ${currentMicToggleHotkey}`
+    )
+    currentMicToggleHotkey = null
+  }
+
+  if (accelerator && accelerator.trim() !== '') {
+    try {
+      const success = globalShortcut.register(accelerator, () => {
+        console.log(
+          `[HotkeyManager] Microphone toggle hotkey pressed: ${accelerator}`
+        )
+        win?.webContents.send('global-hotkey-mic-toggle')
+      })
+
+      if (success) {
+        console.log(
+          `[HotkeyManager] Registered microphone toggle hotkey: ${accelerator}`
+        )
+        currentMicToggleHotkey = accelerator
+      } else {
+        console.error(
+          `[HotkeyManager] Failed to register hotkey: ${accelerator}. It might be in use by another application or an invalid combination.`
+        )
+        win?.webContents.send('show-notification', {
+          type: 'error',
+          message: `Failed to register hotkey: ${accelerator}. It may be in use.`,
+        })
+      }
+    } catch (error) {
+      console.error(
+        `[HotkeyManager] Error registering hotkey: ${accelerator}`,
+        error
+      )
+      win?.webContents.send('show-notification', {
+        type: 'error',
+        message: `Error registering hotkey: ${accelerator}.`,
+      })
+    }
+  } else {
+    console.log(
+      '[HotkeyManager] No microphone toggle hotkey provided or it was cleared.'
+    )
+  }
+}
 
 function closeAuthWindowAndNotify(
   winInstance: BrowserWindow | null,
@@ -469,14 +521,29 @@ async function createWindow() {
     return await loadSettings()
   })
 
-  ipcMain.handle('settings:save', async (event, settings: AppSettings) => {
-    try {
-      await saveSettings(settings)
-      return { success: true }
-    } catch (error: any) {
-      return { success: false, error: error.message }
+  ipcMain.handle(
+    'settings:save',
+    async (event, settingsToSave: AppSettings) => {
+      try {
+        const oldSettings = await loadSettings()
+        await saveSettings(settingsToSave)
+
+        if (
+          oldSettings?.microphoneToggleHotkey !==
+            settingsToSave.microphoneToggleHotkey ||
+          (!oldSettings && settingsToSave.microphoneToggleHotkey)
+        ) {
+          console.log(
+            '[Main IPC settings:save] Microphone toggle hotkey changed. Re-registering.'
+          )
+          registerMicrophoneToggleHotkey(settingsToSave.microphoneToggleHotkey)
+        }
+        return { success: true }
+      } catch (error: any) {
+        return { success: false, error: error.message }
+      }
     }
-  })
+  )
 
   ipcMain.on('close-app', () => {
     app.quit()
@@ -701,8 +768,13 @@ app.whenReady().then(async () => {
   const initialSettings = await loadSettings()
   if (initialSettings) {
     console.log('Initial settings loaded in main process:', initialSettings)
+    registerMicrophoneToggleHotkey(initialSettings.microphoneToggleHotkey)
   } else {
     console.warn('No initial settings found or settings failed to load.')
+    const defaultFallbackSettings = { microphoneToggleHotkey: 'Alt+M' }
+    registerMicrophoneToggleHotkey(
+      defaultFallbackSettings.microphoneToggleHotkey
+    )
   }
 
   try {
@@ -728,6 +800,7 @@ app.on('before-quit', async event => {
     return
   }
   isHandlingQuit = true
+  globalShortcut.unregisterAll()
   stopAuthServer()
   console.log('[Main Index] Before quit: Performing cleanup...')
   event.preventDefault()

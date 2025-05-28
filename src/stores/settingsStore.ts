@@ -14,6 +14,8 @@ export interface AliceSettings {
   assistantTools: string[]
   mcpServersConfig?: string
 
+  microphoneToggleHotkey: string
+
   VITE_JACKETT_API_KEY: string
   VITE_JACKETT_URL: string
   VITE_QB_URL: string
@@ -32,6 +34,8 @@ const defaultSettings: AliceSettings = {
   assistantTools: ['get_current_datetime', 'perform_web_search'],
   mcpServersConfig: '[]',
 
+  microphoneToggleHotkey: 'Alt+M',
+
   VITE_JACKETT_API_KEY: '',
   VITE_JACKETT_URL: '',
   VITE_QB_URL: '',
@@ -48,6 +52,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   assistantTemperature: 'Assistant Temperature',
   assistantTopP: 'Assistant Top P',
   assistantTools: 'Enabled Assistant Tools',
+  microphoneToggleHotkey: 'Microphone Toggle Hotkey',
 
   VITE_JACKETT_API_KEY: 'Jackett API Key (Torrents)',
   VITE_JACKETT_URL: 'Jackett URL (Torrents)',

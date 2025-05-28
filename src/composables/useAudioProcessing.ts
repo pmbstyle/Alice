@@ -18,6 +18,11 @@ export function useAudioProcessing() {
   const isSpeechDetected = ref(false)
   const vadAssetBasePath = ref<string>('./')
 
+  const handleGlobalMicToggle = () => {
+    console.log('[AudioProcessing] Global hotkey for mic toggle received.')
+    toggleRecordingRequest()
+  }
+
   onMounted(async () => {
     if (
       window.location.protocol === 'file:' &&
@@ -60,6 +65,9 @@ export function useAudioProcessing() {
       )
       vadAssetBasePath.value = './'
     }
+    if (window.ipcRenderer) {
+      window.ipcRenderer.on('global-hotkey-mic-toggle', handleGlobalMicToggle)
+    }
   })
 
   const initializeVAD = async () => {
@@ -74,7 +82,7 @@ export function useAudioProcessing() {
       console.warn(
         '[VAD Manager] Attempting to initialize VAD, but asset path might not be fully resolved yet. Waiting briefly...'
       )
-      await new Promise(resolve => setTimeout(resolve, 100))
+      await new Promise(resolve => setTimeout(resolve, 200))
       if (vadAssetBasePath.value === './') {
         console.error(
           "[VAD Manager] CRITICAL: VAD asset path still './' in file protocol after delay. VAD will likely fail."

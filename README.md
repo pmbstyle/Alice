@@ -37,7 +37,7 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   
 - 🪪 **Advanced system prompt**
 
-  Alice comes with a high-quality system prompt that allows a seamless user experience and tool usage. The system prompt can be updated in settings.
+  Alice comes with an advanced system prompt that allows a seamless user experience and tool usage. The system prompt can be updated in settings at any time.
   
 - ⚙️ **Function calling**
   

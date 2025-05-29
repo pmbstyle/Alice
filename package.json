@@ -1,9 +1,9 @@
 {
-  "name": "electron-vue-vite",
+  "name": "alice-ai-app",
   "version": "1.0.2",
   "main": "dist-electron/main/index.js",
-  "description": "Alice app",
-  "author": "pmb",
+  "description": "Alice AI assistant app",
+  "author": "pmbstyle",
   "license": "MIT",
   "private": true,
   "keywords": [

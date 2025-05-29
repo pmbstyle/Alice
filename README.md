@@ -121,4 +121,7 @@ Create `app-config.json` file in the root directory with the following content t
 1. Build the Electron app:  
    `npm run build`
 
-1. Install the app from the `release` folder.
+2. Install the app from the `release` folder.
+
+## Community links
+- [ArchLinux port](https://aur.archlinux.org/packages/alice-ai-assient-bin)

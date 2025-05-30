@@ -578,6 +578,18 @@ async function createWindow() {
     return screenshotDataURL
   })
 
+  ipcMain.handle('capture-screen', async () => {
+    console.log('[Main IPC] "capture-screen" invoked.')
+    try {
+      const sources = await desktopCapturer.getSources({ types: ['screen'] })
+      console.log('[Main IPC] "capture-screen" sources found:', sources.length)
+      return sources
+    } catch (error) {
+      console.error('[Main IPC] "capture-screen" error:', error)
+      return []
+    }
+  })
+
   ipcMain.handle('settings:load', async () => {
     return await loadSettings()
   })

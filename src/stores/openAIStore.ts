@@ -112,7 +112,7 @@ export const useConversationStore = defineStore('conversation', () => {
     currentConversationTurnId.value = `turn-${Date.now()}`
     try {
       const summaryResult = await window.ipcRenderer.invoke(
-        'summaries:get-latest-summary'
+        'summaries:get-latest-summary', {}
       )
       if (
         summaryResult.success &&
@@ -211,7 +211,7 @@ export const useConversationStore = defineStore('conversation', () => {
     let latestSummaryText: string | null = null
     try {
       const summaryResult = await window.ipcRenderer.invoke(
-        'summaries:get-latest-summary'
+        'summaries:get-latest-summary', {}
       )
       if (
         summaryResult.success &&

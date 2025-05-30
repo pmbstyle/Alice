@@ -24,6 +24,9 @@ import {
   searchSimilarThoughts,
   deleteAllThoughtVectors,
   ensureSaveOnQuit as ensureThoughtStoreSave,
+  getRecentMessagesForSummarization,
+  saveConversationSummary,
+  getLatestConversationSummary,
 } from './thoughtVectorStore'
 import * as googleAuthManager from './googleAuthManager'
 import * as googleCalendarManager from './googleCalendarManager'
@@ -33,7 +36,6 @@ import path from 'node:path'
 import os from 'node:os'
 import http from 'node:http'
 import { URL } from 'node:url'
-import fs from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -127,24 +129,17 @@ function registerMicrophoneToggleHotkey(accelerator: string | undefined) {
   }
 }
 
-function closeAuthWindowAndNotify(
-  winInstance: BrowserWindow | null,
-  success: boolean,
-  messageOrError: string
-) {
+function closeAuthWindowAndNotify(success: boolean, messageOrError: string) {
   if (success) {
     console.log('[AuthServer] OAuth Success:', messageOrError)
-    winInstance?.webContents.send(
-      'google-auth-loopback-success',
-      messageOrError
-    )
+    win?.webContents.send('google-auth-loopback-success', messageOrError)
   } else {
     console.error('[AuthServer] OAuth Error:', messageOrError)
-    winInstance?.webContents.send('google-auth-loopback-error', messageOrError)
+    win?.webContents.send('google-auth-loopback-error', messageOrError)
   }
 }
 
-function startAuthServer(mainWindow: BrowserWindow | null): Promise<void> {
+function startAuthServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     if (authServer && authServer.listening) {
       console.log('[AuthServer] Server already running.')
@@ -154,8 +149,13 @@ function startAuthServer(mainWindow: BrowserWindow | null): Promise<void> {
 
     authServer = http.createServer(async (req, res) => {
       try {
+        if (!req.url) {
+          res.writeHead(400, { 'Content-Type': 'text/plain' })
+          res.end('Bad Request: URL is missing.')
+          return
+        }
         const requestUrl = new URL(
-          req.url!,
+          req.url,
           `http://127.0.0.1:${OAUTH_SERVER_PORT}`
         )
         const pathName = requestUrl.pathname
@@ -169,7 +169,7 @@ function startAuthServer(mainWindow: BrowserWindow | null): Promise<void> {
             res.end(
               `<h1>Authentication Failed</h1><p>${error}</p><p>You can close this window.</p>`
             )
-            closeAuthWindowAndNotify(win, false, `OAuth error: ${error}`)
+            closeAuthWindowAndNotify(false, `OAuth error: ${error}`)
             stopAuthServer()
           } else if (code) {
             await googleAuthManager.getTokensFromCode(code)
@@ -178,9 +178,8 @@ function startAuthServer(mainWindow: BrowserWindow | null): Promise<void> {
               '<h1>Authentication Successful!</h1><p>You can close this browser window/tab now and return to Alice.</p>'
             )
             closeAuthWindowAndNotify(
-              win,
               true,
-              'Successfully authenticated with Google Calendar.'
+              'Successfully authenticated with Google.'
             )
             stopAuthServer()
           } else {
@@ -189,7 +188,6 @@ function startAuthServer(mainWindow: BrowserWindow | null): Promise<void> {
               '<h1>Authentication Failed</h1><p>No authorization code or error received on callback.</p><p>You can close this window.</p>'
             )
             closeAuthWindowAndNotify(
-              win,
               false,
               'No authorization code or error received on callback.'
             )
@@ -207,7 +205,6 @@ function startAuthServer(mainWindow: BrowserWindow | null): Promise<void> {
           '<h1>Internal Server Error</h1><p>An error occurred while processing your authentication. Please try again.</p>'
         )
         closeAuthWindowAndNotify(
-          win,
           false,
           `Server error during authentication: ${e.message}`
         )
@@ -249,7 +246,7 @@ function stopAuthServer() {
 async function createWindow() {
   win = new BrowserWindow({
     title: 'Alice',
-    icon: path.join(process.env.VITE_PUBLIC, 'app_logo.png'),
+    icon: path.join(process.env.VITE_PUBLIC!, 'app_logo.png'),
     transparent: true,
     frame: false,
     width: 500,
@@ -264,7 +261,6 @@ async function createWindow() {
 
   if (VITE_DEV_SERVER_URL) {
     win.loadURL(VITE_DEV_SERVER_URL)
-    // win.webContents.openDevTools() // Uncomment for debugging renderer
   } else {
     win.loadFile(indexHtml)
   }
@@ -288,21 +284,27 @@ async function createWindow() {
   })
 
   ipcMain.on('resize', (event, arg) => {
-    if (win) {
+    if (
+      win &&
+      arg &&
+      typeof arg.width === 'number' &&
+      typeof arg.height === 'number'
+    ) {
       win.setSize(arg.width, arg.height)
     }
   })
+
   ipcMain.on('mini', (event, arg) => {
-    if (win) {
-      let display = screen.getPrimaryDisplay()
+    if (win && arg && typeof arg.minimize === 'boolean') {
+      const display = screen.getPrimaryDisplay()
       if (arg.minimize) {
-        let x = display.bounds.width - 230
-        let y = display.bounds.height - 260
+        const x = display.bounds.width - 230
+        const y = display.bounds.height - 260
         win.setPosition(x, y)
         win.setSize(210, 210)
       } else {
-        let x = display.bounds.width / 2 - 250
-        let y = display.bounds.height / 2 - 250
+        const x = Math.round(display.bounds.width / 2 - 250)
+        const y = Math.round(display.bounds.height / 2 - 250)
         win.setPosition(x, y)
         win.setSize(500, 500)
       }
@@ -325,12 +327,6 @@ async function createWindow() {
         embedding: number[]
       }
     ) => {
-      console.log('[Main IPC thoughtVector:add] Received:', {
-        conversationId,
-        role,
-        textPreview: textContent.substring(0, 50),
-        embeddingLength: embedding?.length,
-      })
       try {
         await addThoughtVector(conversationId, role, textContent, embedding)
         return { success: true }
@@ -480,19 +476,82 @@ async function createWindow() {
     }
   })
 
+  ipcMain.handle(
+    'summaries:get-recent-messages',
+    async (
+      event,
+      { limit, conversationId }: { limit: number; conversationId?: string }
+    ) => {
+      try {
+        const messages = await getRecentMessagesForSummarization(
+          limit,
+          conversationId
+        )
+        return { success: true, data: messages }
+      } catch (error) {
+        console.error('IPC summaries:get-recent-messages error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'summaries:save-summary',
+    async (
+      event,
+      {
+        summaryText,
+        summarizedMessagesCount,
+        conversationId,
+      }: {
+        summaryText: string
+        summarizedMessagesCount: number
+        conversationId?: string
+      }
+    ) => {
+      try {
+        const summaryRecord = await saveConversationSummary(
+          summaryText,
+          summarizedMessagesCount,
+          conversationId
+        )
+        return { success: true, data: summaryRecord }
+      } catch (error) {
+        console.error('IPC summaries:save-summary error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'summaries:get-latest-summary',
+    async (event, { conversationId }: { conversationId?: string }) => {
+      try {
+        const summary = await getLatestConversationSummary(conversationId)
+        return { success: true, data: summary }
+      } catch (error) {
+        console.error('IPC summaries:get-latest-summary error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
+
   ipcMain.handle('get-renderer-dist-path', async () => {
     return RENDERER_DIST
   })
 
   ipcMain.handle('screenshot', async (event, arg) => {
-    const source = await desktopCapturer.getSources({
+    const sources = await desktopCapturer.getSources({
       types: ['screen'],
       thumbnailSize: {
         width: 1200,
         height: 1200,
       },
     })
-    return source[0].thumbnail.toDataURL()
+    if (sources.length > 0) {
+      return sources[0].thumbnail.toDataURL()
+    }
+    return null
   })
 
   ipcMain.handle('show-overlay', () => {
@@ -500,6 +559,7 @@ async function createWindow() {
       createOverlayWindow()
     }
     overlayWindow?.show()
+    return true
   })
 
   ipcMain.handle('hide-overlay', () => {
@@ -507,7 +567,8 @@ async function createWindow() {
     win?.webContents.send('overlay-closed')
     return true
   })
-  ipcMain.handle('save-screenshot', (event, dataURL) => {
+
+  ipcMain.handle('save-screenshot', (event, dataURL: string) => {
     screenshotDataURL = dataURL
     win?.webContents.send('screenshot-captured')
     return true
@@ -590,115 +651,134 @@ async function createWindow() {
     }
   })
 
-  ipcMain.handle('electron:open-path', async (event, args) => {
-    if (!args || typeof args.target !== 'string' || args.target.trim() === '') {
-      console.error('open_path: Invalid target received:', args)
-      return {
-        success: false,
-        message: 'Error: No valid target path, name, or URL provided.',
-      }
-    }
-
-    const targetPath = args.target.trim()
-    console.log(`Main process received request to open: ${targetPath}`)
-
-    try {
+  ipcMain.handle(
+    'electron:open-path',
+    async (event, args: { target: string }) => {
       if (
-        targetPath.startsWith('http://') ||
-        targetPath.startsWith('https://') ||
-        targetPath.startsWith('mailto:')
+        !args ||
+        typeof args.target !== 'string' ||
+        args.target.trim() === ''
       ) {
-        console.log(`Opening external URL: ${targetPath}`)
-        await shell.openExternal(targetPath)
+        console.error('open_path: Invalid target received:', args)
         return {
-          success: true,
-          message: `Successfully initiated opening URL: ${targetPath}`,
+          success: false,
+          message: 'Error: No valid target path, name, or URL provided.',
         }
-      } else {
-        console.log(`Opening path/application: ${targetPath}`)
-        const errorMessage = await shell.openPath(targetPath)
+      }
 
-        if (errorMessage) {
-          console.error(`Failed to open path "${targetPath}": ${errorMessage}`)
-          return {
-            success: false,
-            message: `Error: Could not open "${targetPath}". Reason: ${errorMessage}`,
-          }
-        } else {
+      const targetPath = args.target.trim()
+      console.log(`Main process received request to open: ${targetPath}`)
+
+      try {
+        if (
+          targetPath.startsWith('http://') ||
+          targetPath.startsWith('https://') ||
+          targetPath.startsWith('mailto:')
+        ) {
+          console.log(`Opening external URL: ${targetPath}`)
+          await shell.openExternal(targetPath)
           return {
             success: true,
-            message: `Successfully opened path: ${targetPath}`,
+            message: `Successfully initiated opening URL: ${targetPath}`,
+          }
+        } else {
+          console.log(`Opening path/application: ${targetPath}`)
+          const errorMessage = await shell.openPath(targetPath)
+
+          if (errorMessage) {
+            console.error(
+              `Failed to open path "${targetPath}": ${errorMessage}`
+            )
+            return {
+              success: false,
+              message: `Error: Could not open "${targetPath}". Reason: ${errorMessage}`,
+            }
+          } else {
+            return {
+              success: true,
+              message: `Successfully opened path: ${targetPath}`,
+            }
           }
         }
-      }
-    } catch (error: any) {
-      console.error(`Unexpected error opening target "${targetPath}":`, error)
-      return {
-        success: false,
-        message: `Error: An unexpected issue occurred while trying to open "${targetPath}". ${error.message || ''}`,
-      }
-    }
-  })
-
-  ipcMain.handle('electron:manage-clipboard', async (event, args) => {
-    if (!args || (args.action !== 'read' && args.action !== 'write')) {
-      console.error('manage_clipboard: Invalid action received:', args?.action)
-      return {
-        success: false,
-        message: 'Error: Invalid action specified. Must be "read" or "write".',
-      }
-    }
-
-    try {
-      if (args.action === 'read') {
-        const clipboardText = clipboard.readText()
-        console.log('Clipboard read:', clipboardText)
+      } catch (error: any) {
+        console.error(`Unexpected error opening target "${targetPath}":`, error)
         return {
-          success: true,
-          message: 'Successfully read text from clipboard.',
-          data: clipboardText,
+          success: false,
+          message: `Error: An unexpected issue occurred while trying to open "${targetPath}". ${error.message || ''}`,
         }
-      } else {
-        if (typeof args.content !== 'string') {
-          if (args.content === undefined || args.content === null) {
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'electron:manage-clipboard',
+    async (event, args: { action: 'read' | 'write'; content?: string }) => {
+      if (!args || (args.action !== 'read' && args.action !== 'write')) {
+        console.error(
+          'manage_clipboard: Invalid action received:',
+          args?.action
+        )
+        return {
+          success: false,
+          message:
+            'Error: Invalid action specified. Must be "read" or "write".',
+        }
+      }
+
+      try {
+        if (args.action === 'read') {
+          const clipboardText = clipboard.readText()
+          console.log(
+            'Clipboard read:',
+            clipboardText.substring(0, 100) +
+              (clipboardText.length > 100 ? '...' : '')
+          )
+          return {
+            success: true,
+            message: 'Successfully read text from clipboard.',
+            data: clipboardText,
+          }
+        } else {
+          if (typeof args.content !== 'string') {
+            if (args.content === undefined || args.content === null) {
+              console.error(
+                'manage_clipboard: Content is missing for write action.'
+              )
+              return {
+                success: false,
+                message:
+                  'Error: Text content must be provided for the "write" action (can be an empty string to clear).',
+              }
+            }
             console.error(
-              'manage_clipboard: Content is missing for write action.'
+              'manage_clipboard: Content must be a string for write action.'
             )
             return {
               success: false,
               message:
-                'Error: Text content must be provided for the "write" action.',
+                'Error: Text content must be a string for the "write" action.',
             }
           }
 
-          console.error(
-            'manage_clipboard: Content must be a string for write action.'
-          )
+          clipboard.writeText(args.content)
+          console.log('Clipboard write successful.')
           return {
-            success: false,
-            message:
-              'Error: Text content must be a string for the "write" action.',
+            success: true,
+            message: 'Successfully wrote text to clipboard.',
           }
         }
-
-        clipboard.writeText(args.content)
-        console.log('Clipboard write successful.')
+      } catch (error: any) {
+        console.error(
+          `Unexpected error during clipboard action "${args.action}":`,
+          error
+        )
         return {
-          success: true,
-          message: 'Successfully wrote text to clipboard.',
+          success: false,
+          message: `Error: An unexpected issue occurred during the clipboard operation. ${error.message || ''}`,
         }
       }
-    } catch (error: any) {
-      console.error(
-        `Unexpected error during clipboard action "${args.action}":`,
-        error
-      )
-      return {
-        success: false,
-        message: `Error: An unexpected issue occurred during the clipboard operation. ${error.message || ''}`,
-      }
     }
-  })
+  )
 }
 
 async function createOverlayWindow() {
@@ -729,11 +809,6 @@ async function createOverlayWindow() {
   overlayWindow.on('closed', () => {
     overlayWindow = null
   })
-
-  ipcMain.handle('capture-screen', async () => {
-    const sources = await desktopCapturer.getSources({ types: ['screen'] })
-    return sources
-  })
 }
 
 app.on('ready', () => {
@@ -751,12 +826,12 @@ app.on('ready', () => {
 app.whenReady().then(async () => {
   protocol.registerFileProtocol('alice-image', (request, callback) => {
     const url = request.url.substring('alice-image://'.length)
-    const filePath = path.join(
-      GENERATED_IMAGES_FULL_PATH,
-      decodeURIComponent(url)
+    const decodedUrlPath = decodeURIComponent(url)
+    const filePath = path.normalize(
+      path.join(GENERATED_IMAGES_FULL_PATH, decodedUrlPath)
     )
 
-    if (filePath.startsWith(GENERATED_IMAGES_FULL_PATH)) {
+    if (filePath.startsWith(path.normalize(GENERATED_IMAGES_FULL_PATH))) {
       callback({ path: filePath })
     } else {
       console.error(
@@ -765,6 +840,7 @@ app.whenReady().then(async () => {
       callback({ error: -6 })
     }
   })
+
   const initialSettings = await loadSettings()
   if (initialSettings) {
     console.log('Initial settings loaded in main process:', initialSettings)
@@ -839,7 +915,7 @@ app.on('activate', () => {
 
 ipcMain.handle('google-calendar:get-auth-url', async () => {
   try {
-    await startAuthServer(win)
+    await startAuthServer()
     const oAuth2Client = googleAuthManager.getOAuth2Client()
     const authUrl = oAuth2Client.generateAuthUrl({
       access_type: 'offline',
@@ -849,7 +925,10 @@ ipcMain.handle('google-calendar:get-auth-url', async () => {
         'https://www.googleapis.com/auth/gmail.readonly',
       ],
     })
-    console.log('[IPC get-auth-url] Generated auth URL:', authUrl)
+    console.log(
+      '[IPC get-auth-url] Generated auth URL:',
+      authUrl.substring(0, 100) + '...'
+    )
     shell.openExternal(authUrl)
     return {
       success: true,
@@ -876,32 +955,18 @@ ipcMain.handle('google-calendar:check-auth-status', async () => {
 ipcMain.handle('google-calendar:disconnect', async () => {
   await googleAuthManager.clearTokens()
   stopAuthServer()
-  return { success: true, message: 'Disconnected from Google Calendar.' }
+  return { success: true, message: 'Disconnected from Google Services.' }
 })
 
-async function withAuthenticatedCalendarClient<T>(
-  operation: (authClient: any) => Promise<T>
-): Promise<T | { success: false; error: string }> {
-  const authClient = await googleAuthManager.getAuthenticatedClient()
-  if (!authClient) {
-    return {
-      success: false,
-      error:
-        'User not authenticated with Google Calendar. Please authenticate in settings.',
-    }
-  }
-  return operation(authClient)
-}
-
-async function withAuthenticatedGmailClient<T>(
-  operation: (authClient: any) => Promise<T>
+async function withAuthenticatedClient<T>(
+  operation: (authClient: any) => Promise<T>,
+  serviceName: string
 ): Promise<T | { success: false; error: string; unauthenticated?: boolean }> {
   const authClient = await googleAuthManager.getAuthenticatedClient()
   if (!authClient) {
     return {
       success: false,
-      error:
-        'User not authenticated with Google. Please authenticate in settings.',
+      error: `User not authenticated with ${serviceName}. Please authenticate in settings.`,
       unauthenticated: true,
     }
   }
@@ -909,88 +974,98 @@ async function withAuthenticatedGmailClient<T>(
 }
 
 ipcMain.handle('google-calendar:list-events', async (event, args) => {
-  return withAuthenticatedCalendarClient(authClient =>
-    googleCalendarManager.listEvents(
-      authClient,
-      args.calendarId,
-      args.timeMin,
-      args.timeMax,
-      args.q,
-      args.maxResults
-    )
+  return withAuthenticatedClient(
+    authClient =>
+      googleCalendarManager.listEvents(
+        authClient,
+        args.calendarId,
+        args.timeMin,
+        args.timeMax,
+        args.q,
+        args.maxResults
+      ),
+    'Google Calendar'
   )
 })
 
 ipcMain.handle('google-calendar:create-event', async (event, args) => {
-  return withAuthenticatedCalendarClient(authClient =>
-    googleCalendarManager.createEvent(
-      authClient,
-      args.calendarId,
-      args.eventResource
-    )
+  return withAuthenticatedClient(
+    authClient =>
+      googleCalendarManager.createEvent(
+        authClient,
+        args.calendarId,
+        args.eventResource
+      ),
+    'Google Calendar'
   )
 })
 
 ipcMain.handle('google-calendar:update-event', async (event, args) => {
-  return withAuthenticatedCalendarClient(authClient =>
-    googleCalendarManager.updateEvent(
-      authClient,
-      args.calendarId,
-      args.eventId,
-      args.eventResource
-    )
+  return withAuthenticatedClient(
+    authClient =>
+      googleCalendarManager.updateEvent(
+        authClient,
+        args.calendarId,
+        args.eventId,
+        args.eventResource
+      ),
+    'Google Calendar'
   )
 })
 
 ipcMain.handle('google-calendar:delete-event', async (event, args) => {
-  return withAuthenticatedCalendarClient(authClient =>
-    googleCalendarManager.deleteEvent(authClient, args.calendarId, args.eventId)
+  return withAuthenticatedClient(
+    authClient =>
+      googleCalendarManager.deleteEvent(
+        authClient,
+        args.calendarId,
+        args.eventId
+      ),
+    'Google Calendar'
   )
 })
 
 ipcMain.handle('google-gmail:list-messages', async (event, args) => {
-  return withAuthenticatedGmailClient(authClient =>
-    googleGmailManager.listMessages({
-      authClient,
-      userId: args.userId,
-      maxResults: args.maxResults,
-      labelIds: args.labelIds,
-      q: args.q,
-      includeSpamTrash: args.includeSpamTrash,
-    })
+  return withAuthenticatedClient(
+    authClient =>
+      googleGmailManager.listMessages({
+        authClient,
+        userId: args.userId,
+        maxResults: args.maxResults,
+        labelIds: args.labelIds,
+        q: args.q,
+        includeSpamTrash: args.includeSpamTrash,
+      }),
+    'Gmail'
   )
 })
 
 ipcMain.handle('google-gmail:get-message', async (event, args) => {
-  return withAuthenticatedGmailClient(authClient =>
-    googleGmailManager.getMessage({
-      authClient,
-      userId: args.userId,
-      id: args.id,
-      format: args.format,
-    })
+  return withAuthenticatedClient(
+    authClient =>
+      googleGmailManager.getMessage({
+        authClient,
+        userId: args.userId,
+        id: args.id,
+        format: args.format,
+      }),
+    'Gmail'
   )
 })
 
-ipcMain.handle('open-win', (_, arg) => {
-  const childWindow = new BrowserWindow({
-    webPreferences: {
-      preload,
-    },
-  })
-
-  if (VITE_DEV_SERVER_URL) {
-    childWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
-  } else {
-    childWindow.loadFile(indexHtml, { hash: arg })
-  }
-})
-
 app.on('certificate-error', (event, webContents, url, err, certificate, cb) => {
-  if (err) console.error('Certificate error for URL:', url, err.message)
+  if (err)
+    console.error(
+      'Certificate error for URL:',
+      url,
+      err.message ? err.message : err
+    )
 
-  if (url.startsWith('https://192.168.')) {
-    console.warn(`Bypassing certificate error for local URL: ${url}`)
+  if (
+    url.startsWith('https://192.168.') ||
+    url.startsWith('https://localhost')
+  ) {
+    console.warn(`Bypassing certificate error for local/dev URL: ${url}`)
     event.preventDefault()
     cb(true)
   } else {

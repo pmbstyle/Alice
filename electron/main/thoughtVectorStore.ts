@@ -30,6 +30,20 @@ export interface ThoughtMetadata {
   createdAt: string
 }
 
+export interface RawMessageRecord {
+  role: string
+  text_content: string
+  created_at: string
+}
+
+export interface ConversationSummaryRecord {
+  id: string
+  summary_text: string
+  summarized_messages_count: number
+  conversation_id?: string
+  created_at: string
+}
+
 export interface MemoryRecord {
   id: string
   content: string
@@ -79,8 +93,20 @@ function initDB() {
     );
   `)
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS conversation_summaries (
+      id TEXT PRIMARY KEY,
+      summary_text TEXT NOT NULL,
+      summarized_messages_count INTEGER NOT NULL,
+      conversation_id TEXT, -- Optional: to scope summaries to specific conversations
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_cs_created_at ON conversation_summaries (created_at);
+    CREATE INDEX IF NOT EXISTS idx_cs_conversation_id ON conversation_summaries (conversation_id);
+  `)
+
   console.log(
-    '[ThoughtVectorStore DB] SQLite database initialized and tables ensured.'
+    '[ThoughtVectorStore DB] SQLite database initialized and tables ensured (including conversation_summaries).'
   )
 }
 
@@ -189,10 +215,6 @@ function insertThoughtMetadata(
       createdAt,
       embeddingBuffer
     )
-    console.log(
-      '[insertThoughtMetadata] SQLite insert successful. Changes:',
-      info.changes
-    )
     if (info.changes === 0) {
       console.warn(
         '[insertThoughtMetadata] SQLite insert reported 0 changes. ID might exist or other issue.',
@@ -214,7 +236,7 @@ function getThoughtMetadataByLabels(labels: number[]): ThoughtMetadata[] {
         SELECT thought_id, conversation_id, role, text_content, created_at
         FROM thoughts
         WHERE hnsw_label IN (${placeholders})
-        ORDER BY hnsw_label
+        ORDER BY hnsw_label /* Order by label to match HNSW results if needed, though created_at might be more useful for context */
     `)
   const rows = stmt.all(...labels) as any[]
   return rows.map(row => ({
@@ -358,7 +380,6 @@ async function saveHnswIndex() {
     const dir = path.dirname(hnswIndexFilePath)
     await fs.mkdir(dir, { recursive: true })
     await hnswIndex.writeIndex(hnswIndexFilePath)
-    console.log('[ThoughtVectorStore] HNSW Index saved.')
   } catch (error) {
     console.error('[ThoughtVectorStore] Error saving HNSW index:', error)
   }
@@ -377,11 +398,6 @@ export async function addThoughtVector(
   textContent: string,
   embedding: number[]
 ): Promise<void> {
-  console.log('[addThoughtVector] Attempting to add thought:', {
-    conversationId,
-    role,
-    textPreview: textContent.substring(0, 50),
-  })
   if (!isStoreInitialized || !hnswIndex || !db) {
     console.error('[ThoughtVectorStore ADD] Store not initialized properly.')
     await initializeThoughtVectorStore()
@@ -398,7 +414,7 @@ export async function addThoughtVector(
     )
   }
 
-  const thoughtId = `${conversationId}-${role}-${Date.now()}`
+  const thoughtId = `${conversationId}-${role}-${Date.now()}-${randomUUID().substring(0, 8)}`
   const label = hnswIndex.getCurrentCount()
 
   if (label >= hnswIndex.getMaxElements()) {
@@ -426,16 +442,12 @@ export async function addThoughtVector(
   })()
 
   await saveHnswIndex()
-  console.log(
-    `[ThoughtVectorStore ADD] Added thought with HNSW label ${label}, ID ${thoughtId}. HNSW count: ${hnswIndex.getCurrentCount()}`
-  )
 }
 
 export async function searchSimilarThoughts(
   queryEmbedding: number[],
   topK: number
 ): Promise<ThoughtMetadata[]> {
-  console.log('[ThoughtVectorStore SEARCH] Received query.')
   if (
     !isStoreInitialized ||
     !hnswIndex ||
@@ -453,18 +465,11 @@ export async function searchSimilarThoughts(
   }
 
   const numPointsInIndex = hnswIndex.getCurrentCount()
-  console.log(
-    `[ThoughtVectorStore SEARCH] Searching in HNSW index with ${numPointsInIndex} points.`
-  )
   if (numPointsInIndex === 0) return []
 
   const results = hnswIndex.searchKnn(
     queryEmbedding,
     Math.min(topK, numPointsInIndex)
-  )
-  console.log(
-    '[ThoughtVectorStore SEARCH] HNSW searchKnn results (labels):',
-    results.neighbors
   )
 
   if (!results || !results.neighbors || results.neighbors.length === 0) {
@@ -473,9 +478,6 @@ export async function searchSimilarThoughts(
   }
 
   const retrievedMetadata = getThoughtMetadataByLabels(results.neighbors)
-  console.log(
-    `[ThoughtVectorStore SEARCH] Retrieved ${retrievedMetadata.length} metadata items from DB.`
-  )
 
   return retrievedMetadata
 }
@@ -534,5 +536,120 @@ export function getDBInstance(): Database.Database {
   if (!db) {
     initDB()
   }
-  return db!
+  if (!db) {
+    throw new Error('Failed to initialize database instance.')
+  }
+  return db
+}
+
+/**
+ * Retrieves the most recent raw messages from the thoughts table for summarization.
+ * @param limit The maximum number of messages to retrieve.
+ * @param conversationId Optional. If provided, messages will be scoped to this conversation.
+ * @returns A promise that resolves to an array of RawMessageRecord.
+ */
+export async function getRecentMessagesForSummarization(
+  limit: number,
+  conversationId?: string
+): Promise<RawMessageRecord[]> {
+  const currentDb = getDBInstance()
+  try {
+    let sql = 'SELECT role, text_content, created_at FROM thoughts'
+    const params: any[] = []
+
+    if (conversationId) {
+      sql += ' WHERE conversation_id = ?'
+      params.push(conversationId)
+    }
+
+    sql += ' ORDER BY created_at DESC LIMIT ?'
+    params.push(limit)
+
+    const rows = currentDb.prepare(sql).all(...params) as RawMessageRecord[]
+    return rows.reverse()
+  } catch (error) {
+    console.error(
+      'Failed to get recent messages for summarization from SQLite:',
+      error
+    )
+    throw error
+  }
+}
+
+/**
+ * Saves a new conversation summary to the database.
+ * @param summaryText The text of the summary.
+ * @param summarizedMessagesCount The number of messages that were summarized.
+ * @param conversationId Optional. The ID of the conversation this summary belongs to.
+ * @returns A promise that resolves to the saved ConversationSummaryRecord.
+ */
+export async function saveConversationSummary(
+  summaryText: string,
+  summarizedMessagesCount: number,
+  conversationId?: string
+): Promise<ConversationSummaryRecord> {
+  const currentDb = getDBInstance()
+  const id = randomUUID()
+  const createdAt = new Date().toISOString()
+
+  try {
+    const stmt = currentDb.prepare(
+      'INSERT INTO conversation_summaries (id, summary_text, summarized_messages_count, conversation_id, created_at) VALUES (?, ?, ?, ?, ?)'
+    )
+    stmt.run(
+      id,
+      summaryText,
+      summarizedMessagesCount,
+      conversationId,
+      createdAt
+    )
+    console.log(
+      '[ThoughtVectorStore] Conversation summary saved to SQLite:',
+      id
+    )
+    return {
+      id,
+      summary_text: summaryText,
+      summarized_messages_count: summarizedMessagesCount,
+      conversation_id: conversationId,
+      created_at: createdAt,
+    }
+  } catch (error) {
+    console.error('Failed to save conversation summary to SQLite:', error)
+    throw error
+  }
+}
+
+/**
+ * Retrieves the latest conversation summary.
+ * @param conversationId Optional. If provided, retrieves the latest summary for that specific conversation.
+ * @returns A promise that resolves to the latest ConversationSummaryRecord or null if none found.
+ */
+export async function getLatestConversationSummary(
+  conversationId?: string
+): Promise<ConversationSummaryRecord | null> {
+  const currentDb = getDBInstance()
+  try {
+    let sql =
+      'SELECT id, summary_text, summarized_messages_count, conversation_id, created_at FROM conversation_summaries'
+    const params: any[] = []
+
+    if (conversationId) {
+      sql += ' WHERE conversation_id = ?'
+      params.push(conversationId)
+    }
+
+    sql += ' ORDER BY created_at DESC LIMIT 1'
+
+    const row = currentDb.prepare(sql).get(...params) as
+      | ConversationSummaryRecord
+      | undefined
+    return row || null
+  } catch (error) {
+    console.error(
+      'Failed to get latest conversation summary from SQLite:',
+      error
+    )
+    throw error
+  }
 }

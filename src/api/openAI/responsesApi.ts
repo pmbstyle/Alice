@@ -36,6 +36,7 @@ type OpenAIResponsesApiTool =
   | OpenAIResponsesApiFunctionTool
   | OpenAIResponsesApiImageTool
   | OpenAIResponsesApiWebSearchPreviewTool
+  | MCPToolConfig
 
 export const getOpenAIClient = (): OpenAI => {
   const settings = useSettingsStore().config
@@ -50,7 +51,7 @@ export const getOpenAIClient = (): OpenAI => {
 }
 
 export const createOpenAIResponse = async (
-  input: any[],
+  input: OpenAI.Responses.Request.InputItemLike[],
   previousResponseId: string | null,
   stream: boolean = false,
   customInstructions?: string
@@ -94,7 +95,7 @@ export const createOpenAIResponse = async (
             mcpTool.server_label &&
             mcpTool.server_url
           ) {
-            finalToolsForApi.push(mcpTool as any)
+            finalToolsForApi.push(mcpTool as MCPToolConfig)
           } else {
             console.warn('Invalid MCP tool definition skipped:', mcpTool)
           }
@@ -124,7 +125,8 @@ export const createOpenAIResponse = async (
         : settings.assistantSystemPrompt || undefined,
     temperature: settings.assistantTemperature ?? 1.0,
     top_p: settings.assistantTopP ?? 1.0,
-    tools: finalToolsForApi.length > 0 ? finalToolsForApi : undefined,
+    tools:
+      finalToolsForApi.length > 0 ? (finalToolsForApi as any[]) : undefined,
     previous_response_id: previousResponseId || undefined,
     stream: stream,
     store: true,
@@ -159,11 +161,87 @@ export const uploadFileForResponses = async (
   try {
     const file = await openai.files.create({
       file: fileData,
-      purpose: purpose,
+      purpose: purpose as OpenAI.FileCreateParams['purpose'],
     })
     return file
   } catch (error) {
     console.error('Error uploading file to OpenAI:', error)
+    return null
+  }
+}
+
+/**
+ * Creates a summarization response from OpenAI using a specific model.
+ * @param messagesToSummarize An array of message strings, formatted for the summarization prompt.
+ * @param summarizationModel The model to use for summarization (e.g., 'gpt-4.1-nano').
+ * @param systemPrompt The system prompt to guide the summarization.
+ * @returns A promise that resolves to the summary string or null if an error occurs.
+ */
+export const createSummarizationResponse = async (
+  messagesToSummarize: { role: string; content: string }[],
+  summarizationModel: string = 'gpt-4.1-nano',
+  systemPrompt: string
+): Promise<string | null> => {
+  const openai = getOpenAIClient()
+
+  const apiInput: OpenAI.Responses.Request.InputItemLike[] =
+    messagesToSummarize.map(msg => {
+      return {
+        role: 'user',
+        content: [{ type: 'input_text', text: `${msg.role}: ${msg.content}` }],
+      }
+    })
+
+  const combinedTextForSummarization = messagesToSummarize
+    .map(msg => `${msg.role}: ${msg.content}`)
+    .join('\n\n')
+
+  const summarizationApiInput: OpenAI.Responses.Request.InputItemLike[] = [
+    {
+      role: 'user',
+      content: [{ type: 'input_text', text: combinedTextForSummarization }],
+    },
+  ]
+
+  const params: OpenAI.Responses.ResponseCreateParams = {
+    model: summarizationModel,
+    input: summarizationApiInput,
+    instructions: systemPrompt,
+    temperature: 0.5,
+    top_p: 1.0,
+    stream: false,
+    store: false,
+  }
+
+  try {
+    const response = await openai.responses.create(params as any)
+
+    if (
+      response.output &&
+      Array.isArray(response.output) &&
+      response.output.length > 0
+    ) {
+      const messageOutput = response.output.find(
+        (item: any) => item.type === 'message' && item.role === 'assistant'
+      )
+      if (
+        messageOutput &&
+        messageOutput.content &&
+        Array.isArray(messageOutput.content) &&
+        messageOutput.content.length > 0
+      ) {
+        const textPart = messageOutput.content.find(
+          (part: any) => part.type === 'output_text'
+        )
+        if (textPart && textPart.text) {
+          return textPart.text.trim()
+        }
+      }
+    }
+    console.error('Summarization response format unexpected:', response)
+    return null
+  } catch (error) {
+    console.error('Error creating summarization response with OpenAI:', error)
     return null
   }
 }

@@ -127,4 +127,4 @@ Create `app-config.json` file in the root directory with the following content t
 2. Install the app from the `release` folder.
 
 ## Community links
-- [ArchLinux port](https://aur.archlinux.org/packages/alice-ai-assient-bin)
+- [ArchLinux port](https://aur.archlinux.org/packages/alice-ai-app-bin)

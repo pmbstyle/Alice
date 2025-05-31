@@ -17,6 +17,9 @@ export interface AppChatMessageContentPart {
   uri?: string
   path?: string
   absolutePathForOpening?: string
+  imageGenerationId?: string
+  isPartial?: boolean
+  partialIndex?: number
 }
 
 export interface ChatMessage {
@@ -205,6 +208,65 @@ export const useGeneralStore = defineStore('general', () => {
     }
   }
 
+  const updateImageContentPartByGenerationId = (
+    tempMessageId: string,
+    imageGenerationId: string,
+    newPath: string,
+    newAbsolutePath: string,
+    isPartialUpdate: boolean,
+    partialIndexUpdate?: number
+  ) => {
+    const messageIndex = findMessageIndexByTempId(tempMessageId)
+    if (messageIndex !== -1) {
+      const message = chatHistory.value[messageIndex]
+      if (Array.isArray(message.content)) {
+        let imagePartIndex = message.content.findIndex(
+          p =>
+            p.type === 'app_generated_image_path' &&
+            p.imageGenerationId === imageGenerationId
+        )
+
+        if (imagePartIndex !== -1) {
+          const partToUpdate = message.content[
+            imagePartIndex
+          ] as AppChatMessageContentPart
+          partToUpdate.path = newPath
+          partToUpdate.absolutePathForOpening = newAbsolutePath
+          partToUpdate.isPartial = isPartialUpdate
+          if (isPartialUpdate && partialIndexUpdate !== undefined) {
+            partToUpdate.partialIndex = partialIndexUpdate
+          } else if (!isPartialUpdate) {
+            delete partToUpdate.partialIndex
+          }
+        } else {
+          message.content.push({
+            type: 'app_generated_image_path',
+            path: newPath,
+            absolutePathForOpening: newAbsolutePath,
+            imageGenerationId: imageGenerationId,
+            isPartial: isPartialUpdate,
+            partialIndex: partialIndexUpdate,
+          })
+        }
+      } else {
+        message.content = [
+          {
+            type: 'app_generated_image_path',
+            path: newPath,
+            absolutePathForOpening: newAbsolutePath,
+            imageGenerationId: imageGenerationId,
+            isPartial: isPartialUpdate,
+            partialIndex: partialIndexUpdate,
+          },
+        ]
+      }
+    } else {
+      console.warn(
+        `[GeneralStore updateImagePart] Message with tempId ${tempMessageId} not found.`
+      )
+    }
+  }
+
   const updateMessageContentByTempId = (
     tempId: string,
     newContentText: string
@@ -297,6 +359,7 @@ export const useGeneralStore = defineStore('general', () => {
     updateMessageApiIdByTempId,
     appendMessageDeltaByTempId,
     addContentPartToMessageByTempId,
+    updateImageContentPartByGenerationId,
     updateMessageContentByTempId,
     updateMessageApiResponseIdByTempId,
     addToolCallToMessageByTempId,

@@ -14,6 +14,7 @@ interface OpenAIResponsesApiFunctionTool {
 
 interface OpenAIResponsesApiImageTool {
   type: 'image_generation'
+  partial_images?: number
 }
 
 interface OpenAIResponsesApiWebSearchPreviewTool {
@@ -110,6 +111,7 @@ export const createOpenAIResponse = async (
 
   finalToolsForApi.push({
     type: 'image_generation',
+    partial_images: 2,
   } as OpenAIResponsesApiImageTool)
 
   finalToolsForApi.push({
@@ -170,13 +172,6 @@ export const uploadFileForResponses = async (
   }
 }
 
-/**
- * Creates a summarization response from OpenAI using a specific model.
- * @param messagesToSummarize An array of message strings, formatted for the summarization prompt.
- * @param summarizationModel The model to use for summarization (e.g., 'gpt-4.1-nano').
- * @param systemPrompt The system prompt to guide the summarization.
- * @returns A promise that resolves to the summary string or null if an error occurs.
- */
 export const createSummarizationResponse = async (
   messagesToSummarize: { role: string; content: string }[],
   summarizationModel: string = 'gpt-4.1-nano',

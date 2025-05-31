@@ -25,6 +25,9 @@ export interface AppChatMessageContentPart {
   uri?: string
   path?: string
   absolutePathForOpening?: string
+  imageGenerationId?: string
+  isPartial?: boolean
+  partialIndex?: number
 }
 
 export interface ChatMessage {
@@ -50,7 +53,7 @@ export const useConversationStore = defineStore('conversation', () => {
   const {
     setAudioState,
     queueAudioForPlayback,
-    addContentPartToMessageByTempId,
+    updateImageContentPartByGenerationId,
     stopPlaybackAndClearQueue,
   } = generalStore
   const { isRecordingRequested, audioState, chatHistory } =
@@ -318,6 +321,15 @@ export const useConversationStore = defineStore('conversation', () => {
                 }
                 return null
               } else if (appPart.type === 'app_generated_image_path') {
+                if (
+                  currentApiRole !== 'user' &&
+                  currentApiRole !== 'developer'
+                ) {
+                  return {
+                    type: 'output_text',
+                    text: '[Assistant previously generated an image]',
+                  }
+                }
                 return null
               }
               return null
@@ -350,6 +362,7 @@ export const useConversationStore = defineStore('conversation', () => {
     let currentAssistantApiMessageId: string | null = null
     const functionCallArgsBuffer: Record<string, string> = {}
     let streamEndedNormally = true
+    const activeImageGenerationCallId = ref<string | null>(null)
 
     try {
       for await (const event of stream) {
@@ -377,6 +390,46 @@ export const useConversationStore = defineStore('conversation', () => {
               )
             }
           }
+          if (event.item.type === 'image_generation_call') {
+            activeImageGenerationCallId.value = event.item.id
+            setAudioState('GENERATING_IMAGE')
+            generalStore.statusMessage = '🎨 Generating image...'
+          }
+        }
+
+        if (event.type === 'response.image_generation_call.partial_image') {
+          const imageGenCallId = event.item_id
+          const partialIdx = event.partial_image_index
+          const imageBase64 = event.partial_image_b64
+
+          if (
+            imageBase64 &&
+            imageGenCallId === activeImageGenerationCallId.value
+          ) {
+            generalStore.statusMessage = `🎨 Generating image...`
+            const partialImageFileName = `alice_partial_${imageGenCallId}_${partialIdx}.png`
+            const saveResult = await window.ipcRenderer.invoke(
+              'image:save-generated',
+              imageBase64
+            )
+
+            if (
+              saveResult.success &&
+              saveResult.fileName &&
+              saveResult.absolutePathForOpening
+            ) {
+              updateImageContentPartByGenerationId(
+                placeholderTempId,
+                imageGenCallId,
+                saveResult.fileName,
+                saveResult.absolutePathForOpening,
+                true,
+                partialIdx + 1
+              )
+            } else {
+              console.error('Failed to save partial image:', saveResult?.error)
+            }
+          }
         }
 
         if (
@@ -384,10 +437,17 @@ export const useConversationStore = defineStore('conversation', () => {
           event.item.type === 'image_generation_call'
         ) {
           setAudioState('GENERATING_IMAGE')
-          const imageBase64 = (
+          generalStore.statusMessage = '🖼️ Finalizing image...'
+          const finalImageCall =
             event.item as OpenAI.Responses.ImageGenerationCallOutput
-          ).result
-          if (imageBase64) {
+          const imageGenCallId = finalImageCall.id
+
+          if (
+            finalImageCall.result &&
+            imageGenCallId === activeImageGenerationCallId.value
+          ) {
+            const imageBase64 = finalImageCall.result
+            const finalImageFileName = `alice_final_${imageGenCallId}.png`
             const saveResult = await window.ipcRenderer.invoke(
               'image:save-generated',
               imageBase64
@@ -398,28 +458,36 @@ export const useConversationStore = defineStore('conversation', () => {
               saveResult.fileName &&
               saveResult.absolutePathForOpening
             ) {
-              addContentPartToMessageByTempId(placeholderTempId, {
-                type: 'app_generated_image_path',
-                path: saveResult.fileName,
-                absolutePathForOpening: saveResult.absolutePathForOpening,
-              })
+              updateImageContentPartByGenerationId(
+                placeholderTempId,
+                imageGenCallId,
+                saveResult.fileName,
+                saveResult.absolutePathForOpening,
+                false
+              )
+              generalStore.statusMessage = '✨ Image complete!'
             } else {
-              addContentPartToMessageByTempId(placeholderTempId, {
+              generalStore.addContentPartToMessageByTempId(placeholderTempId, {
                 type: 'app_text',
-                text: `\n[Error saving image: ${saveResult?.error || 'IPC Error'}]`,
+                text: `\n[Error saving final image: ${saveResult?.error || 'IPC Error'}]`,
               })
+              generalStore.statusMessage = '⚠️ Error saving final image.'
             }
           } else {
-            addContentPartToMessageByTempId(placeholderTempId, {
+            generalStore.addContentPartToMessageByTempId(placeholderTempId, {
               type: 'app_text',
-              text: '\n[Image generation did not return image data]',
+              text: '\n[Image generation did not return final image data]',
             })
+            generalStore.statusMessage = '⚠️ No final image data.'
           }
+          activeImageGenerationCallId.value = null
           if (
             generalStore.audioQueue.length === 0 &&
             audioState.value === 'GENERATING_IMAGE'
           ) {
-            setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+            setTimeout(() => {
+              setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+            }, 1500)
           }
         }
 
@@ -511,6 +579,7 @@ export const useConversationStore = defineStore('conversation', () => {
           const errorMsg = `Error: ${event.error?.message || 'Streaming error'}`
           generalStore.statusMessage = errorMsg
           generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
+          activeImageGenerationCallId.value = null
           break
         }
       }
@@ -526,6 +595,7 @@ export const useConversationStore = defineStore('conversation', () => {
       }
     } catch (error: any) {
       streamEndedNormally = false
+      activeImageGenerationCallId.value = null
       console.error('Error processing stream:', error)
       const errorMsg = `Error: Processing response failed (${error.message})`
       generalStore.statusMessage = errorMsg
@@ -535,7 +605,8 @@ export const useConversationStore = defineStore('conversation', () => {
         if (
           (audioState.value === 'WAITING_FOR_RESPONSE' ||
             audioState.value === 'GENERATING_IMAGE') &&
-          generalStore.audioQueue.length === 0
+          generalStore.audioQueue.length === 0 &&
+          !activeImageGenerationCallId.value
         ) {
           setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
         }
@@ -546,15 +617,16 @@ export const useConversationStore = defineStore('conversation', () => {
         if (finalAssistantMessage) {
           try {
             let assistantTextForIndexing = ''
-            if (typeof finalAssistantMessage.content === 'string') {
-              assistantTextForIndexing = finalAssistantMessage.content
-            } else if (Array.isArray(finalAssistantMessage.content)) {
+
+            if (Array.isArray(finalAssistantMessage.content)) {
               const textPart = finalAssistantMessage.content.find(
                 p => p.type === 'app_text'
               )
               if (textPart && textPart.text) {
                 assistantTextForIndexing = textPart.text
               }
+            } else if (typeof finalAssistantMessage.content === 'string') {
+              assistantTextForIndexing = finalAssistantMessage.content
             }
 
             if (assistantTextForIndexing) {
@@ -577,7 +649,9 @@ export const useConversationStore = defineStore('conversation', () => {
             )
           }
         }
-        await triggerConversationSummarization()
+        if (!activeImageGenerationCallId.value) {
+          await triggerConversationSummarization()
+        }
       }
     }
     return { streamEndedNormally }
@@ -619,7 +693,8 @@ export const useConversationStore = defineStore('conversation', () => {
         if (
           queueAudioForPlayback(ttsResponse) &&
           audioState.value !== 'SPEAKING' &&
-          generalStore.audioQueue.length > 0
+          generalStore.audioQueue.length > 0 &&
+          audioState.value !== 'GENERATING_IMAGE'
         )
           setAudioState('SPEAKING')
       } catch (err) {
@@ -960,7 +1035,6 @@ export const useConversationStore = defineStore('conversation', () => {
     initialize,
     chat,
     transcribeAudioMessage,
-    // uploadScreenshotToOpenAI,
     fetchModels,
     currentResponseId,
     triggerConversationSummarization,

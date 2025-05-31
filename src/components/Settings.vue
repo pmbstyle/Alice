@@ -54,7 +54,7 @@
         <div class="space-y-4 p-2">
           <div>
             <label for="assistant-model" class="block mb-1 text-sm"
-              >Model *</label
+              >Assistant Model *</label
             >
             <select
               id="assistant-model"
@@ -93,7 +93,7 @@
 
           <div>
             <label for="assistant-system-prompt" class="block mb-1 text-sm"
-              >System Prompt</label
+              >Assistant System Prompt</label
             >
             <textarea
               id="assistant-system-prompt"
@@ -107,7 +107,7 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label for="assistant-temperature" class="block mb-1 text-sm">
-                Temperature ({{
+                Assistant Temperature ({{
                   currentSettings.assistantTemperature.toFixed(1)
                 }})
               </label>
@@ -123,7 +123,7 @@
             </div>
             <div>
               <label for="assistant-top-p" class="block mb-1 text-sm">
-                Top P ({{ currentSettings.assistantTopP.toFixed(1) }})
+                Assistant Top P ({{ currentSettings.assistantTopP.toFixed(1) }})
               </label>
               <input
                 id="assistant-top-p"
@@ -137,8 +137,96 @@
             </div>
           </div>
 
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label for="max-history-messages" class="block mb-1 text-sm"
+                >Max History Messages (API)</label
+              >
+              <input
+                id="max-history-messages"
+                type="number"
+                min="1"
+                max="50"
+                step="1"
+                v-model.number="currentSettings.MAX_HISTORY_MESSAGES_FOR_API"
+                class="input input-bordered w-full focus:input-primary"
+              />
+              <p class="text-xs text-gray-400 mt-1">
+                Number of recent messages sent to the API (e.g., 10-20).
+              </p>
+            </div>
+            <div>
+              <label for="summarization-messages" class="block mb-1 text-sm"
+                >Summarization Message Count</label
+              >
+              <input
+                id="summarization-messages"
+                type="number"
+                min="5"
+                max="100"
+                step="1"
+                v-model.number="currentSettings.SUMMARIZATION_MESSAGE_COUNT"
+                class="input input-bordered w-full focus:input-primary"
+              />
+              <p class="text-xs text-gray-400 mt-1">
+                Number of messages to summarize for context (e.g., 20-40).
+              </p>
+            </div>
+          </div>
           <div>
-            <label class="block mb-2 text-sm font-medium">Enabled Tools</label>
+            <label for="summarization-model" class="block mb-1 text-sm"
+              >Summarization Model *</label
+            >
+            <select
+              id="summarization-model"
+              v-model="currentSettings.SUMMARIZATION_MODEL"
+              class="select select-bordered w-full focus:select-primary"
+              required
+            >
+              <option disabled value="">Select a summarization model</option>
+              <option
+                v-if="
+                  conversationStore.availableModels.length === 0 &&
+                  settingsStore.coreOpenAISettingsValid
+                "
+                value=""
+              >
+                Loading models...
+              </option>
+              <option
+                v-for="model in availableModelsForSelect"
+                :key="`summ-${model.id}`"
+                :value="model.id"
+              >
+                {{ model.id }}
+              </option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">
+              Model used for generating conversation summaries (e.g.,
+              gpt-4.1-nano).
+            </p>
+          </div>
+
+          <div>
+            <label for="summarization-system-prompt" class="block mb-1 text-sm"
+              >Summarization System Prompt</label
+            >
+            <textarea
+              id="summarization-system-prompt"
+              v-model="currentSettings.SUMMARIZATION_SYSTEM_PROMPT"
+              rows="6"
+              class="textarea textarea-bordered w-full focus:textarea-primary h-40"
+              placeholder="You are an expert conversation summarizer..."
+            ></textarea>
+            <p class="text-xs text-gray-400 mt-1">
+              System prompt to guide the summarization model.
+            </p>
+          </div>
+
+          <div>
+            <label class="block mb-2 text-sm font-medium"
+              >Enabled Assistant Tools</label
+            >
             <div
               class="space-y-2 p-3 border border-neutral-content/20 rounded-md max-h-60 overflow-y-auto bg-gray-800/50"
             >
@@ -202,7 +290,9 @@
               >Microphone Toggle Hotkey</label
             >
             <div class="flex items-center justify-between">
-              <kbd class="kbd kbd-xl">{{formatAccelerator(currentSettings.microphoneToggleHotkey)}}</kbd>
+              <kbd class="kbd kbd-xl">{{
+                formatAccelerator(currentSettings.microphoneToggleHotkey)
+              }}</kbd>
               <div class="flex items-center gap-2">
                 <button
                   type="button"
@@ -558,12 +648,7 @@ const availableToolsForSelect = computed(() => {
 })
 
 const availableModelsForSelect = computed(() => {
-  return availableModels.value.filter(
-    model => model.id.startsWith('gpt-')
-    // model.id.startsWith('o1-') || //thinking handling is not available yet
-    // model.id.startsWith('o3-') ||
-    // model.id.startsWith('o4-')
-  )
+  return availableModels.value.filter(model => model.id.startsWith('gpt-'))
 })
 
 const toolDependencies: Record<string, string[]> = {
@@ -610,7 +695,7 @@ function isToolConfigured(toolName: string): boolean {
     if (depKey === 'GOOGLE_AUTH') {
       return googleAuthStatus.isAuthenticated
     }
-    return !!currentLocalSettings[depKey]?.trim()
+    return !!currentLocalSettings[depKey as keyof AliceSettings]?.trim()
   })
 }
 
@@ -777,7 +862,8 @@ const handleHotkeyKeyDown = (event: KeyboardEvent) => {
 
     const newHotkey = acceleratorParts.join('+')
     if (isRecordingHotkeyFor.value) {
-      currentSettings.value[isRecordingHotkeyFor.value] = newHotkey
+      currentSettings.value[isRecordingHotkeyFor.value as keyof AliceSettings] =
+        newHotkey as any
     }
     stopRecordingHotkey()
   }
@@ -810,7 +896,7 @@ const clearHotkey = (settingKey: keyof AliceSettings) => {
   if (isRecordingHotkeyFor.value === settingKey) {
     stopRecordingHotkey()
   }
-  currentSettings.value[settingKey] = ''
+  ;(currentSettings.value[settingKey] as any) = ''
 }
 
 onMounted(async () => {
@@ -843,6 +929,9 @@ onUnmounted(() => {
       handleGoogleAuthSuccess
     )
     window.ipcRenderer.off('google-auth-loopback-error', handleGoogleAuthError)
+  }
+  if (isRecordingHotkeyFor.value) {
+    stopRecordingHotkey()
   }
 })
 

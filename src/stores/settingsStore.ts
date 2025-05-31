@@ -1,7 +1,20 @@
+import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
 import { useConversationStore } from './openAIStore'
 import { useGeneralStore } from './generalStore'
 import defaultSystemPromptFromMD from '../../docs/systemPrompt.md?raw'
+
+const DEFAULT_SUMMARIZATION_SYSTEM_PROMPT = `You are an expert conversation summarizer.
+Your task is to create a **concise and brief** summary of the following conversation segment.
+Focus on:
+- Key topics discussed.
+- Important information, facts, or preferences shared by the user or assistant.
+- Decisions made.
+- Any unresolved questions or outstanding tasks.
+
+The summary should help provide context for future interactions, allowing the conversation to resume naturally.
+**Keep the summary to 2-4 sentences if possible, and definitely no more than 150 words.**
+Do not add any conversational fluff, commentary, or an introductory/concluding sentence like "Here is the summary:". Just provide the factual summary of the conversation transcript.`
 
 export interface AliceSettings {
   VITE_OPENAI_API_KEY: string
@@ -13,6 +26,10 @@ export interface AliceSettings {
   assistantTopP: number
   assistantTools: string[]
   mcpServersConfig?: string
+  MAX_HISTORY_MESSAGES_FOR_API: number
+  SUMMARIZATION_MESSAGE_COUNT: number
+  SUMMARIZATION_MODEL: string
+  SUMMARIZATION_SYSTEM_PROMPT: string
 
   microphoneToggleHotkey: string
 
@@ -33,6 +50,10 @@ const defaultSettings: AliceSettings = {
   assistantTopP: 1.0,
   assistantTools: ['get_current_datetime', 'perform_web_search'],
   mcpServersConfig: '[]',
+  MAX_HISTORY_MESSAGES_FOR_API: 10,
+  SUMMARIZATION_MESSAGE_COUNT: 20,
+  SUMMARIZATION_MODEL: 'gpt-4.1-nano',
+  SUMMARIZATION_SYSTEM_PROMPT: DEFAULT_SUMMARIZATION_SYSTEM_PROMPT,
 
   microphoneToggleHotkey: 'Alt+M',
 
@@ -52,6 +73,10 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   assistantTemperature: 'Assistant Temperature',
   assistantTopP: 'Assistant Top P',
   assistantTools: 'Enabled Assistant Tools',
+  MAX_HISTORY_MESSAGES_FOR_API: 'Max History Messages for API',
+  SUMMARIZATION_MESSAGE_COUNT: 'Summarization Message Count',
+  SUMMARIZATION_MODEL: 'Summarization Model',
+  SUMMARIZATION_SYSTEM_PROMPT: 'Summarization System Prompt',
   microphoneToggleHotkey: 'Microphone Toggle Hotkey',
 
   VITE_JACKETT_API_KEY: 'Jackett API Key (Torrents)',
@@ -59,6 +84,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_QB_URL: 'qBittorrent URL',
   VITE_QB_USERNAME: 'qBittorrent Username',
   VITE_QB_PASSWORD: 'qBittorrent Password',
+  mcpServersConfig: 'MCP Servers JSON Configuration',
 }
 
 const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
@@ -66,287 +92,330 @@ const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
   'VITE_GROQ_API_KEY',
 ]
 
-export const useSettingsStore = defineStore('settings', {
-  state: () => ({
-    settings: { ...defaultSettings } as AliceSettings,
-    isLoading: false,
-    isSaving: false,
-    error: null as string | null,
-    successMessage: null as string | null,
-    initialLoadAttempted: false,
-    coreOpenAISettingsValid: false,
-  }),
-  getters: {
-    isProduction: (): boolean => import.meta.env.PROD,
-    areEssentialSettingsProvided(state): boolean {
-      if (!this.isProduction) return true
-      const allEssentialKeys: (keyof AliceSettings)[] = [
-        ...ESSENTIAL_CORE_API_KEYS,
-        'assistantModel',
-      ]
-      return allEssentialKeys.every(key => {
-        const value = state.settings[key]
-        if (typeof value === 'string') return !!value.trim()
-        if (typeof value === 'number') return true
-        if (Array.isArray(value)) return true
-        return false
-      })
-    },
-    areCoreApiKeysSufficientForTesting(state): boolean {
-      if (!this.isProduction) return true
-      return !!state.settings.VITE_OPENAI_API_KEY?.trim()
-    },
-    config(state): Readonly<AliceSettings> {
-      const baseConfig = this.isProduction
-        ? state.settings
-        : {
+export const useSettingsStore = defineStore('settings', () => {
+  const settings = ref<AliceSettings>({ ...defaultSettings })
+  const isLoading = ref(false)
+  const isSaving = ref(false)
+  const error = ref<string | null>(null)
+  const successMessage = ref<string | null>(null)
+  const initialLoadAttempted = ref(false)
+  const coreOpenAISettingsValid = ref(false)
+
+  const isProduction = computed(() => import.meta.env.PROD)
+
+  const areEssentialSettingsProvided = computed(() => {
+    if (!isProduction.value) return true
+    const allEssentialKeys: (keyof AliceSettings)[] = [
+      ...ESSENTIAL_CORE_API_KEYS,
+      'assistantModel',
+      'SUMMARIZATION_MODEL',
+    ]
+    return allEssentialKeys.every(key => {
+      const value = settings.value[key]
+      if (typeof value === 'string') return !!value.trim()
+      if (typeof value === 'number') return true
+      if (Array.isArray(value)) return true
+      return false
+    })
+  })
+
+  const areCoreApiKeysSufficientForTesting = computed(() => {
+    if (!isProduction.value) return true
+    return !!settings.value.VITE_OPENAI_API_KEY?.trim()
+  })
+
+  const config = computed<Readonly<AliceSettings>>(() => {
+    const baseConfig = isProduction.value
+      ? settings.value
+      : {
+          ...defaultSettings,
+          ...settings.value,
+          ...Object.fromEntries(
+            Object.entries(import.meta.env)
+              .filter(
+                ([key]) =>
+                  key.startsWith('VITE_') ||
+                  key.startsWith('assistant') ||
+                  key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
+                  key === 'SUMMARIZATION_MESSAGE_COUNT' ||
+                  key === 'SUMMARIZATION_MODEL' ||
+                  key === 'SUMMARIZATION_SYSTEM_PROMPT'
+              )
+              .map(([key, value]) => {
+                if (
+                  key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
+                  key === 'SUMMARIZATION_MESSAGE_COUNT' ||
+                  key === 'assistantTemperature' ||
+                  key === 'assistantTopP'
+                ) {
+                  return [key, parseFloat(String(value))]
+                }
+                if (key === 'assistantTools' && typeof value === 'string') {
+                  return [
+                    key,
+                    value
+                      .split(',')
+                      .map(t => t.trim())
+                      .filter(Boolean),
+                  ]
+                }
+                return [key, String(value)]
+              })
+          ),
+        }
+    return baseConfig
+  })
+
+  async function loadSettings() {
+    if (initialLoadAttempted.value && isProduction.value) {
+      return
+    }
+
+    isLoading.value = true
+    error.value = null
+    successMessage.value = null
+    coreOpenAISettingsValid.value = false
+    try {
+      if (isProduction.value) {
+        console.log(
+          '[SettingsStore] Production: Loading settings from main process...'
+        )
+        const loaded = await window.settingsAPI.loadSettings()
+        if (loaded) {
+          settings.value = {
             ...defaultSettings,
-            ...state.settings,
-            ...Object.fromEntries(
-              Object.entries(import.meta.env)
-                .filter(
-                  ([key]) =>
-                    key.startsWith('VITE_') || key.startsWith('assistant')
-                )
-                .map(([key, value]) => [key, String(value)])
-            ),
-          }
-      return baseConfig
-    },
-  },
-  actions: {
-    async loadSettings() {
-      if (this.initialLoadAttempted && this.isProduction) {
-        return
-      }
-
-      this.isLoading = true
-      this.error = null
-      this.successMessage = null
-      this.coreOpenAISettingsValid = false
-      try {
-        if (this.isProduction) {
-          console.log(
-            '[SettingsStore] Production: Loading settings from main process...'
-          )
-          const loaded = await window.settingsAPI.loadSettings()
-          if (loaded) {
-            this.settings = {
-              ...defaultSettings,
-              ...(loaded as Partial<AliceSettings>),
-            }
-          } else {
-            this.settings = { ...defaultSettings }
+            ...(loaded as Partial<AliceSettings>),
           }
         } else {
-          console.log(
-            '[SettingsStore] Development: Populating with defaults, persisted dev settings, then .env.'
-          )
-          let devCombinedSettings: AliceSettings = { ...defaultSettings }
-          if (window.settingsAPI) {
-            const loadedDevSettings = await window.settingsAPI.loadSettings()
-            if (loadedDevSettings) {
-              devCombinedSettings = {
-                ...devCombinedSettings,
-                ...(loadedDevSettings as Partial<AliceSettings>),
-              }
-            }
-          }
-          for (const key of Object.keys(defaultSettings) as Array<
-            keyof AliceSettings
-          >) {
-            if (import.meta.env[key]) {
-              const envValue = import.meta.env[key]
-              if (key === 'assistantTemperature' || key === 'assistantTopP') {
-                ;(devCombinedSettings as any)[key] = parseFloat(
-                  envValue as string
-                )
-              } else if (
-                key === 'assistantTools' &&
-                typeof envValue === 'string'
-              ) {
-                ;(devCombinedSettings as any)[key] = envValue
-                  .split(',')
-                  .map(t => t.trim())
-                  .filter(Boolean)
-              } else {
-                ;(devCombinedSettings as any)[key] = envValue
-              }
-            }
-          }
-          this.settings = devCombinedSettings
+          settings.value = { ...defaultSettings }
         }
-
-        if (this.config.VITE_OPENAI_API_KEY) {
-          try {
-            const conversationStore = useConversationStore()
-            await conversationStore.fetchModels()
-            this.coreOpenAISettingsValid = true
-            console.log(
-              '[SettingsStore] Core OpenAI API key validated on load via fetchModels.'
-            )
-          } catch (e: any) {
-            console.warn(
-              `[SettingsStore] Core OpenAI API key validation failed on load: ${e.message}`
-            )
-            this.coreOpenAISettingsValid = false
-          }
-        }
-      } catch (e: any) {
-        this.error = `Failed to load settings: ${e.message}`
-        this.settings = { ...defaultSettings }
-        this.coreOpenAISettingsValid = false
-      } finally {
-        this.isLoading = false
-        this.initialLoadAttempted = true
-      }
-    },
-
-    updateSetting(
-      key: keyof AliceSettings,
-      value: string | boolean | number | string[]
-    ) {
-      if (key === 'assistantTemperature' || key === 'assistantTopP') {
-        ;(this.settings as any)[key] = Number(value)
-      } else if (key === 'assistantTools' && Array.isArray(value)) {
-        this.settings[key] = value as string[]
       } else {
-        ;(this.settings as any)[key] = String(value)
-      }
-      this.successMessage = null
-      this.error = null
-      if (key === 'VITE_OPENAI_API_KEY') {
-        this.coreOpenAISettingsValid = false
-      }
-    },
-
-    async saveSettingsToFile(): Promise<boolean> {
-      if (!this.isProduction && !window.settingsAPI?.saveSettings) {
         console.log(
-          '[SettingsStore] Dev mode (or no IPC): Skipping saveSettingsToFile.'
+          '[SettingsStore] Development: Populating with defaults, persisted dev settings, then .env.'
         )
-        this.successMessage =
-          'Settings updated (Dev Mode - Not saved to file unless IPC available)'
-        return true
-      }
-      this.isSaving = true
-      this.error = null
-      try {
-        const plainSettings: AliceSettings = {
-          ...this.settings,
-          assistantTools: Array.from(this.settings.assistantTools || []),
-        }
-
-        console.log('--- plainSettings for IPC ---')
-        for (const key in plainSettings) {
-          if (Object.prototype.hasOwnProperty.call(plainSettings, key)) {
-            const value = (plainSettings as any)[key]
-            console.log(
-              `Key: ${key}, Type: ${typeof value}, IsArray: ${Array.isArray(value)}, Value:`,
-              value
-            )
+        let devCombinedSettings: AliceSettings = { ...defaultSettings }
+        if (window.settingsAPI) {
+          const loadedDevSettings = await window.settingsAPI.loadSettings()
+          if (loadedDevSettings) {
+            devCombinedSettings = {
+              ...devCombinedSettings,
+              ...(loadedDevSettings as Partial<AliceSettings>),
+            }
           }
         }
-        console.log(
-          'Stringified plainSettings (for IPC):',
-          JSON.stringify(plainSettings)
-        )
-
-        const saveResult = await window.settingsAPI.saveSettings(plainSettings)
-
-        if (saveResult.success) {
-          console.log('[SettingsStore] Settings saved to file successfully.')
-          this.isSaving = false
-          return true
-        } else {
-          this.error = `Failed to save settings to file: ${saveResult.error || 'Unknown error'}`
-          console.error(
-            '[SettingsStore saveSettingsToFile] IPC save failed:',
-            saveResult.error
-          )
-          this.isSaving = false
-          return false
+        for (const key of Object.keys(defaultSettings) as Array<
+          keyof AliceSettings
+        >) {
+          if (import.meta.env[key]) {
+            const envValue = import.meta.env[key]
+            if (
+              key === 'assistantTemperature' ||
+              key === 'assistantTopP' ||
+              key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
+              key === 'SUMMARIZATION_MESSAGE_COUNT'
+            ) {
+              ;(devCombinedSettings as any)[key] = parseFloat(
+                envValue as string
+              )
+            } else if (
+              key === 'assistantTools' &&
+              typeof envValue === 'string'
+            ) {
+              ;(devCombinedSettings as any)[key] = envValue
+                .split(',')
+                .map(t => t.trim())
+                .filter(Boolean)
+            } else {
+              ;(devCombinedSettings as any)[key] = envValue
+            }
+          }
         }
-      } catch (e: any) {
-        this.error = `Error during settings save: ${e.message}`
+        settings.value = devCombinedSettings
+      }
+
+      if (config.value.VITE_OPENAI_API_KEY) {
+        try {
+          const conversationStore = useConversationStore()
+          await conversationStore.fetchModels()
+          coreOpenAISettingsValid.value = true
+          console.log(
+            '[SettingsStore] Core OpenAI API key validated on load via fetchModels.'
+          )
+        } catch (e: any) {
+          console.warn(
+            `[SettingsStore] Core OpenAI API key validation failed on load: ${e.message}`
+          )
+          coreOpenAISettingsValid.value = false
+        }
+      }
+    } catch (e: any) {
+      error.value = `Failed to load settings: ${e.message}`
+      settings.value = { ...defaultSettings }
+      coreOpenAISettingsValid.value = false
+    } finally {
+      isLoading.value = false
+      initialLoadAttempted.value = true
+    }
+  }
+
+  function updateSetting(
+    key: keyof AliceSettings,
+    value: string | boolean | number | string[]
+  ) {
+    if (
+      key === 'assistantTemperature' ||
+      key === 'assistantTopP' ||
+      key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
+      key === 'SUMMARIZATION_MESSAGE_COUNT'
+    ) {
+      ;(settings.value as any)[key] = Number(value)
+    } else if (key === 'assistantTools' && Array.isArray(value)) {
+      settings.value[key] = value as string[]
+    } else {
+      ;(settings.value as any)[key] = String(value)
+    }
+    successMessage.value = null
+    error.value = null
+    if (key === 'VITE_OPENAI_API_KEY') {
+      coreOpenAISettingsValid.value = false
+    }
+  }
+
+  async function saveSettingsToFile(): Promise<boolean> {
+    if (!isProduction.value && !window.settingsAPI?.saveSettings) {
+      console.log(
+        '[SettingsStore] Dev mode (or no IPC): Skipping saveSettingsToFile.'
+      )
+      successMessage.value =
+        'Settings updated (Dev Mode - Not saved to file unless IPC available)'
+      return true
+    }
+    isSaving.value = true
+    error.value = null
+    try {
+      const plainSettings: AliceSettings = {
+        ...settings.value,
+        assistantTools: Array.from(settings.value.assistantTools || []),
+      }
+
+      const saveResult = await window.settingsAPI.saveSettings(plainSettings)
+
+      if (saveResult.success) {
+        console.log('[SettingsStore] Settings saved to file successfully.')
+        isSaving.value = false
+        return true
+      } else {
+        error.value = `Failed to save settings to file: ${saveResult.error || 'Unknown error'}`
         console.error(
-          '[SettingsStore saveSettingsToFile] Exception during save:',
-          e
+          '[SettingsStore saveSettingsToFile] IPC save failed:',
+          saveResult.error
         )
-        this.isSaving = false
+        isSaving.value = false
         return false
       }
-    },
+    } catch (e: any) {
+      error.value = `Error during settings save: ${e.message}`
+      console.error(
+        '[SettingsStore saveSettingsToFile] Exception during save:',
+        e
+      )
+      isSaving.value = false
+      return false
+    }
+  }
 
-    async saveAndTestSettings() {
-      this.isSaving = true
-      this.error = null
-      this.successMessage = null
-      this.coreOpenAISettingsValid = false
-      const generalStore = useGeneralStore()
-      const conversationStore = useConversationStore()
+  async function saveAndTestSettings() {
+    isSaving.value = true
+    error.value = null
+    successMessage.value = null
+    coreOpenAISettingsValid.value = false
+    const generalStore = useGeneralStore()
+    const conversationStore = useConversationStore()
 
-      const currentConfigForTest = this.config
+    const currentConfigForTest = config.value
 
-      if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
-        this.error = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing.`
-        generalStore.statusMessage = 'Settings incomplete for API tests'
-        this.isSaving = false
-        return
-      }
-      if (!currentConfigForTest.assistantModel?.trim()) {
-        this.error = `Essential setting '${settingKeyToLabelMap.assistantModel}' is missing.`
-        generalStore.statusMessage = 'Assistant model not selected.'
-        this.isSaving = false
-        return
-      }
+    if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
+      error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing.`
+      generalStore.statusMessage = 'Settings incomplete for API tests'
+      isSaving.value = false
+      return
+    }
+    if (!currentConfigForTest.assistantModel?.trim()) {
+      error.value = `Essential setting '${settingKeyToLabelMap.assistantModel}' is missing.`
+      generalStore.statusMessage = 'Assistant model not selected.'
+      isSaving.value = false
+      return
+    }
+    if (!currentConfigForTest.SUMMARIZATION_MODEL?.trim()) {
+      error.value = `Essential setting '${settingKeyToLabelMap.SUMMARIZATION_MODEL}' is missing.`
+      generalStore.statusMessage = 'Summarization model not selected.'
+      isSaving.value = false
+      return
+    }
 
-      let openAIServiceTestSuccess = false
-      try {
-        await conversationStore.fetchModels()
-        openAIServiceTestSuccess = true
-        this.coreOpenAISettingsValid = true
-        console.log(
-          '[SettingsStore] OpenAI API connection test successful (fetchModels).'
-        )
-      } catch (e: any) {
-        this.error = `OpenAI API connection test failed: ${e.message}. Check your OpenAI API Key.`
-        this.coreOpenAISettingsValid = false
-      }
+    let openAIServiceTestSuccess = false
+    try {
+      await conversationStore.fetchModels()
+      openAIServiceTestSuccess = true
+      coreOpenAISettingsValid.value = true
+      console.log(
+        '[SettingsStore] OpenAI API connection test successful (fetchModels).'
+      )
+    } catch (e: any) {
+      error.value = `OpenAI API connection test failed: ${e.message}. Check your OpenAI API Key.`
+      coreOpenAISettingsValid.value = false
+    }
 
-      if (openAIServiceTestSuccess) {
-        const settingsPersisted = await this.saveSettingsToFile()
+    if (openAIServiceTestSuccess) {
+      const settingsPersisted = await saveSettingsToFile()
 
-        if (settingsPersisted) {
-          this.successMessage = 'OpenAI settings are valid and saved!'
-          if (!this.isProduction) {
-            this.successMessage +=
-              ' (Dev mode - .env might override for operation if not using UI for all settings)'
-          }
-          generalStore.statusMessage =
-            'Re-initializing Alice with new settings...'
+      if (settingsPersisted) {
+        successMessage.value = 'OpenAI settings are valid and saved!'
+        if (!isProduction.value) {
+          successMessage.value +=
+            ' (Dev mode - .env might override for operation if not using UI for all settings)'
+        }
+        generalStore.statusMessage =
+          'Re-initializing Alice with new settings...'
 
-          if (conversationStore.isInitialized) {
-            conversationStore.isInitialized = false
-          }
-          const initSuccess = await conversationStore.initialize()
-          if (initSuccess) {
-            this.successMessage += ' Alice is ready.'
-            generalStore.setAudioState('IDLE')
-          } else {
-            const initErrorMsg = generalStore.statusMessage.includes('Error:')
-              ? generalStore.statusMessage
-              : 'Failed to re-initialize Alice with new settings.'
-            this.error = (this.error ? this.error + '; ' : '') + initErrorMsg
-            this.successMessage = `Settings valid, but ${initErrorMsg}`
-          }
+        if (conversationStore.isInitialized) {
+          conversationStore.isInitialized = false
+        }
+        const initSuccess = await conversationStore.initialize()
+        if (initSuccess) {
+          successMessage.value += ' Alice is ready.'
+          generalStore.setAudioState('IDLE')
         } else {
-          generalStore.statusMessage = 'Error saving settings to file.'
+          const initErrorMsg = generalStore.statusMessage.includes('Error:')
+            ? generalStore.statusMessage
+            : 'Failed to re-initialize Alice with new settings.'
+          error.value = (error.value ? error.value + '; ' : '') + initErrorMsg
+          successMessage.value = `Settings valid, but ${initErrorMsg}`
         }
       } else {
-        generalStore.statusMessage = 'Settings validation failed.'
+        generalStore.statusMessage = 'Error saving settings to file.'
       }
-      this.isSaving = false
-    },
-  },
+    } else {
+      generalStore.statusMessage = 'Settings validation failed.'
+    }
+    isSaving.value = false
+  }
+
+  return {
+    settings,
+    isLoading,
+    isSaving,
+    error,
+    successMessage,
+    initialLoadAttempted,
+    coreOpenAISettingsValid,
+    isProduction,
+    areEssentialSettingsProvided,
+    areCoreApiKeysSufficientForTesting,
+    config,
+    loadSettings,
+    updateSetting,
+    saveSettingsToFile,
+    saveAndTestSettings,
+  }
 })

@@ -62,20 +62,6 @@ export const useConversationStore = defineStore('conversation', () => {
   const availableModels = ref<OpenAI.Models.Model[]>([])
   const isSummarizing = ref<boolean>(false)
 
-  const SUMMARIZATION_MESSAGE_COUNT = 20
-  const SUMMARIZATION_MODEL = 'gpt-4.1-nano'
-  const SUMMARIZATION_SYSTEM_PROMPT = `You are an expert conversation summarizer.
-  Your task is to create a **concise and brief** summary of the following conversation segment.
-  Focus on:
-  - Key topics discussed.
-  - Important information, facts, or preferences shared by the user or assistant.
-  - Decisions made.
-  - Any unresolved questions or outstanding tasks.
-
-  The summary should help provide context for future interactions, allowing the conversation to resume naturally.
-  **Keep the summary to 2-4 sentences if possible, and definitely no more than 150 words.**
-  Do not add any conversational fluff, commentary, or an introductory/concluding sentence like "Here is the summary:". Just provide the factual summary of the conversation transcript.`
-
   const initialize = async (): Promise<boolean> => {
     if (isInitialized.value) {
       return true
@@ -86,10 +72,11 @@ export const useConversationStore = defineStore('conversation', () => {
     if (settingsStore.isProduction) {
       if (
         !settingsStore.config.VITE_OPENAI_API_KEY ||
-        !settingsStore.config.assistantModel
+        !settingsStore.config.assistantModel ||
+        !settingsStore.config.SUMMARIZATION_MODEL
       ) {
         generalStore.statusMessage =
-          'Error: Core OpenAI settings (API Key/Model) not configured.'
+          'Error: Core OpenAI settings (API Key/Assistant Model/Summarization Model) not configured.'
         isInitialized.value = false
         return false
       }
@@ -98,6 +85,8 @@ export const useConversationStore = defineStore('conversation', () => {
         console.warn('[Dev] OpenAI API Key missing.')
       if (!settingsStore.config.assistantModel)
         console.warn('[Dev] Assistant model not set.')
+      if (!settingsStore.config.SUMMARIZATION_MODEL)
+        console.warn('[Dev] Summarization model not set.')
     }
     if (
       availableModels.value.length === 0 &&
@@ -112,7 +101,8 @@ export const useConversationStore = defineStore('conversation', () => {
     currentConversationTurnId.value = `turn-${Date.now()}`
     try {
       const summaryResult = await window.ipcRenderer.invoke(
-        'summaries:get-latest-summary', {}
+        'summaries:get-latest-summary',
+        {}
       )
       if (
         summaryResult.success &&
@@ -149,7 +139,7 @@ export const useConversationStore = defineStore('conversation', () => {
       const messagesResult = await window.ipcRenderer.invoke(
         'summaries:get-recent-messages',
         {
-          limit: SUMMARIZATION_MESSAGE_COUNT,
+          limit: settingsStore.config.SUMMARIZATION_MESSAGE_COUNT,
         }
       )
 
@@ -166,8 +156,8 @@ export const useConversationStore = defineStore('conversation', () => {
 
         const summaryText = await createSummarizationResponse(
           formattedMessagesForSummary,
-          SUMMARIZATION_MODEL,
-          SUMMARIZATION_SYSTEM_PROMPT
+          settingsStore.config.SUMMARIZATION_MODEL,
+          settingsStore.config.SUMMARIZATION_SYSTEM_PROMPT
         )
 
         if (summaryText) {
@@ -203,15 +193,15 @@ export const useConversationStore = defineStore('conversation', () => {
   > => {
     const historyToBuildFrom = [...chatHistory.value]
     const apiInput: OpenAI.Responses.Request.InputItemLike[] = []
-    const MAX_HISTORY_MESSAGES_FOR_API = 10
     const recentHistory = historyToBuildFrom
-      .slice(0, MAX_HISTORY_MESSAGES_FOR_API)
+      .slice(0, settingsStore.config.MAX_HISTORY_MESSAGES_FOR_API)
       .reverse()
 
     let latestSummaryText: string | null = null
     try {
       const summaryResult = await window.ipcRenderer.invoke(
-        'summaries:get-latest-summary', {}
+        'summaries:get-latest-summary',
+        {}
       )
       if (
         summaryResult.success &&
@@ -946,7 +936,7 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function fetchModels() {
-    if (!useSettingsStore().config.VITE_OPENAI_API_KEY) {
+    if (!settingsStore.config.VITE_OPENAI_API_KEY) {
       console.warn('Cannot fetch models: OpenAI API Key is missing.')
       availableModels.value = []
       return

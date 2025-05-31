@@ -236,7 +236,7 @@ function getThoughtMetadataByLabels(labels: number[]): ThoughtMetadata[] {
         SELECT thought_id, conversation_id, role, text_content, created_at
         FROM thoughts
         WHERE hnsw_label IN (${placeholders})
-        ORDER BY hnsw_label /* Order by label to match HNSW results if needed, though created_at might be more useful for context */
+        ORDER BY hnsw_label
     `)
   const rows = stmt.all(...labels) as any[]
   return rows.map(row => ({

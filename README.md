@@ -30,6 +30,7 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   
   - **Thoughts:** Past conversation fragments embedded in a local Hnswlib vector database for quick context inspiration.  
   - **Memories:** Long-term structured facts stored in a local database, retrievable on demand via memory tools.
+  - **Summarization** Past messages are automatically summirizing and serving to Alice to have context from previous conversations and longer context awareness.
     
 - 🎞️ **Animated assistant appearance**
   
@@ -64,6 +65,10 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   - System prompt
   - Temperature
   - Top P
+  - Max History Messages
+  - Summarization Message Count
+  - Summarization Model
+  - Summarization System Prompt
   - Microphone toggle hot key
   - Available tools
   - MCP servers
@@ -82,8 +87,8 @@ Use [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupI
 - [Vue.js](https://vuejs.org/) (Frontend framework)
 - [Electron](https://www.electronjs.org/) (Desktop app framework)
 - [Pinia](https://pinia.vuejs.org/) (App state management)
-- [OpenAI API](https://platform.openai.com/docs/api-reference/introduction) (GPT-4.1-mini, TTS, Vision)
-- [Groq API](https://console.groq.com/) (Whisper: speech-to-text)
+- [OpenAI API](https://platform.openai.com/docs/api-reference/introduction) (Responses API, TTS, Vision, Image generation, etc ..)
+- [Groq API](https://console.groq.com/) (Whisper-large-v3: fast speech-to-text)
 - [Hnswlib](https://github.com/nmslib/hnswlib) (Vector database for thought retrieval)
 - [VAD](https://github.com/ricky0123/vad) (Voice Activity Detection)
 - [ChatGPT 4o](https://chat.openai.com) (Native image generation: Alice image)

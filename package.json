@@ -54,7 +54,7 @@
     "better-sqlite3": "^11.10.0",
     "fs": "^0.0.1-security",
     "googleapis": "^148.0.0",
-    "groq-sdk": "^0.9.1",
+    "groq-sdk": "^0.23.0",
     "hnswlib-node": "^3.0.0",
     "path": "^0.12.7",
     "prettier": "^3.5.1",

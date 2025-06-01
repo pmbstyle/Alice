@@ -49,7 +49,7 @@
     "vue-tsc": "^2.0.6"
   },
   "dependencies": {
-    "@ricky0123/vad-web": "^0.0.23",
+    "@ricky0123/vad-web": "^0.0.24",
     "@tailwindcss/vite": "^4.1.4",
     "better-sqlite3": "^11.10.0",
     "fs": "^0.0.1-security",

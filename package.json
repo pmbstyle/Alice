@@ -44,7 +44,7 @@
     "vite": "^6.3.4",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.5",
-    "vite-plugin-static-copy": "^2.3.1",
+    "vite-plugin-static-copy": "^3.0.0",
     "vue": "^3.4.21",
     "vue-tsc": "^2.0.6"
   },

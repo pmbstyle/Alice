@@ -32,6 +32,8 @@ export interface AliceSettings {
   SUMMARIZATION_SYSTEM_PROMPT: string
 
   microphoneToggleHotkey: string
+  mutePlaybackHotkey: string
+  takeScreenshotHotkey: string
 
   VITE_JACKETT_API_KEY: string
   VITE_JACKETT_URL: string
@@ -56,6 +58,8 @@ const defaultSettings: AliceSettings = {
   SUMMARIZATION_SYSTEM_PROMPT: DEFAULT_SUMMARIZATION_SYSTEM_PROMPT,
 
   microphoneToggleHotkey: 'Alt+M',
+  mutePlaybackHotkey: 'Alt+S',
+  takeScreenshotHotkey: 'Alt+C',
 
   VITE_JACKETT_API_KEY: '',
   VITE_JACKETT_URL: '',
@@ -78,6 +82,8 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   SUMMARIZATION_MODEL: 'Summarization Model',
   SUMMARIZATION_SYSTEM_PROMPT: 'Summarization System Prompt',
   microphoneToggleHotkey: 'Microphone Toggle Hotkey',
+  mutePlaybackHotkey: 'Mute Playback Hotkey',
+  takeScreenshotHotkey: 'Take Screenshot Hotkey',
 
   VITE_JACKETT_API_KEY: 'Jackett API Key (Torrents)',
   VITE_JACKETT_URL: 'Jackett URL (Torrents)',

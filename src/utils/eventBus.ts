@@ -6,6 +6,8 @@ type Events = {
   'audio-ended': void
   'processing-complete': string
   'screenshot-ready': string
+  'mute-playback-toggle': void
+  'take-screenshot': void
 }
 
 const eventBus = mitt<Events>()

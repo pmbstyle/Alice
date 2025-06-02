@@ -17,6 +17,8 @@ export interface AppSettings {
   VITE_QB_USERNAME?: string
   VITE_QB_PASSWORD?: string
   microphoneToggleHotkey?: string
+  mutePlaybackHotkey?: string
+  takeScreenshotHotkey?: string
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {

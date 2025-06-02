@@ -23,6 +23,16 @@ export function useAudioProcessing() {
     toggleRecordingRequest()
   }
 
+  const handleGlobalMutePlayback = () => {
+    console.log('[AudioProcessing] Global hotkey for mute playback received.')
+    eventBus.emit('mute-playback-toggle')
+  }
+
+  const handleGlobalTakeScreenshot = () => {
+    console.log('[AudioProcessing] Global hotkey for take screenshot received.')
+    eventBus.emit('take-screenshot')
+  }
+
   onMounted(async () => {
     if (
       window.location.protocol === 'file:' &&
@@ -67,6 +77,8 @@ export function useAudioProcessing() {
     }
     if (window.ipcRenderer) {
       window.ipcRenderer.on('global-hotkey-mic-toggle', handleGlobalMicToggle)
+      window.ipcRenderer.on('global-hotkey-mute-playback', handleGlobalMutePlayback)
+      window.ipcRenderer.on('global-hotkey-take-screenshot', handleGlobalTakeScreenshot)
     }
   })
 
@@ -271,6 +283,11 @@ export function useAudioProcessing() {
   onUnmounted(() => {
     console.log('[Audio Processing] Component unmounted, ensuring VAD cleanup.')
     destroyVAD()
+    if (window.ipcRenderer) {
+      window.ipcRenderer.off('global-hotkey-mic-toggle', handleGlobalMicToggle)
+      window.ipcRenderer.off('global-hotkey-mute-playback', handleGlobalMutePlayback)
+      window.ipcRenderer.off('global-hotkey-take-screenshot', handleGlobalTakeScreenshot)
+    }
   })
 
   return {

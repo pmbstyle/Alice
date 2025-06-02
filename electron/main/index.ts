@@ -79,12 +79,14 @@ let screenshotDataURL: string | null = null
 let isHandlingQuit = false
 
 let currentMicToggleHotkey: string | null = null
+let currentMutePlaybackHotkey: string | null = null
+let currentTakeScreenshotHotkey: string | null = null
 
 function registerMicrophoneToggleHotkey(accelerator: string | undefined) {
   if (currentMicToggleHotkey) {
     globalShortcut.unregister(currentMicToggleHotkey)
     console.log(
-      `[HotkeyManager] Unregistered hotkey: ${currentMicToggleHotkey}`
+      `[HotkeyManager] Unregistered microphone hotkey: ${currentMicToggleHotkey}`
     )
     currentMicToggleHotkey = null
   }
@@ -105,26 +107,124 @@ function registerMicrophoneToggleHotkey(accelerator: string | undefined) {
         currentMicToggleHotkey = accelerator
       } else {
         console.error(
-          `[HotkeyManager] Failed to register hotkey: ${accelerator}. It might be in use by another application or an invalid combination.`
+          `[HotkeyManager] Failed to register microphone hotkey: ${accelerator}. It might be in use by another application or an invalid combination.`
         )
         win?.webContents.send('show-notification', {
           type: 'error',
-          message: `Failed to register hotkey: ${accelerator}. It may be in use.`,
+          message: `Failed to register microphone hotkey: ${accelerator}. It may be in use.`,
         })
       }
     } catch (error) {
       console.error(
-        `[HotkeyManager] Error registering hotkey: ${accelerator}`,
+        `[HotkeyManager] Error registering microphone hotkey: ${accelerator}`,
         error
       )
       win?.webContents.send('show-notification', {
         type: 'error',
-        message: `Error registering hotkey: ${accelerator}.`,
+        message: `Error registering microphone hotkey: ${accelerator}.`,
       })
     }
   } else {
     console.log(
       '[HotkeyManager] No microphone toggle hotkey provided or it was cleared.'
+    )
+  }
+}
+
+function registerMutePlaybackHotkey(accelerator: string | undefined) {
+  if (currentMutePlaybackHotkey) {
+    globalShortcut.unregister(currentMutePlaybackHotkey)
+    console.log(
+      `[HotkeyManager] Unregistered mute playback hotkey: ${currentMutePlaybackHotkey}`
+    )
+    currentMutePlaybackHotkey = null
+  }
+
+  if (accelerator && accelerator.trim() !== '') {
+    try {
+      const success = globalShortcut.register(accelerator, () => {
+        console.log(
+          `[HotkeyManager] Mute playback hotkey pressed: ${accelerator}`
+        )
+        win?.webContents.send('global-hotkey-mute-playback')
+      })
+
+      if (success) {
+        console.log(
+          `[HotkeyManager] Registered mute playback hotkey: ${accelerator}`
+        )
+        currentMutePlaybackHotkey = accelerator
+      } else {
+        console.error(
+          `[HotkeyManager] Failed to register mute playback hotkey: ${accelerator}. It might be in use by another application or an invalid combination.`
+        )
+        win?.webContents.send('show-notification', {
+          type: 'error',
+          message: `Failed to register mute playback hotkey: ${accelerator}. It may be in use.`,
+        })
+      }
+    } catch (error) {
+      console.error(
+        `[HotkeyManager] Error registering mute playback hotkey: ${accelerator}`,
+        error
+      )
+      win?.webContents.send('show-notification', {
+        type: 'error',
+        message: `Error registering mute playback hotkey: ${accelerator}.`,
+      })
+    }
+  } else {
+    console.log(
+      '[HotkeyManager] No mute playback hotkey provided or it was cleared.'
+    )
+  }
+}
+
+function registerTakeScreenshotHotkey(accelerator: string | undefined) {
+  if (currentTakeScreenshotHotkey) {
+    globalShortcut.unregister(currentTakeScreenshotHotkey)
+    console.log(
+      `[HotkeyManager] Unregistered take screenshot hotkey: ${currentTakeScreenshotHotkey}`
+    )
+    currentTakeScreenshotHotkey = null
+  }
+
+  if (accelerator && accelerator.trim() !== '') {
+    try {
+      const success = globalShortcut.register(accelerator, () => {
+        console.log(
+          `[HotkeyManager] Take screenshot hotkey pressed: ${accelerator}`
+        )
+        win?.webContents.send('global-hotkey-take-screenshot')
+      })
+
+      if (success) {
+        console.log(
+          `[HotkeyManager] Registered take screenshot hotkey: ${accelerator}`
+        )
+        currentTakeScreenshotHotkey = accelerator
+      } else {
+        console.error(
+          `[HotkeyManager] Failed to register take screenshot hotkey: ${accelerator}. It might be in use by another application or an invalid combination.`
+        )
+        win?.webContents.send('show-notification', {
+          type: 'error',
+          message: `Failed to register take screenshot hotkey: ${accelerator}. It may be in use.`,
+        })
+      }
+    } catch (error) {
+      console.error(
+        `[HotkeyManager] Error registering take screenshot hotkey: ${accelerator}`,
+        error
+      )
+      win?.webContents.send('show-notification', {
+        type: 'error',
+        message: `Error registering take screenshot hotkey: ${accelerator}.`,
+      })
+    }
+  } else {
+    console.log(
+      '[HotkeyManager] No take screenshot hotkey provided or it was cleared.'
     )
   }
 }
@@ -611,6 +711,29 @@ async function createWindow() {
           )
           registerMicrophoneToggleHotkey(settingsToSave.microphoneToggleHotkey)
         }
+
+        if (
+          oldSettings?.mutePlaybackHotkey !==
+            settingsToSave.mutePlaybackHotkey ||
+          (!oldSettings && settingsToSave.mutePlaybackHotkey)
+        ) {
+          console.log(
+            '[Main IPC settings:save] Mute playback hotkey changed. Re-registering.'
+          )
+          registerMutePlaybackHotkey(settingsToSave.mutePlaybackHotkey)
+        }
+
+        if (
+          oldSettings?.takeScreenshotHotkey !==
+            settingsToSave.takeScreenshotHotkey ||
+          (!oldSettings && settingsToSave.takeScreenshotHotkey)
+        ) {
+          console.log(
+            '[Main IPC settings:save] Take screenshot hotkey changed. Re-registering.'
+          )
+          registerTakeScreenshotHotkey(settingsToSave.takeScreenshotHotkey)
+        }
+
         return { success: true }
       } catch (error: any) {
         return { success: false, error: error.message }
@@ -857,11 +980,23 @@ app.whenReady().then(async () => {
   if (initialSettings) {
     console.log('Initial settings loaded in main process:', initialSettings)
     registerMicrophoneToggleHotkey(initialSettings.microphoneToggleHotkey)
+    registerMutePlaybackHotkey(initialSettings.mutePlaybackHotkey)
+    registerTakeScreenshotHotkey(initialSettings.takeScreenshotHotkey)
   } else {
     console.warn('No initial settings found or settings failed to load.')
-    const defaultFallbackSettings = { microphoneToggleHotkey: 'Alt+M' }
+    const defaultFallbackSettings = { 
+      microphoneToggleHotkey: 'Alt+M',
+      mutePlaybackHotkey: 'Alt+S',
+      takeScreenshotHotkey: 'Alt+C'
+    }
     registerMicrophoneToggleHotkey(
       defaultFallbackSettings.microphoneToggleHotkey
+    )
+    registerMutePlaybackHotkey(
+      defaultFallbackSettings.mutePlaybackHotkey
+    )
+    registerTakeScreenshotHotkey(
+      defaultFallbackSettings.takeScreenshotHotkey
     )
   }
 

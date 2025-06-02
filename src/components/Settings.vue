@@ -323,6 +323,84 @@
               Press the desired key combination. Press Esc to cancel.
             </p>
           </div>
+
+          <div>
+            <label for="mute-playback-hotkey" class="block mb-1 text-sm"
+              >Mute Playback Hotkey</label
+            >
+            <div class="flex items-center justify-between">
+              <kbd class="kbd kbd-xl">{{
+                formatAccelerator(currentSettings.mutePlaybackHotkey)
+              }}</kbd>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  @click="startRecordingHotkey('mutePlaybackHotkey')"
+                  class="btn btn-secondary btn-active btn-sm"
+                  :disabled="isRecordingHotkeyFor === 'mutePlaybackHotkey'"
+                >
+                  {{
+                    isRecordingHotkeyFor === 'mutePlaybackHotkey'
+                      ? 'Recording...'
+                      : 'Record'
+                  }}
+                </button>
+                <button
+                  type="button"
+                  @click="clearHotkey('mutePlaybackHotkey')"
+                  class="btn btn-warning btn-outline btn-sm"
+                  :disabled="!currentSettings.mutePlaybackHotkey"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <p
+              v-if="isRecordingHotkeyFor === 'mutePlaybackHotkey'"
+              class="text-xs text-yellow-400 mt-1"
+            >
+              Press the desired key combination. Press Esc to cancel.
+            </p>
+          </div>
+
+          <div>
+            <label for="take-screenshot-hotkey" class="block mb-1 text-sm"
+              >Take Screenshot Hotkey</label
+            >
+            <div class="flex items-center justify-between">
+              <kbd class="kbd kbd-xl">{{
+                formatAccelerator(currentSettings.takeScreenshotHotkey)
+              }}</kbd>
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  @click="startRecordingHotkey('takeScreenshotHotkey')"
+                  class="btn btn-secondary btn-active btn-sm"
+                  :disabled="isRecordingHotkeyFor === 'takeScreenshotHotkey'"
+                >
+                  {{
+                    isRecordingHotkeyFor === 'takeScreenshotHotkey'
+                      ? 'Recording...'
+                      : 'Record'
+                  }}
+                </button>
+                <button
+                  type="button"
+                  @click="clearHotkey('takeScreenshotHotkey')"
+                  class="btn btn-warning btn-outline btn-sm"
+                  :disabled="!currentSettings.takeScreenshotHotkey"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <p
+              v-if="isRecordingHotkeyFor === 'takeScreenshotHotkey'"
+              class="text-xs text-yellow-400 mt-1"
+            >
+              Press the desired key combination. Press Esc to cancel.
+            </p>
+          </div>
         </div>
       </fieldset>
 

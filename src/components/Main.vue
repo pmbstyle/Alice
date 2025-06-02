@@ -119,6 +119,8 @@ onMounted(async () => {
   }
 
   eventBus.on('processing-complete', handleProcessingComplete)
+  eventBus.on('mute-playback-toggle', handleToggleTTS)
+  eventBus.on('take-screenshot', handleTakeScreenshot)
 })
 
 onUnmounted(() => {
@@ -126,6 +128,8 @@ onUnmounted(() => {
     cleanupScreenshotListeners()
   }
   eventBus.off('processing-complete', handleProcessingComplete)
+  eventBus.off('mute-playback-toggle', handleToggleTTS)
+  eventBus.off('take-screenshot', handleTakeScreenshot)
 })
 
 const handleTakeScreenshot = () => {

@@ -65,6 +65,7 @@ export function useScreenshot() {
               : 'Stand by'
           }
           takingScreenShot.value = false
+          window.ipcRenderer?.invoke('focus-main-window')
         }
       }
 

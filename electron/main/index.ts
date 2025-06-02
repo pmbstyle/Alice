@@ -678,6 +678,16 @@ async function createWindow() {
     return screenshotDataURL
   })
 
+  ipcMain.handle('focus-main-window', () => {
+    if (win && !win.isDestroyed()) {
+      win.show()
+      win.focus()
+      win.moveTop()
+      console.log('[Main IPC] Main window focused after screenshot')
+    }
+    return true
+  })
+
   ipcMain.handle('capture-screen', async () => {
     console.log('[Main IPC] "capture-screen" invoked.')
     try {

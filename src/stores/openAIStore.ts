@@ -407,7 +407,6 @@ export const useConversationStore = defineStore('conversation', () => {
             imageGenCallId === activeImageGenerationCallId.value
           ) {
             generalStore.statusMessage = `🎨 Generating image...`
-            const partialImageFileName = `alice_partial_${imageGenCallId}_${partialIdx}.png`
             const saveResult = await window.ipcRenderer.invoke(
               'image:save-generated',
               imageBase64
@@ -447,7 +446,6 @@ export const useConversationStore = defineStore('conversation', () => {
             imageGenCallId === activeImageGenerationCallId.value
           ) {
             const imageBase64 = finalImageCall.result
-            const finalImageFileName = `alice_final_${imageGenCallId}.png`
             const saveResult = await window.ipcRenderer.invoke(
               'image:save-generated',
               imageBase64
@@ -501,11 +499,11 @@ export const useConversationStore = defineStore('conversation', () => {
           event.type === 'response.output_item.done' &&
           event.item.type === 'function_call'
         ) {
-          streamEndedNormally = false
           const functionCallPayload =
             event.item as OpenAI.Responses.FunctionCall
           const itemId = functionCallPayload.id
           let args = {}
+
           try {
             const rawArgs =
               functionCallArgsBuffer[itemId] ||
@@ -529,14 +527,9 @@ export const useConversationStore = defineStore('conversation', () => {
 
           if (audioState.value === 'SPEAKING') stopPlaybackAndClearQueue()
 
-          if (!isContinuationAfterTool) {
-            await handleToolCall(functionCallPayload, currentResponseId.value)
-          } else {
-            console.warn(
-              '[ProcessStream] Tool call received in a continuation stream. Relying on main chat loop to process.'
-            )
-          }
-          return { streamEndedNormally }
+          await handleToolCall(functionCallPayload, currentResponseId.value)
+
+          return { streamEndedNormally: true }
         }
 
         if (
@@ -617,7 +610,6 @@ export const useConversationStore = defineStore('conversation', () => {
         if (finalAssistantMessage) {
           try {
             let assistantTextForIndexing = ''
-
             if (Array.isArray(finalAssistantMessage.content)) {
               const textPart = finalAssistantMessage.content.find(
                 p => p.type === 'app_text'
@@ -649,7 +641,11 @@ export const useConversationStore = defineStore('conversation', () => {
             )
           }
         }
-        if (!activeImageGenerationCallId.value) {
+
+        if (
+          !activeImageGenerationCallId.value &&
+          !event?.item?.type?.includes('call')
+        ) {
           await triggerConversationSummarization()
         }
       }

@@ -231,5 +231,153 @@
       ],
       "additionalProperties": false
     }
+  },
+  {
+    "type": "function",
+    "name": "get_calendar_events",
+    "description": "Fetches events directly from the user's Google Calendar. Use this to find out what's on the user's schedule. You can specify a date range or search query.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "calendarId": {
+          "type": "string",
+          "description": "Calendar identifier. Defaults to 'primary' if not specified."
+        },
+        "timeMin": {
+          "type": "string",
+          "description": "The start of the time range (ISO 8601 date-time string, e.g., '2025-06-03T00:00:00Z') for which to fetch events. If not provided, defaults to the current time for open-ended future searches."
+        },
+        "timeMax": {
+          "type": "string",
+          "description": "The end of the time range (ISO 8601 date-time string, e.g., '2025-06-03T23:59:59Z') for which to fetch events. If not provided, allows fetching events indefinitely into the future from timeMin."
+        },
+        "q": {
+          "type": "string",
+          "description": "Free text search query to find events (e.g., 'Dentist appointment', 'Birthday party')."
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": "The maximum number of events to return. Defaults to 10 if not specified."
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "create_calendar_event",
+    "description": "Creates a new event in the user's Google Calendar. Requires event summary, start, and end times.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "calendarId": {
+          "type": "string",
+          "description": "Calendar identifier. Defaults to 'primary' if not specified."
+        },
+        "summary": {
+          "type": "string",
+          "description": "The title or summary of the event (e.g., 'Meeting with John')."
+        },
+        "description": {
+          "type": "string",
+          "description": "A more detailed description of the event (optional)."
+        },
+        "startDateTime": {
+          "type": "string",
+          "description": "The start date and time of the event in ISO 8601 format (e.g., '2025-06-03T14:00:00-07:00'). Include timezone offset if known."
+        },
+        "endDateTime": {
+          "type": "string",
+          "description": "The end date and time of the event in ISO 8601 format (e.g., '2025-06-03T15:00:00-07:00'). Include timezone offset if known."
+        },
+        "location": {
+          "type": "string",
+          "description": "The location of the event (optional, e.g., 'Conference Room A' or an address)."
+        },
+        "attendees": {
+          "type": "array",
+          "description": "A list of email addresses of attendees to invite (optional).",
+          "items": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "required": ["summary", "startDateTime", "endDateTime"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "update_calendar_event",
+    "description": "Updates an existing event in the user's Google Calendar. Requires the event ID and at least one field to update.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "calendarId": {
+          "type": "string",
+          "description": "Calendar identifier. Defaults to 'primary' if not specified."
+        },
+        "eventId": {
+          "type": "string",
+          "description": "The unique ID of the event to update."
+        },
+        "summary": {
+          "type": "string",
+          "description": "The new title or summary for the event (optional)."
+        },
+        "description": {
+          "type": "string",
+          "description": "The new detailed description for the event (optional)."
+        },
+        "startDateTime": {
+          "type": "string",
+          "description": "The new start date and time in ISO 8601 format (optional)."
+        },
+        "endDateTime": {
+          "type": "string",
+          "description": "The new end date and time in ISO 8601 format (optional)."
+        },
+        "location": {
+          "type": "string",
+          "description": "The new location for the event (optional)."
+        },
+        "attendees": {
+          "type": "array",
+          "description": "A new list of email addresses of attendees (optional). This will replace existing attendees.",
+          "items": {
+            "type": "string",
+            "format": "email"
+          }
+        }
+      },
+      "required": ["eventId"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "delete_calendar_event",
+    "description": "Deletes an event from the user's Google Calendar. Requires the event ID.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "calendarId": {
+          "type": "string",
+          "description": "Calendar identifier. Defaults to 'primary' if not specified."
+        },
+        "eventId": {
+          "type": "string",
+          "description": "The unique ID of the event to delete."
+        }
+      },
+      "required": ["eventId"],
+      "additionalProperties": false
+    }
   }
 ]

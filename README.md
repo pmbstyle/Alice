@@ -67,7 +67,7 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   - Summarization Message Count
   - Summarization Model
   - Summarization System Prompt
-  - Microphone toggle hot key
+  - Microphone/Audio toggle, take screenshot hot keys
   - Available tools
   - MCP servers
   - Google integration

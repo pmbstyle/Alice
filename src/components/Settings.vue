@@ -16,7 +16,7 @@
       <fieldset
         class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
       >
-        <legend class="fieldset-legend">Core API Keys</legend>
+        <legend class="fieldset-legend">Core API Keys & STT</legend>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
           <div>
             <label for="openai-key" class="block mb-1 text-sm"
@@ -32,8 +32,21 @@
             />
           </div>
           <div>
+            <label for="stt-provider" class="block mb-1 text-sm"
+              >Speech-to-Text Provider *</label
+            >
+            <select
+              id="stt-provider"
+              v-model="currentSettings.sttProvider"
+              class="select select-bordered w-full focus:select-primary"
+            >
+              <option value="openai">OpenAI (gpt-4o-transcribe)</option>
+              <option value="groq">Groq (whisper-large-v3)</option>
+            </select>
+          </div>
+          <div v-if="currentSettings.sttProvider === 'groq'">
             <label for="groq-key" class="block mb-1 text-sm"
-              >Groq API Key (STT) *</label
+              >Groq API Key (for STT) *</label
             >
             <input
               id="groq-key"
@@ -43,6 +56,9 @@
               autocomplete="new-password"
               placeholder="gsk_..."
             />
+            <p class="text-xs text-gray-400 mt-1">
+              Required only if Groq STT is selected above.
+            </p>
           </div>
         </div>
       </fieldset>
@@ -515,18 +531,7 @@
               v-model="currentSettings.mcpServersConfig"
               rows="10"
               class="textarea textarea-bordered w-full focus:textarea-primary h-60 bg-gray-800"
-              placeholder='[
-                {
-                  "type": "mcp",
-                  "server_label": "deepwiki_example",
-                  "server_url": "https://mcp.deepwiki.com/mcp",
-                  "require_approval": "never",
-                  "allowed_tools": ["ask_question"],
-                  "headers": {
-                    "X-Custom-Header": "example_value"
-                  }
-                }
-              ]'
+              :placeholder="mcpPlaceholder"
             ></textarea>
             <p class="text-xs text-gray-400 mt-1">
               Enter a JSON array of MCP server configurations. Each object
@@ -773,6 +778,16 @@ function betterToolName(name: string): string {
   )
 }
 
+const mcpPlaceholder = `[
+// MCP Servers array, example server:
+  {
+    "type": "mcp",
+    "server_label": "deepwiki",
+    "server_url": "https://mcp.deepwiki.com/mcp",
+    "require_approval": "never"
+  }
+]`
+
 function isToolConfigured(toolName: string): boolean {
   const currentLocalSettings = currentSettings.value
   const deps = toolDependencies[toolName]
@@ -954,17 +969,6 @@ const handleHotkeyKeyDown = (event: KeyboardEvent) => {
     }
     stopRecordingHotkey()
   }
-
-  if (isRecordingHotkeyFor.value) {
-    const tempAccelerator = Array.from(activeRecordingKeys.value).join('+')
-
-    const inputElement = document.getElementById(
-      'mic-toggle-hotkey'
-    ) as HTMLInputElement
-    if (inputElement) {
-      inputElement.value = formatAccelerator(tempAccelerator)
-    }
-  }
 }
 
 const startRecordingHotkey = (settingKey: keyof AliceSettings) => {
@@ -1080,6 +1084,16 @@ const handleSaveAndTestSettings = async () => {
     settingsStore.error.startsWith('MCP Servers Configuration')
   ) {
     settingsStore.error = null
+  }
+
+  if (
+    currentSettings.value.sttProvider === 'groq' &&
+    !currentSettings.value.VITE_GROQ_API_KEY?.trim()
+  ) {
+    settingsStore.error = `Groq STT is selected, but the Groq API Key is missing.`
+    settingsStore.successMessage = null
+    settingsStore.isSaving = false
+    return
   }
 
   await settingsStore.saveAndTestSettings()

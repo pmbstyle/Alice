@@ -19,7 +19,9 @@ function getGroqClient(): Groq {
   })
 }
 
-export const transcribeAudio = async (audioBuffer: Buffer): Promise<string> => {
+export const transcribeAudio = async (
+  audioBuffer: ArrayBuffer
+): Promise<string> => {
   const groq = getGroqClient()
   if (!useSettingsStore().config.VITE_GROQ_API_KEY) {
     console.error('Cannot transcribe audio: Groq API Key is missing.')

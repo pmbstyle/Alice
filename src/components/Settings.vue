@@ -60,7 +60,6 @@
               id="assistant-model"
               v-model="currentSettings.assistantModel"
               class="select select-bordered w-full focus:select-primary"
-              required
             >
               <option disabled value="">Select a model</option>
               <option
@@ -70,7 +69,7 @@
                 "
                 value=""
               >
-                Loading models... (or ensure OpenAI key is valid)
+                Loading models...
               </option>
               <option
                 v-for="model in availableModelsForSelect"
@@ -83,7 +82,8 @@
             <p
               v-if="
                 !settingsStore.coreOpenAISettingsValid &&
-                currentSettings.VITE_OPENAI_API_KEY
+                currentSettings.VITE_OPENAI_API_KEY &&
+                conversationStore.availableModels.length === 0
               "
               class="text-xs text-warning mt-1"
             >
@@ -181,7 +181,6 @@
               id="summarization-model"
               v-model="currentSettings.SUMMARIZATION_MODEL"
               class="select select-bordered w-full focus:select-primary"
-              required
             >
               <option disabled value="">Select a summarization model</option>
               <option
@@ -201,6 +200,16 @@
                 {{ model.id }}
               </option>
             </select>
+            <p
+              v-if="
+                !settingsStore.coreOpenAISettingsValid &&
+                currentSettings.VITE_OPENAI_API_KEY &&
+                conversationStore.availableModels.length === 0
+              "
+              class="text-xs text-warning mt-1"
+            >
+              OpenAI API key needs to be validated (Save & Test) to load models.
+            </p>
             <p class="text-xs text-gray-400 mt-1">
               Model used for generating conversation summaries (e.g.,
               gpt-4.1-nano).

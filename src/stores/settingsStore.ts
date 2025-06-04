@@ -308,7 +308,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
       if (saveResult.success) {
         console.log('[SettingsStore] Settings saved to file successfully.')
-        isSaving.value = false
         return true
       } else {
         error.value = `Failed to save settings to file: ${saveResult.error || 'Unknown error'}`
@@ -334,7 +333,6 @@ export const useSettingsStore = defineStore('settings', () => {
     isSaving.value = true
     error.value = null
     successMessage.value = null
-    coreOpenAISettingsValid.value = false
     const generalStore = useGeneralStore()
     const conversationStore = useConversationStore()
 
@@ -342,20 +340,14 @@ export const useSettingsStore = defineStore('settings', () => {
 
     if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
       error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing.`
-      generalStore.statusMessage = 'Settings incomplete for API tests'
+      generalStore.statusMessage = 'OpenAI API Key is required.'
       isSaving.value = false
       return
     }
-    if (!currentConfigForTest.assistantModel?.trim()) {
-      error.value = `Essential setting '${settingKeyToLabelMap.assistantModel}' is missing.`
-      generalStore.statusMessage = 'Assistant model not selected.'
-      isSaving.value = false
-      return
-    }
-    if (!currentConfigForTest.SUMMARIZATION_MODEL?.trim()) {
-      error.value = `Essential setting '${settingKeyToLabelMap.SUMMARIZATION_MODEL}' is missing.`
-      generalStore.statusMessage = 'Summarization model not selected.'
-      isSaving.value = false
+
+    const settingsPersistedInitially = await saveSettingsToFile()
+    if (!settingsPersistedInitially) {
+      generalStore.statusMessage = 'Error saving settings to file.'
       return
     }
 
@@ -370,39 +362,50 @@ export const useSettingsStore = defineStore('settings', () => {
     } catch (e: any) {
       error.value = `OpenAI API connection test failed: ${e.message}. Check your OpenAI API Key.`
       coreOpenAISettingsValid.value = false
+      openAIServiceTestSuccess = false
     }
 
     if (openAIServiceTestSuccess) {
-      const settingsPersisted = await saveSettingsToFile()
+      if (!currentConfigForTest.assistantModel?.trim()) {
+        error.value = `OpenAI API Key is valid. Please select an '${settingKeyToLabelMap.assistantModel}'.`
+        generalStore.statusMessage = 'Assistant model not selected.'
+        successMessage.value =
+          'OpenAI API Key is valid. Models loaded. Please complete model selections.'
+        isSaving.value = false
+        return
+      }
+      if (!currentConfigForTest.SUMMARIZATION_MODEL?.trim()) {
+        error.value = `OpenAI API Key is valid. Please select a '${settingKeyToLabelMap.SUMMARIZATION_MODEL}'.`
+        generalStore.statusMessage = 'Summarization model not selected.'
+        successMessage.value =
+          'OpenAI API Key is valid. Models loaded. Please complete model selections.'
+        isSaving.value = false
+        return
+      }
 
-      if (settingsPersisted) {
-        successMessage.value = 'OpenAI settings are valid and saved!'
-        if (!isProduction.value) {
-          successMessage.value +=
-            ' (Dev mode - .env might override for operation if not using UI for all settings)'
-        }
-        generalStore.statusMessage =
-          'Re-initializing Alice with new settings...'
+      successMessage.value = 'OpenAI settings are valid and saved!'
+      if (!isProduction.value) {
+        successMessage.value +=
+          ' (Dev mode - .env might override for operation if not using UI for all settings)'
+      }
+      generalStore.statusMessage = 'Re-initializing Alice with new settings...'
 
-        if (conversationStore.isInitialized) {
-          conversationStore.isInitialized = false
-        }
-        const initSuccess = await conversationStore.initialize()
-        if (initSuccess) {
-          successMessage.value += ' Alice is ready.'
-          generalStore.setAudioState('IDLE')
-        } else {
-          const initErrorMsg = generalStore.statusMessage.includes('Error:')
-            ? generalStore.statusMessage
-            : 'Failed to re-initialize Alice with new settings.'
-          error.value = (error.value ? error.value + '; ' : '') + initErrorMsg
-          successMessage.value = `Settings valid, but ${initErrorMsg}`
-        }
+      if (conversationStore.isInitialized) {
+        conversationStore.isInitialized = false
+      }
+      const initSuccess = await conversationStore.initialize()
+      if (initSuccess) {
+        successMessage.value += ' Alice is ready.'
+        generalStore.setAudioState('IDLE')
       } else {
-        generalStore.statusMessage = 'Error saving settings to file.'
+        const initErrorMsg = generalStore.statusMessage.includes('Error:')
+          ? generalStore.statusMessage
+          : 'Failed to re-initialize Alice with new settings.'
+        error.value = (error.value ? error.value + '; ' : '') + initErrorMsg
+        successMessage.value = `Settings valid, but ${initErrorMsg}`
       }
     } else {
-      generalStore.statusMessage = 'Settings validation failed.'
+      generalStore.statusMessage = 'Settings validation failed. Check API Key.'
     }
     isSaving.value = false
   }

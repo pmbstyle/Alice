@@ -9,7 +9,7 @@ import {
   createSummarizationResponse,
 } from '../api/openAI/responsesApi'
 import { transcribeAudio as transcribeAudioGroq } from '../api/groq/stt'
-import { transcribeAudioOpenAI } from '../api/openai/stt'
+import { transcribeAudioOpenAI } from '../api/openAI/stt'
 import {
   retrieveRelevantThoughtsForPrompt,
   indexMessageForThoughts,

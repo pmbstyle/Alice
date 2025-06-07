@@ -62,6 +62,7 @@ import { bg } from '../utils/assetsImport'
 import { useGeneralStore } from '../stores/generalStore'
 import { useConversationStore } from '../stores/openAIStore'
 import { indexMessageForThoughts } from '../api/openAI/assistant'
+import { uploadFileForResponses } from '../api/openAI/responsesApi'
 import type {
   ChatMessage,
   AppChatMessageContentPart,
@@ -179,7 +180,7 @@ const processRequestFromSidebar = (text: string) => {
     }, 2000)
     return
   }
-  if (text && text.trim()) {
+  if (text.trim() || generalStore.attachedFile) {
     if (
       audioState.value === 'IDLE' ||
       audioState.value === 'LISTENING' ||
@@ -210,15 +211,43 @@ const processRequest = async (
 
   setAudioState('WAITING_FOR_RESPONSE')
 
-  const appContentParts: AppChatMessageContentPart[] = [
-    { type: 'app_text', text: text },
-  ]
+  const appContentParts: AppChatMessageContentPart[] = []
+  const fileToProcess = generalStore.attachedFile
+
+  if (fileToProcess) {
+    generalStore.statusMessage = `Uploading ${fileToProcess.name}...`
+    const uploadedFile = await uploadFileForResponses(fileToProcess)
+    if (uploadedFile) {
+      appContentParts.push({
+        type: 'app_file',
+        fileId: uploadedFile.id,
+        fileName: fileToProcess.name,
+      })
+    } else {
+      generalStore.statusMessage = 'Error: PDF file upload failed.'
+      isProcessingRequest = false
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      generalStore.attachedFile = null
+      return
+    }
+    generalStore.attachedFile = null
+  }
+
+  if (text) {
+    appContentParts.push({ type: 'app_text', text: text })
+  }
 
   if (screenshotReady.value && screenShot.value) {
     appContentParts.push({ type: 'app_image_uri', uri: screenShot.value })
-
     screenshotReady.value = false
     screenShot.value = ''
+  }
+
+  if (appContentParts.length === 0) {
+    generalStore.statusMessage = 'Nothing to send.'
+    isProcessingRequest = false
+    setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+    return
   }
 
   const userMessage: ChatMessage = {
@@ -228,29 +257,19 @@ const processRequest = async (
 
   try {
     let userTextForIndexing = ''
-    if (typeof userMessage.content === 'string') {
-      userTextForIndexing = userMessage.content
-    } else if (Array.isArray(userMessage.content)) {
-      const textPart = userMessage.content.find(p => p.type === 'app_text')
-      if (textPart && textPart.text) {
-        userTextForIndexing = textPart.text
-      }
+    if (Array.isArray(userMessage.content)) {
+      const textParts = userMessage.content
+        .filter(p => p.type === 'app_text' && p.text)
+        .map(p => p.text!)
+      userTextForIndexing = textParts.join(' ')
     }
 
     if (userTextForIndexing) {
       const conversationIdForThought =
         conversationStore.currentResponseId || 'default_conversation'
-
-      console.log(
-        `[Main.vue] Indexing user message: "${userTextForIndexing.substring(0, 50)}"`
-      )
       await indexMessageForThoughts(conversationIdForThought, 'user', {
         content: appContentParts,
       })
-    } else {
-      console.warn(
-        '[Main.vue] No text content found in user message to index for thoughts.'
-      )
     }
   } catch (e) {
     console.error(

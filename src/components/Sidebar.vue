@@ -64,17 +64,48 @@
         class="gradient-border-wrapper"
         :class="{ 'opacity-50': !isConversationReady }"
       >
-        <input
-          v-model="chatInput"
-          @keyup.enter="chatInputHandle"
-          class="input w-full rounded-lg bg-gray-800 border-0 text-white p-3 relative z-10 disabled:cursor-not-allowed"
-          placeholder="Type your message here..."
-          :disabled="!isConversationReady"
-        />
+        <div class="flex items-center gap-1 bg-gray-800 rounded-lg pl-2">
+          <img
+            :src="pdfIcon"
+            alt="PDF Icon"
+            class="w-6 h-6 mr-2 cursor-pointer hover:opacity-60"
+            title="Attach PDF"
+            @click="triggerFileUpload"
+          />
+          <input
+            ref="fileInput"
+            type="file"
+            @change="handleFileSelect"
+            class="hidden"
+            accept=".pdf"
+          />
+          <input
+            v-model="chatInput"
+            @keyup.enter="chatInputHandle"
+            class="input w-full bg-transparent border-0 shadow-none text-white p-3 relative z-10 disabled:cursor-not-allowed focus:outline-none focus:shadow-none"
+            placeholder="Type your message here..."
+            :disabled="!isConversationReady"
+          />
+        </div>
+      </div>
+      <div
+        v-if="attachedFile"
+        class="text-xs text-gray-400 p-1 pl-3 flex justify-between items-center"
+      >
+        <span class="truncate" :title="attachedFile.name"
+          >Attached: {{ attachedFile.name }}</span
+        >
+        <button
+          @click="clearAttachedFile"
+          class="btn btn-xs btn-ghost"
+          title="Remove file"
+        >
+          ✕
+        </button>
       </div>
       <div
         class="w-full px-4 pt-1 pb-2 text-center text-xs text-gray-500"
-        v-if="!isConversationReady"
+        v-if="!isConversationReady && !attachedFile"
       >
         {{
           generalStore.statusMessage.includes('Error:')
@@ -95,6 +126,7 @@ import { useGeneralStore } from '../stores/generalStore'
 import { useSettingsStore } from '../stores/settingsStore'
 import { useConversationStore } from '../stores/openAIStore'
 import { storeToRefs } from 'pinia'
+import { pdfIcon } from '../utils/assetsImport'
 
 const generalStore = useGeneralStore()
 const settingsStore = useSettingsStore()
@@ -103,13 +135,33 @@ const conversationStore = useConversationStore()
 const sidebarContentElement = ref<null | HTMLElement>(null)
 const emit = defineEmits(['processRequest'])
 
-const { openSidebar, chatInput, storeMessage, sideBarView } =
+const { openSidebar, chatInput, sideBarView, attachedFile } =
   storeToRefs(generalStore)
 const { chatHistory } = storeToRefs(generalStore)
 const { isInitialized: conversationIsInitialized } =
   storeToRefs(conversationStore)
 
 const isConversationReady = computed(() => conversationIsInitialized.value)
+const fileInput = ref<HTMLInputElement | null>(null)
+
+const triggerFileUpload = () => {
+  if (!isConversationReady.value) return
+  fileInput.value?.click()
+}
+
+const handleFileSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.files && target.files[0]) {
+    generalStore.attachedFile = target.files[0]
+  }
+}
+
+const clearAttachedFile = () => {
+  generalStore.attachedFile = null
+  if (fileInput.value) {
+    fileInput.value.value = ''
+  }
+}
 
 const changeSidebarView = async (newView: 'chat' | 'settings') => {
   sideBarView.value = newView
@@ -123,13 +175,16 @@ const debounceDelay = 300
 
 const chatInputHandle = async () => {
   const text = chatInput.value.trim()
-  if (text.length > 0 && isConversationReady.value) {
+  const file = generalStore.attachedFile
+
+  if ((text.length > 0 || file) && isConversationReady.value) {
     if (debounceTimeout.value) clearTimeout(debounceTimeout.value)
 
     debounceTimeout.value = window.setTimeout(async () => {
       const textToSend = chatInput.value.trim()
       chatInput.value = ''
       emit('processRequest', textToSend)
+      clearAttachedFile()
     }, debounceDelay)
   } else if (!isConversationReady.value) {
     generalStore.statusMessage = 'AI not ready. Please wait or check settings.'

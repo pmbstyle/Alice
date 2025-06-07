@@ -20,7 +20,7 @@ import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
 
 export interface AppChatMessageContentPart {
-  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path'
+  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path' | 'app_file'
   text?: string
   uri?: string
   path?: string
@@ -28,6 +28,8 @@ export interface AppChatMessageContentPart {
   imageGenerationId?: string
   isPartial?: boolean
   partialIndex?: number
+  fileId?: string
+  fileName?: string
 }
 
 export interface ChatMessage {
@@ -316,6 +318,18 @@ export const useConversationStore = defineStore('conversation', () => {
                     type: 'input_text',
                     text: '[User previously sent an image]',
                   }
+                }
+                return null
+              } else if (appPart.type === 'app_file') {
+                if (!appPart.fileId) return null
+                if (
+                  currentApiRole === 'user' ||
+                  currentApiRole === 'developer'
+                ) {
+                  return {
+                    type: 'input_file',
+                    file_id: appPart.fileId,
+                  } as OpenAI.Responses.Request.InputFilePart
                 }
                 return null
               } else if (appPart.type === 'app_generated_image_path') {

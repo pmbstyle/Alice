@@ -24,7 +24,7 @@
   mac: {
     target: ['dmg'],
     icon: 'public/app_logo.png',
-    artifactName: '${productName}-Mac-${version}-Installer.${ext}',
+    artifactName: 'Alice-AI-App-Mac-${version}-Installer.${ext}',
   },
   win: {
     target: [
@@ -33,7 +33,7 @@
         arch: ['x64'],
       },
     ],
-    artifactName: '${productName}-Windows-${version}-Setup.${ext}',
+    artifactName: 'Alice-AI-App-Windows-${version}-Setup.${ext}',
   },
   nsis: {
     oneClick: true,
@@ -45,6 +45,6 @@
     target: ['AppImage'],
     category: 'Utility',
     icon: 'public/app_logo.png',
-    artifactName: '${productName}-Linux-${version}.${ext}',
+    artifactName: 'Alice-AI-App-Linux-${version}.${ext}',
   },
 }

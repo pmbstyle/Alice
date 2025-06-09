@@ -1,6 +1,6 @@
 {
   "name": "alice-ai-app",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "main": "dist-electron/main/index.js",
   "description": "Alice AI assistant app",
   "author": "pmbstyle",
@@ -52,6 +52,8 @@
     "@ricky0123/vad-web": "^0.0.24",
     "@tailwindcss/vite": "^4.1.4",
     "better-sqlite3": "^11.10.0",
+    "electron-log": "^5.4.0",
+    "electron-updater": "^6.6.2",
     "fs": "^0.0.1-security",
     "googleapis": "^149.0.0",
     "groq-sdk": "^0.9.1",

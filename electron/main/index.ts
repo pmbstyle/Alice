@@ -10,6 +10,7 @@ import {
   protocol,
   globalShortcut,
 } from 'electron'
+import pkg from 'electron-updater'
 import { loadSettings, saveSettings, AppSettings } from './settingsManager'
 import {
   saveMemoryLocal,
@@ -37,6 +38,7 @@ import os from 'node:os'
 import http from 'node:http'
 import { URL } from 'node:url'
 import { mkdir, writeFile } from 'node:fs/promises'
+import log from 'electron-log'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -49,6 +51,7 @@ export const VITE_DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL
 const IS_DEV = !!VITE_DEV_SERVER_URL
 const OAUTH_SERVER_PORT = 9876
 let authServer: http.Server | null = null
+const { autoUpdater } = pkg
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_DIR_NAME = 'generated_images'
@@ -81,6 +84,56 @@ let isHandlingQuit = false
 let currentMicToggleHotkey: string | null = null
 let currentMutePlaybackHotkey: string | null = null
 let currentTakeScreenshotHotkey: string | null = null
+
+autoUpdater.logger = log
+autoUpdater.logger.transports.file.level = 'info'
+log.info('App starting...')
+
+if (IS_DEV) {
+  log.info('[AutoUpdater] Forcing dev update config.')
+  autoUpdater.forceDevUpdateConfig = true
+}
+
+function checkForUpdates() {
+  console.log('[AutoUpdater] Checking for updates...')
+  autoUpdater.checkForUpdates()
+}
+
+autoUpdater.on('checking-for-update', () => {
+  console.log('[AutoUpdater] Checking for update...')
+})
+
+autoUpdater.on('update-available', info => {
+  console.log('[AutoUpdater] Update available.', info)
+  console.log('[AutoUpdater] Starting download...')
+  autoUpdater.downloadUpdate().catch(err => {
+    console.error('[AutoUpdater] Error during download:', err)
+  })
+})
+
+autoUpdater.on('update-not-available', info => {
+  console.log('[AutoUpdater] Update not available.', info)
+})
+
+autoUpdater.on('error', err => {
+  console.error('[AutoUpdater] Error:', err)
+})
+
+autoUpdater.on('download-progress', progressObj => {
+  let log_message = `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent.toFixed(2)}% (${progressObj.transferred}/${progressObj.total})`
+  console.log(log_message)
+  win?.webContents.send('update-download-progress', progressObj)
+})
+
+autoUpdater.on('update-downloaded', info => {
+  console.log('[AutoUpdater] Update downloaded.', info)
+  win?.webContents.send('update-downloaded', info)
+})
+
+ipcMain.on('restart-and-install-update', () => {
+  console.log('[AutoUpdater] Quitting and installing update...')
+  autoUpdater.quitAndInstall()
+})
 
 function registerMicrophoneToggleHotkey(accelerator: string | undefined) {
   if (currentMicToggleHotkey) {
@@ -994,20 +1047,16 @@ app.whenReady().then(async () => {
     registerTakeScreenshotHotkey(initialSettings.takeScreenshotHotkey)
   } else {
     console.warn('No initial settings found or settings failed to load.')
-    const defaultFallbackSettings = { 
+    const defaultFallbackSettings = {
       microphoneToggleHotkey: 'Alt+M',
       mutePlaybackHotkey: 'Alt+S',
-      takeScreenshotHotkey: 'Alt+C'
+      takeScreenshotHotkey: 'Alt+C',
     }
     registerMicrophoneToggleHotkey(
       defaultFallbackSettings.microphoneToggleHotkey
     )
-    registerMutePlaybackHotkey(
-      defaultFallbackSettings.mutePlaybackHotkey
-    )
-    registerTakeScreenshotHotkey(
-      defaultFallbackSettings.takeScreenshotHotkey
-    )
+    registerMutePlaybackHotkey(defaultFallbackSettings.mutePlaybackHotkey)
+    registerTakeScreenshotHotkey(defaultFallbackSettings.takeScreenshotHotkey)
   }
 
   try {
@@ -1026,6 +1075,7 @@ app.whenReady().then(async () => {
   }
   createWindow()
   createOverlayWindow()
+  checkForUpdates()
 })
 
 app.on('before-quit', async event => {

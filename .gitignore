@@ -30,3 +30,4 @@ pnpm-lock.yaml
 yarn.lock
 .env
 app-config.json
+dev-app-update.yml

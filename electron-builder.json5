@@ -1,12 +1,19 @@
 // @see https://www.electron.build/configuration/configuration
 {
   $schema: 'https://raw.githubusercontent.com/electron-userland/electron-builder/master/packages/app-builder-lib/scheme.json',
-  appId: 'aliceapp',
+  appId: 'aliceaiapp',
   asar: true,
-  productName: 'Alice app',
+  productName: 'Alice AI App',
   directories: {
     output: 'release/${version}',
   },
+  "publish": [
+    {
+      "provider": "github",
+      "owner": "pmbstyle",
+      "repo": "Alice"
+    }
+  ],
   files: ['dist', 'dist-electron'],
   "extraResources": [
     {

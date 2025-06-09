@@ -12,7 +12,7 @@ export type AudioState =
   | 'GENERATING_IMAGE'
 
 export interface AppChatMessageContentPart {
-  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path'
+  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path' | 'app_file'
   text?: string
   uri?: string
   path?: string
@@ -20,6 +20,8 @@ export interface AppChatMessageContentPart {
   imageGenerationId?: string
   isPartial?: boolean
   partialIndex?: number
+  fileId?: string
+  fileName?: string
 }
 
 export interface ChatMessage {
@@ -49,6 +51,7 @@ export const useGeneralStore = defineStore('general', () => {
   const videoSource = ref<string>(setVideo('STAND_BY'))
   const audioQueue = ref<Response[]>([])
   const sideBarView = ref<string>('chat')
+  const attachedFile = ref<File | null>(null)
 
   const setAudioState = (newState: AudioState) => {
     if (audioState.value === newState) return
@@ -353,6 +356,7 @@ export const useGeneralStore = defineStore('general', () => {
     videoSource,
     audioQueue,
     sideBarView,
+    attachedFile,
     setAudioState,
     queueAudioForPlayback,
     addMessageToHistory,

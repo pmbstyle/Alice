@@ -8,7 +8,8 @@ import {
   getOpenAIClient,
   createSummarizationResponse,
 } from '../api/openAI/responsesApi'
-import { transcribeAudio } from '../api/groq/stt'
+import { transcribeAudio as transcribeAudioGroq } from '../api/groq/stt'
+import { transcribeAudioOpenAI } from '../api/openAI/stt'
 import {
   retrieveRelevantThoughtsForPrompt,
   indexMessageForThoughts,
@@ -17,10 +18,9 @@ import {
 import { useGeneralStore } from './generalStore'
 import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
-import { MimeTypedBuffer } from 'electron/main'
 
 export interface AppChatMessageContentPart {
-  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path'
+  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path' | 'app_file'
   text?: string
   uri?: string
   path?: string
@@ -28,6 +28,8 @@ export interface AppChatMessageContentPart {
   imageGenerationId?: string
   isPartial?: boolean
   partialIndex?: number
+  fileId?: string
+  fileName?: string
 }
 
 export interface ChatMessage {
@@ -72,25 +74,23 @@ export const useConversationStore = defineStore('conversation', () => {
     if (!settingsStore.initialLoadAttempted) {
       await settingsStore.loadSettings()
     }
-    if (settingsStore.isProduction) {
-      if (
-        !settingsStore.config.VITE_OPENAI_API_KEY ||
-        !settingsStore.config.assistantModel ||
-        !settingsStore.config.SUMMARIZATION_MODEL
-      ) {
-        generalStore.statusMessage =
-          'Error: Core OpenAI settings (API Key/Assistant Model/Summarization Model) not configured.'
-        isInitialized.value = false
-        return false
-      }
-    } else {
-      if (!settingsStore.config.VITE_OPENAI_API_KEY)
-        console.warn('[Dev] OpenAI API Key missing.')
-      if (!settingsStore.config.assistantModel)
-        console.warn('[Dev] Assistant model not set.')
-      if (!settingsStore.config.SUMMARIZATION_MODEL)
-        console.warn('[Dev] Summarization model not set.')
+
+    const essentialCheckPassed = settingsStore.isProduction
+      ? settingsStore.areEssentialSettingsProvided
+      : !!settingsStore.config.VITE_OPENAI_API_KEY &&
+        !!settingsStore.config.assistantModel &&
+        !!settingsStore.config.SUMMARIZATION_MODEL &&
+        (settingsStore.config.sttProvider === 'openai' ||
+          (settingsStore.config.sttProvider === 'groq' &&
+            !!settingsStore.config.VITE_GROQ_API_KEY))
+
+    if (!essentialCheckPassed) {
+      generalStore.statusMessage =
+        'Error: Core settings (API Keys/Models/STT) not configured.'
+      isInitialized.value = false
+      return false
     }
+
     if (
       availableModels.value.length === 0 &&
       settingsStore.config.VITE_OPENAI_API_KEY
@@ -318,6 +318,18 @@ export const useConversationStore = defineStore('conversation', () => {
                     type: 'input_text',
                     text: '[User previously sent an image]',
                   }
+                }
+                return null
+              } else if (appPart.type === 'app_file') {
+                if (!appPart.fileId) return null
+                if (
+                  currentApiRole === 'user' ||
+                  currentApiRole === 'developer'
+                ) {
+                  return {
+                    type: 'input_file',
+                    file_id: appPart.fileId,
+                  } as OpenAI.Responses.Request.InputFilePart
                 }
                 return null
               } else if (appPart.type === 'app_generated_image_path') {
@@ -940,10 +952,26 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   const transcribeAudioMessage = async (
-    audioBuffer: MimeTypedBuffer
+    audioArrayBuffer: ArrayBuffer
   ): Promise<string> => {
+    const { sttProvider, VITE_OPENAI_API_KEY, VITE_GROQ_API_KEY } =
+      settingsStore.config
+
     try {
-      return await transcribeAudio(audioBuffer)
+      if (sttProvider === 'openai') {
+        if (!VITE_OPENAI_API_KEY) {
+          generalStore.statusMessage =
+            'Error: OpenAI API Key for STT is missing.'
+          return ''
+        }
+        return await transcribeAudioOpenAI(audioArrayBuffer)
+      } else {
+        if (!VITE_GROQ_API_KEY) {
+          generalStore.statusMessage = 'Error: Groq API Key for STT is missing.'
+          return ''
+        }
+        return await transcribeAudioGroq(audioArrayBuffer)
+      }
     } catch (error) {
       generalStore.statusMessage = 'Error: Transcription service failed'
       console.error('Transcription service error:', error)

@@ -19,6 +19,7 @@ Do not add any conversational fluff, commentary, or an introductory/concluding s
 export interface AliceSettings {
   VITE_OPENAI_API_KEY: string
   VITE_GROQ_API_KEY: string
+  sttProvider: 'openai' | 'groq'
 
   assistantModel: string
   assistantSystemPrompt: string
@@ -45,6 +46,7 @@ export interface AliceSettings {
 const defaultSettings: AliceSettings = {
   VITE_OPENAI_API_KEY: '',
   VITE_GROQ_API_KEY: '',
+  sttProvider: 'openai',
 
   assistantModel: 'gpt-4.1-mini',
   assistantSystemPrompt: defaultSystemPromptFromMD,
@@ -71,6 +73,7 @@ const defaultSettings: AliceSettings = {
 const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_OPENAI_API_KEY: 'OpenAI API Key',
   VITE_GROQ_API_KEY: 'Groq API Key (STT)',
+  sttProvider: 'Speech-to-Text Provider',
 
   assistantModel: 'Assistant Model',
   assistantSystemPrompt: 'Assistant System Prompt',
@@ -93,10 +96,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   mcpServersConfig: 'MCP Servers JSON Configuration',
 }
 
-const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
-  'VITE_OPENAI_API_KEY',
-  'VITE_GROQ_API_KEY',
-]
+const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = ['VITE_OPENAI_API_KEY']
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<AliceSettings>({ ...defaultSettings })
@@ -111,12 +111,16 @@ export const useSettingsStore = defineStore('settings', () => {
 
   const areEssentialSettingsProvided = computed(() => {
     if (!isProduction.value) return true
-    const allEssentialKeys: (keyof AliceSettings)[] = [
-      ...ESSENTIAL_CORE_API_KEYS,
+    const essentialKeys: (keyof AliceSettings)[] = [
+      'VITE_OPENAI_API_KEY',
       'assistantModel',
       'SUMMARIZATION_MODEL',
     ]
-    return allEssentialKeys.every(key => {
+    if (settings.value.sttProvider === 'groq') {
+      essentialKeys.push('VITE_GROQ_API_KEY')
+    }
+
+    return essentialKeys.every(key => {
       const value = settings.value[key]
       if (typeof value === 'string') return !!value.trim()
       if (typeof value === 'number') return true
@@ -145,7 +149,8 @@ export const useSettingsStore = defineStore('settings', () => {
                   key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
                   key === 'SUMMARIZATION_MESSAGE_COUNT' ||
                   key === 'SUMMARIZATION_MODEL' ||
-                  key === 'SUMMARIZATION_SYSTEM_PROMPT'
+                  key === 'SUMMARIZATION_SYSTEM_PROMPT' ||
+                  key === 'sttProvider'
               )
               .map(([key, value]) => {
                 if (
@@ -280,6 +285,10 @@ export const useSettingsStore = defineStore('settings', () => {
     } else {
       ;(settings.value as any)[key] = String(value)
     }
+    if (key === 'sttProvider') {
+      settings.value[key] = value as 'openai' | 'groq'
+    }
+
     successMessage.value = null
     error.value = null
     if (key === 'VITE_OPENAI_API_KEY') {
@@ -345,6 +354,16 @@ export const useSettingsStore = defineStore('settings', () => {
       return
     }
 
+    if (
+      currentConfigForTest.sttProvider === 'groq' &&
+      !currentConfigForTest.VITE_GROQ_API_KEY?.trim()
+    ) {
+      error.value = `Groq STT is selected, but '${settingKeyToLabelMap.VITE_GROQ_API_KEY}' is missing.`
+      generalStore.statusMessage = 'Groq API Key is required for Groq STT.'
+      isSaving.value = false
+      return
+    }
+
     const settingsPersistedInitially = await saveSettingsToFile()
     if (!settingsPersistedInitially) {
       generalStore.statusMessage = 'Error saving settings to file.'
@@ -383,7 +402,7 @@ export const useSettingsStore = defineStore('settings', () => {
         return
       }
 
-      successMessage.value = 'OpenAI settings are valid and saved!'
+      successMessage.value = 'Settings are valid and saved!'
       if (!isProduction.value) {
         successMessage.value +=
           ' (Dev mode - .env might override for operation if not using UI for all settings)'
@@ -405,7 +424,8 @@ export const useSettingsStore = defineStore('settings', () => {
         successMessage.value = `Settings valid, but ${initErrorMsg}`
       }
     } else {
-      generalStore.statusMessage = 'Settings validation failed. Check API Key.'
+      generalStore.statusMessage =
+        'Settings validation failed. Check API Key(s).'
     }
     isSaving.value = false
   }

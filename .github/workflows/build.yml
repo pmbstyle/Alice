@@ -35,6 +35,7 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 18
+          cache: 'npm'
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -43,11 +44,6 @@ jobs:
 
       - name: Install Dependencies
         run: npm install
-
-      - name: Rebuild native modules for Electron
-        run: npm run rebuild
-        env:
-          DEBUG: 'electron-rebuild'
 
       - name: Get app version from package.json
         id: get_version
@@ -61,57 +57,22 @@ jobs:
           printf "  \"VITE_GOOGLE_CLIENT_ID\": \"%s\",\n" "${{ secrets.VITE_GOOGLE_CLIENT_ID }}" >> app-config.json
           printf "  \"VITE_GOOGLE_CLIENT_SECRET\": \"%s\"\n" "${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}" >> app-config.json
           printf "}\n" >> app-config.json
-          echo "app-config.json created successfully."
-          echo "--- app-config.json content START ---"
-          cat app-config.json
-          echo "--- app-config.json content END ---"
         env:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}
 
-      - name: Build Release Files (without auto-publishing)
-        run: npm run build -- --publish never
+      - name: Build Release Files
+        run: npm run build -- --publish always
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
-      - name: Prepare artifact details for ${{ matrix.os }}
-        id: prep_artifact
-        shell: bash
-        run: |
-          VERSION="${{ env.APP_VERSION }}"
-          PRODUCT_NAME="Alice app" # Ensure this matches 'productName' in electron-builder.json5
-
-          ARTIFACT_FILENAME=""
-          ARTIFACT_FILEPATH=""
-
-          if [ "${{ matrix.os }}" == "macos-latest" ]; then
-            ARTIFACT_FILENAME="$PRODUCT_NAME-Mac-$VERSION-Installer.dmg"
-          elif [ "${{ matrix.os }}" == "windows-latest" ]; then
-            ARTIFACT_FILENAME="$PRODUCT_NAME-Windows-$VERSION-Setup.exe"
-          elif [ "${{ matrix.os }}" == "ubuntu-latest" ]; then
-            ARTIFACT_FILENAME="$PRODUCT_NAME-Linux-$VERSION.AppImage"
-          fi
-
-          ARTIFACT_FILEPATH="release/$VERSION/$ARTIFACT_FILENAME"
-          echo "ARTIFACT_NAME=${ARTIFACT_FILENAME}" >> $GITHUB_ENV
-          echo "ARTIFACT_PATH=${ARTIFACT_FILEPATH}" >> $GITHUB_ENV
-
-      - name: Verify Artifact Path
-        shell: bash
-        run: |
-          echo "Expecting artifact name: ${{ env.ARTIFACT_NAME }}"
-          echo "Expecting artifact at path: ${{ env.ARTIFACT_PATH }}"
-          ls -lR release/ # List contents of release directory for debugging
-          if [ ! -f "${{ env.ARTIFACT_PATH }}" ]; then
-            echo "::error::Artifact file not found at ${{ env.ARTIFACT_PATH }}"
-            exit 1
-          fi
-
-      - name: Upload Release Asset for ${{ matrix.os }}
+      - name: Upload Release Artifacts for ${{ matrix.os }}
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: ${{ env.ARTIFACT_PATH }}
+          name: release-artifacts-${{ matrix.os }}
+          path: release/${{ env.APP_VERSION }}
           if-no-files-found: error
           retention-days: 5
 
@@ -133,20 +94,19 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: ./release-assets
+          pattern: release-artifacts-*
+          merge-multiple: true
 
       - name: Display structure of downloaded files
         shell: bash
         run: |
           echo "Downloaded release assets:"
           ls -R ./release-assets
-          echo "---"
-          echo "GitHub Ref Name (Tag): ${{ github.ref_name }}"
-          echo "GitHub Ref Type: ${{ github.ref_type }}"
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
         with:
-          artifacts: './release-assets/*/*'
+          artifacts: './release-assets/*'
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
           name: Release ${{ github.ref_name }}

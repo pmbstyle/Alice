@@ -65,8 +65,6 @@ jobs:
         run: npm run build -- --publish always
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
       - name: Upload Release Artifacts for ${{ matrix.os }}
         uses: actions/upload-artifact@v4

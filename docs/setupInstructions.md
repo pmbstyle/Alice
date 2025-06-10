@@ -7,7 +7,7 @@ Run in your terminal `xattr -cr "/Applications/Alice AI App.app"`
 - Go to [OpenAI Platform](https://platform.openai.com/assistants)
 - Get OpenAI API key and add it to settings.
 
-# Groq STT setup
+# Groq STT setup (optional)
 
 - Go to [Groq cloud console](https://console.groq.com/home)  and set up your account
 - Get your API key from [API keys](https://console.groq.com/keys) section and paste it in settings

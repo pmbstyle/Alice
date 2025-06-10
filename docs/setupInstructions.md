@@ -1,6 +1,6 @@
 # MacOS, run an unsigned app
 
-Run in your terminal `xattr -cr /Applications/Alice\ app.app`
+Run in your terminal `xattr -cr "/Applications/Alice AI App.app"`
 
 #  OpenAI Assistant setup
 

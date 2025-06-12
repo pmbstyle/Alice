@@ -553,13 +553,21 @@ export const useConversationStore = defineStore('conversation', () => {
           generalStore.appendMessageDeltaByTempId(placeholderTempId, textChunk)
           if (textChunk.match(/[.!?]\s*$/) || textChunk.includes('\n')) {
             if (currentSentence.trim()) {
-              const ttsResponse = await ttsStream(currentSentence.trim())
-              if (
-                queueAudioForPlayback(ttsResponse) &&
-                audioState.value !== 'SPEAKING' &&
-                audioState.value !== 'GENERATING_IMAGE'
-              )
-                setAudioState('SPEAKING')
+              const textForTTS = currentSentence
+                .trim()
+                .replace(
+                  /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g,
+                  ''
+                )
+              if (textForTTS) {
+                const ttsResponse = await ttsStream(textForTTS)
+                if (
+                  queueAudioForPlayback(ttsResponse) &&
+                  audioState.value !== 'SPEAKING' &&
+                  audioState.value !== 'GENERATING_IMAGE'
+                )
+                  setAudioState('SPEAKING')
+              }
               currentSentence = ''
             }
           }
@@ -590,13 +598,21 @@ export const useConversationStore = defineStore('conversation', () => {
       }
 
       if (currentSentence.trim()) {
-        const ttsResponse = await ttsStream(currentSentence.trim())
-        if (
-          queueAudioForPlayback(ttsResponse) &&
-          audioState.value !== 'SPEAKING' &&
-          audioState.value !== 'GENERATING_IMAGE'
-        )
-          setAudioState('SPEAKING')
+        const textForTTS = currentSentence
+          .trim()
+          .replace(
+            /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g,
+            ''
+          )
+        if (textForTTS) {
+          const ttsResponse = await ttsStream(textForTTS)
+          if (
+            queueAudioForPlayback(ttsResponse) &&
+            audioState.value !== 'SPEAKING' &&
+            audioState.value !== 'GENERATING_IMAGE'
+          )
+            setAudioState('SPEAKING')
+        }
       }
     } catch (error: any) {
       streamEndedNormally = false

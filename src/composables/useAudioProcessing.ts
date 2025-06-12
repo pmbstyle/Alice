@@ -77,8 +77,14 @@ export function useAudioProcessing() {
     }
     if (window.ipcRenderer) {
       window.ipcRenderer.on('global-hotkey-mic-toggle', handleGlobalMicToggle)
-      window.ipcRenderer.on('global-hotkey-mute-playback', handleGlobalMutePlayback)
-      window.ipcRenderer.on('global-hotkey-take-screenshot', handleGlobalTakeScreenshot)
+      window.ipcRenderer.on(
+        'global-hotkey-mute-playback',
+        handleGlobalMutePlayback
+      )
+      window.ipcRenderer.on(
+        'global-hotkey-take-screenshot',
+        handleGlobalTakeScreenshot
+      )
     }
   })
 
@@ -118,6 +124,17 @@ export function useAudioProcessing() {
         baseAssetPath: assetPath,
         onnxWASMBasePath: assetPath,
         onSpeechStart: () => {
+          if (
+            audioState.value === 'SPEAKING' ||
+            audioState.value === 'WAITING_FOR_RESPONSE'
+          ) {
+            console.log(
+              `[VAD Barge-In] User interrupted Alice during ${audioState.value}. Stopping processes.`
+            )
+            eventBus.emit('cancel-llm-stream')
+            generalStore.stopPlaybackAndClearQueue()
+            setAudioState('LISTENING')
+          }
           isSpeechDetected.value = true
           console.log('[VAD Callback] Speech started.')
         },
@@ -203,72 +220,21 @@ export function useAudioProcessing() {
     }
   }
 
-  watch(audioState, (newState, oldState) => {
+  watch(isRecordingRequested, isRequested => {
     console.log(
-      `[VAD Watcher] Audio state changed from ${oldState} to ${newState}`
+      `[VAD Lifecycle] Mic request changed to: ${isRequested}. Current state: ${audioState.value}`
     )
-    if (newState === 'LISTENING') {
+    if (isRequested) {
       if (!myvad.value && !isVadInitializing.value) {
         initializeVAD()
-      } else if (myvad.value && myvad.value.paused) {
-        try {
-          myvad.value.start()
-          console.log(
-            '[VAD Manager] VAD instance existed and was paused, restarted.'
-          )
-          isSpeechDetected.value = false
-        } catch (e) {
-          console.error(
-            '[VAD Manager] Error restarting existing VAD instance, re-initializing.',
-            e
-          )
-          initializeVAD()
-        }
-      } else if (isVadInitializing.value) {
-        console.log(
-          '[VAD Watcher] VAD is already initializing. Will not call initializeVAD again.'
-        )
-      } else {
-        console.log(
-          '[VAD Watcher] VAD instance already exists and is not paused.'
-        )
-        isSpeechDetected.value = false
       }
-    } else if (oldState === 'LISTENING' && newState !== 'LISTENING') {
-      if (myvad.value) {
-        destroyVAD()
-      }
-    }
-  })
-
-  watch(isRecordingRequested, (requested, oldRequestedValue) => {
-    console.log(
-      `[VAD Watcher] isRecordingRequested changed from ${oldRequestedValue} to ${requested}. Current audioState: ${audioState.value}`
-    )
-    const currentState = audioState.value
-
-    if (requested) {
-      if (currentState === 'IDLE' || currentState === 'CONFIG') {
+      if (audioState.value === 'IDLE' || audioState.value === 'CONFIG') {
         setAudioState('LISTENING')
-      } else if (
-        currentState === 'SPEAKING' ||
-        currentState === 'WAITING_FOR_RESPONSE'
-      ) {
-        console.log(
-          `[VAD Watcher] Recording requested while Alice is ${currentState}. Will listen after current action.`
-        )
-      } else if (currentState === 'PROCESSING_AUDIO') {
-        console.log(
-          '[VAD Watcher] Recording requested during audio processing. Will listen after.'
-        )
       }
     } else {
-      if (currentState === 'LISTENING') {
+      destroyVAD()
+      if (audioState.value !== 'IDLE') {
         setAudioState('IDLE')
-      } else if (currentState === 'PROCESSING_AUDIO') {
-        console.log(
-          '[VAD Watcher] Recording stopped request during audio processing. Will go to IDLE after if no TTS.'
-        )
       }
     }
   })
@@ -285,8 +251,14 @@ export function useAudioProcessing() {
     destroyVAD()
     if (window.ipcRenderer) {
       window.ipcRenderer.off('global-hotkey-mic-toggle', handleGlobalMicToggle)
-      window.ipcRenderer.off('global-hotkey-mute-playback', handleGlobalMutePlayback)
-      window.ipcRenderer.off('global-hotkey-take-screenshot', handleGlobalTakeScreenshot)
+      window.ipcRenderer.off(
+        'global-hotkey-mute-playback',
+        handleGlobalMutePlayback
+      )
+      window.ipcRenderer.off(
+        'global-hotkey-take-screenshot',
+        handleGlobalTakeScreenshot
+      )
     }
   })
 

@@ -48,6 +48,8 @@ export const getOpenAIClient = (): OpenAI => {
   return new OpenAI({
     apiKey: settings.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
   })
 }
 
@@ -55,7 +57,8 @@ export const createOpenAIResponse = async (
   input: OpenAI.Responses.Request.InputItemLike[],
   previousResponseId: string | null,
   stream: boolean = false,
-  customInstructions?: string
+  customInstructions?: string,
+  signal?: AbortSignal
 ): Promise<any> => {
   const openai = getOpenAIClient()
   const settings = useSettingsStore().config
@@ -135,23 +138,32 @@ export const createOpenAIResponse = async (
     truncation: 'auto',
   }
 
-  //console.log('[REQUEST PARAMS]', JSON.stringify(params, null, 2)) // dev debugging
+  const requestOptions: OpenAI.RequestOptions = {}
+  if (signal) {
+    requestOptions.signal = signal
+  }
 
   if (stream) {
-    return openai.responses.create(params as any)
+    return openai.responses.create(params as any, requestOptions)
   } else {
-    return openai.responses.create(params as any)
+    return openai.responses.create(params as any, requestOptions)
   }
 }
 
-export const ttsStream = async (text: string): Promise<Response> => {
+export const ttsStream = async (
+  text: string,
+  signal: AbortSignal
+): Promise<Response> => {
   const openai = getOpenAIClient()
-  const response = await openai.audio.speech.create({
-    model: 'tts-1',
-    voice: 'nova',
-    input: text,
-    response_format: 'mp3',
-  })
+  const response = await openai.audio.speech.create(
+    {
+      model: 'tts-1',
+      voice: 'nova',
+      input: text,
+      response_format: 'mp3',
+    },
+    { signal }
+  )
   return response
 }
 

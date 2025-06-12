@@ -8,6 +8,8 @@ type Events = {
   'screenshot-ready': string
   'mute-playback-toggle': void
   'take-screenshot': void
+  'cancel-tts': void
+  'cancel-llm-stream': void
 }
 
 const eventBus = mitt<Events>()

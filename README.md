@@ -33,7 +33,7 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
   Alice comes with an advanced system prompt that allows a seamless user experience and tool usage. The system prompt can be updated in settings at any time.
 
 - ⏹️ **Interruptible responses**  
-  Alice can cancel her response mid-stream when interrupted, including both text and TTS pipelines.
+  Yes, kinda Realtime API but much cheaper to use ;) Alice can cancel her response mid-stream when interrupted with voice input, including both text and TTS pipelines.
 
 - ⚙️ **Function calling**  
   Data retrieval:  

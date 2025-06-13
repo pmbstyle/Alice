@@ -1,6 +1,7 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { setVideo } from '../utils/videoProcess'
+import eventBus from '../utils/eventBus'
 
 export type AudioState =
   | 'IDLE'
@@ -328,6 +329,7 @@ export const useGeneralStore = defineStore('general', () => {
   }
 
   const stopPlaybackAndClearQueue = () => {
+    eventBus.emit('cancel-tts')
     if (audioPlayer.value) {
       audioPlayer.value.pause()
       if (audioPlayer.value.src && audioPlayer.value.src.startsWith('blob:')) {

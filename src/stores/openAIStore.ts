@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { defineStore, storeToRefs } from 'pinia'
 import type OpenAI from 'openai'
 
@@ -7,6 +7,7 @@ import {
   ttsStream,
   getOpenAIClient,
   createSummarizationResponse,
+  createContextAnalysisResponse,
 } from '../api/openAI/responsesApi'
 import { transcribeAudio as transcribeAudioGroq } from '../api/groq/stt'
 import { transcribeAudioOpenAI } from '../api/openAI/stt'
@@ -18,6 +19,7 @@ import {
 import { useGeneralStore } from './generalStore'
 import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
+import eventBus from '../utils/eventBus'
 
 export interface AppChatMessageContentPart {
   type: 'app_text' | 'app_image_uri' | 'app_generated_image_path' | 'app_file'
@@ -66,6 +68,34 @@ export const useConversationStore = defineStore('conversation', () => {
   const isInitialized = ref<boolean>(false)
   const availableModels = ref<OpenAI.Models.Model[]>([])
   const isSummarizing = ref<boolean>(false)
+  const ttsAbortController = ref<AbortController | null>(null)
+  const llmAbortController = ref<AbortController | null>(null)
+  const ephemeralEmotionalContext = ref<string | null>(null)
+
+  const handleCancelTTS = () => {
+    if (ttsAbortController.value) {
+      console.log('[TTS Abort] Cancelling in-flight TTS request.')
+      ttsAbortController.value.abort()
+      ttsAbortController.value = null
+    }
+  }
+
+  const handleCancelLLMStream = () => {
+    if (llmAbortController.value) {
+      console.log('[LLM Abort] Cancelling in-flight LLM stream request.')
+      llmAbortController.value.abort()
+      llmAbortController.value = null
+      currentResponseId.value = null
+    }
+  }
+
+  eventBus.on('cancel-tts', handleCancelTTS)
+  eventBus.on('cancel-llm-stream', handleCancelLLMStream)
+
+  onUnmounted(() => {
+    eventBus.off('cancel-tts', handleCancelTTS)
+    eventBus.off('cancel-llm-stream', handleCancelLLMStream)
+  })
 
   const initialize = async (): Promise<boolean> => {
     if (isInitialized.value) {
@@ -152,26 +182,43 @@ export const useConversationStore = defineStore('conversation', () => {
         messagesResult.data.length > 0
       ) {
         const rawMessages: RawMessageForSummarization[] = messagesResult.data
-        const formattedMessagesForSummary = rawMessages.map(m => ({
+        const formattedMessages = rawMessages.map(m => ({
           role: m.role,
           content: m.text_content || '[content missing]',
         }))
 
-        const summaryText = await createSummarizationResponse(
-          formattedMessagesForSummary,
-          settingsStore.config.SUMMARIZATION_MODEL,
-          settingsStore.config.SUMMARIZATION_SYSTEM_PROMPT
-        )
+        const [emotionalContext, factualSummary] = await Promise.all([
+          createContextAnalysisResponse(
+            formattedMessages,
+            settingsStore.config.SUMMARIZATION_MODEL
+          ),
+          createSummarizationResponse(
+            formattedMessages,
+            settingsStore.config.SUMMARIZATION_MODEL,
+            settingsStore.config.SUMMARIZATION_SYSTEM_PROMPT
+          ),
+        ])
 
-        if (summaryText) {
+        if (emotionalContext) {
+          ephemeralEmotionalContext.value = emotionalContext
+          console.log(
+            '[Summarizer] Captured ephemeral emotional context:',
+            emotionalContext
+          )
+        }
+
+        if (factualSummary) {
           await window.ipcRenderer.invoke('summaries:save-summary', {
-            summaryText,
+            summaryText: factualSummary,
             summarizedMessagesCount: rawMessages.length,
             conversationId: conversationIdForSummary,
           })
-          console.log('[Summarizer] Conversation summary saved.', summaryText)
+          console.log(
+            '[Summarizer] Factual conversation summary saved.',
+            factualSummary
+          )
         } else {
-          console.warn('[Summarizer] Failed to generate summary text.')
+          console.warn('[Summarizer] Failed to generate factual summary.')
         }
       } else if (messagesResult.data && messagesResult.data.length === 0) {
         console.log(
@@ -376,6 +423,44 @@ export const useConversationStore = defineStore('conversation', () => {
     let streamEndedNormally = true
     const activeImageGenerationCallId = ref<string | null>(null)
 
+    const sendToTTS = async (text: string) => {
+      if (text.trim()) {
+        const textForTTS = text
+          .trim()
+          .replace(
+            /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g,
+            ''
+          )
+        if (textForTTS) {
+          ttsAbortController.value = new AbortController()
+          try {
+            const ttsResponse = await ttsStream(
+              textForTTS,
+              ttsAbortController.value.signal
+            )
+            if (
+              queueAudioForPlayback(ttsResponse) &&
+              audioState.value !== 'SPEAKING' &&
+              audioState.value !== 'GENERATING_IMAGE'
+            ) {
+              setAudioState('SPEAKING')
+            }
+          } catch (error: any) {
+            if (error.name !== 'AbortError') {
+              console.error('TTS stream creation failed:', error)
+            }
+          } finally {
+            if (
+              ttsAbortController.value &&
+              !ttsAbortController.value.signal.aborted
+            ) {
+              ttsAbortController.value = null
+            }
+          }
+        }
+      }
+    }
+
     try {
       for await (const event of stream) {
         if (event.type === 'response.created') {
@@ -552,24 +637,8 @@ export const useConversationStore = defineStore('conversation', () => {
           currentSentence += textChunk
           generalStore.appendMessageDeltaByTempId(placeholderTempId, textChunk)
           if (textChunk.match(/[.!?]\s*$/) || textChunk.includes('\n')) {
-            if (currentSentence.trim()) {
-              const textForTTS = currentSentence
-                .trim()
-                .replace(
-                  /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g,
-                  ''
-                )
-              if (textForTTS) {
-                const ttsResponse = await ttsStream(textForTTS)
-                if (
-                  queueAudioForPlayback(ttsResponse) &&
-                  audioState.value !== 'SPEAKING' &&
-                  audioState.value !== 'GENERATING_IMAGE'
-                )
-                  setAudioState('SPEAKING')
-              }
-              currentSentence = ''
-            }
+            await sendToTTS(currentSentence)
+            currentSentence = ''
           }
         }
 
@@ -597,85 +666,46 @@ export const useConversationStore = defineStore('conversation', () => {
         }
       }
 
-      if (currentSentence.trim()) {
-        const textForTTS = currentSentence
-          .trim()
-          .replace(
-            /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g,
-            ''
-          )
-        if (textForTTS) {
-          const ttsResponse = await ttsStream(textForTTS)
-          if (
-            queueAudioForPlayback(ttsResponse) &&
-            audioState.value !== 'SPEAKING' &&
-            audioState.value !== 'GENERATING_IMAGE'
-          )
-            setAudioState('SPEAKING')
-        }
-      }
+      await sendToTTS(currentSentence)
     } catch (error: any) {
-      streamEndedNormally = false
-      activeImageGenerationCallId.value = null
-      console.error('Error processing stream:', error)
-      const errorMsg = `Error: Processing response failed (${error.message})`
-      generalStore.statusMessage = errorMsg
-      generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
+      if (error.name !== 'AbortError') {
+        streamEndedNormally = false
+        activeImageGenerationCallId.value = null
+        console.error('Error processing stream:', error)
+        const errorMsg = `Error: Processing response failed (${error.message})`
+        generalStore.statusMessage = errorMsg
+        generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
+      } else {
+        console.log('[ProcessStream] LLM stream aborted by user.')
+        streamEndedNormally = true
+      }
     } finally {
+      llmAbortController.value = null
       if (streamEndedNormally) {
-        if (
-          (audioState.value === 'WAITING_FOR_RESPONSE' ||
-            audioState.value === 'GENERATING_IMAGE') &&
-          generalStore.audioQueue.length === 0 &&
-          !activeImageGenerationCallId.value
-        ) {
-          setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-        }
-
-        const finalAssistantMessage = chatHistory.value.find(
-          m => m.local_id_temp === placeholderTempId && m.role === 'assistant'
-        )
-        if (finalAssistantMessage) {
-          try {
-            let assistantTextForIndexing = ''
-            if (Array.isArray(finalAssistantMessage.content)) {
-              const textPart = finalAssistantMessage.content.find(
-                p => p.type === 'app_text'
-              )
-              if (textPart && textPart.text) {
-                assistantTextForIndexing = textPart.text
-              }
-            } else if (typeof finalAssistantMessage.content === 'string') {
-              assistantTextForIndexing = finalAssistantMessage.content
-            }
-
-            if (assistantTextForIndexing) {
-              await indexMessageForThoughts(
-                currentConversationTurnId.value ||
-                  currentResponseId.value ||
-                  placeholderTempId,
-                'assistant',
-                {
-                  content: [
-                    { type: 'app_text', text: assistantTextForIndexing },
-                  ],
-                }
-              )
-            }
-          } catch (e) {
-            console.error(
-              '[ProcessStream] Error indexing assistant message for thoughts:',
-              e
-            )
+        const finalizationInterval = setInterval(() => {
+          if (generalStore.audioPlayer && !generalStore.audioPlayer.paused) {
+            return
           }
-        }
 
-        if (
-          !activeImageGenerationCallId.value &&
-          !event?.item?.type?.includes('call')
-        ) {
-          await triggerConversationSummarization()
-        }
+          if (generalStore.audioQueue.length > 0) {
+            return
+          }
+
+          console.log(
+            '[Finalizer] Playback and queue are empty. Finalizing state.'
+          )
+          if (
+            audioState.value === 'SPEAKING' ||
+            audioState.value === 'WAITING_FOR_RESPONSE'
+          ) {
+            setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+          }
+          clearInterval(finalizationInterval)
+
+          if (!activeImageGenerationCallId.value && !isContinuationAfterTool) {
+            triggerConversationSummarization()
+          }
+        }, 250)
       }
     }
     return { streamEndedNormally }
@@ -713,7 +743,10 @@ export const useConversationStore = defineStore('conversation', () => {
 
     if (generalStore.isTTSEnabled) {
       try {
-        const ttsResponse = await ttsStream(toolStatusMessage)
+        const ttsResponse = await ttsStream(
+          toolStatusMessage,
+          new AbortController().signal
+        )
         if (
           queueAudioForPlayback(ttsResponse) &&
           audioState.value !== 'SPEAKING' &&
@@ -788,6 +821,7 @@ export const useConversationStore = defineStore('conversation', () => {
     const nextApiInput = await buildApiInput()
 
     try {
+      llmAbortController.value = new AbortController()
       setAudioState('WAITING_FOR_RESPONSE')
       const afterToolPlaceholder: ChatMessage = {
         role: 'assistant',
@@ -800,7 +834,8 @@ export const useConversationStore = defineStore('conversation', () => {
         nextApiInput,
         originalResponseIdForTool,
         true,
-        finalInstructionsForToolFollowUp
+        finalInstructionsForToolFollowUp,
+        llmAbortController.value.signal
       )) as AsyncIterable<OpenAI.Responses.StreamEvent>
 
       await _processStreamLogic(
@@ -809,21 +844,25 @@ export const useConversationStore = defineStore('conversation', () => {
         true
       )
     } catch (error: any) {
-      console.error('Error in continued stream after tool call:', error)
-      const errorMsg = `Error: Tool interaction follow-up failed (${error.message})`
-      generalStore.statusMessage = errorMsg
-      if (afterToolPlaceholderTempId) {
-        generalStore.updateMessageContentByTempId(
-          afterToolPlaceholderTempId,
-          errorMsg
-        )
-      } else {
-        generalStore.addMessageToHistory({
-          role: 'assistant',
-          content: [{ type: 'app_text', text: errorMsg }],
-        })
+      if (error.name !== 'AbortError') {
+        console.error('Error in continued stream after tool call:', error)
+        const errorMsg = `Error: Tool interaction follow-up failed (${error.message})`
+        generalStore.statusMessage = errorMsg
+        if (afterToolPlaceholderTempId) {
+          generalStore.updateMessageContentByTempId(
+            afterToolPlaceholderTempId,
+            errorMsg
+          )
+        } else {
+          generalStore.addMessageToHistory({
+            role: 'assistant',
+            content: [{ type: 'app_text', text: errorMsg }],
+          })
+        }
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       }
-      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+    } finally {
+      llmAbortController.value = null
     }
   }
 
@@ -886,20 +925,7 @@ export const useConversationStore = defineStore('conversation', () => {
     setAudioState('WAITING_FOR_RESPONSE')
     const constructedApiInput = await buildApiInput()
 
-    if (
-      constructedApiInput.length === 0 &&
-      !settingsStore.config.assistantSystemPrompt
-    ) {
-      console.warn(
-        'Chat called with empty history and no system prompt. Aborting.'
-      )
-      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-      return
-    }
-
-    let finalInstructions = settingsStore.config.assistantSystemPrompt || ''
     let currentUserInputTextForThoughts = ''
-
     const latestMessageInHistory = chatHistory.value[0]
     if (latestMessageInHistory && latestMessageInHistory.role === 'user') {
       if (typeof latestMessageInHistory.content === 'string') {
@@ -913,24 +939,33 @@ export const useConversationStore = defineStore('conversation', () => {
       }
     }
 
+    let thoughtsBlock = ''
     if (currentUserInputTextForThoughts) {
       try {
         const relevantThoughtsArray = await retrieveRelevantThoughtsForPrompt(
           currentUserInputTextForThoughts
         )
-        let thoughtsBlock =
+        thoughtsBlock =
           'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
         thoughtsBlock +=
           relevantThoughtsArray.length > 0
             ? relevantThoughtsArray.map(t => `- ${t}`).join('\n')
             : 'No relevant thoughts...'
-        finalInstructions = `${thoughtsBlock}\n\n---\n\n${settingsStore.config.assistantSystemPrompt || ''}`
       } catch (error) {
         console.error('Error retrieving or formatting thoughts:', error)
       }
     } else {
-      finalInstructions = `Relevant thoughts from past conversation (use these to inform your answer if applicable):\nNo relevant thoughts...\n\n---\n\n${settingsStore.config.assistantSystemPrompt || ''}`
+      thoughtsBlock =
+        'Relevant thoughts from past conversation (use these to inform your answer if applicable):\nNo relevant thoughts...'
     }
+
+    let dynamicSystemNote = ''
+    if (ephemeralEmotionalContext.value) {
+      dynamicSystemNote = `[System Note for Alice: Based on the last conversation segment, the user's tone was: "${ephemeralEmotionalContext.value}". Adapt your response accordingly.]\n\n`
+      ephemeralEmotionalContext.value = null
+    }
+
+    const finalInstructions = `${dynamicSystemNote}${thoughtsBlock}\n\n---\n\n${settingsStore.config.assistantSystemPrompt || ''}`
 
     const assistantMessagePlaceholder: ChatMessage = {
       role: 'assistant',
@@ -941,11 +976,13 @@ export const useConversationStore = defineStore('conversation', () => {
     )
 
     try {
+      llmAbortController.value = new AbortController()
       const streamResult = await createOpenAIResponse(
         constructedApiInput,
         currentResponseId.value,
         true,
-        finalInstructions
+        finalInstructions,
+        llmAbortController.value.signal
       )
       await _processStreamLogic(
         streamResult as AsyncIterable<OpenAI.Responses.StreamEvent>,
@@ -953,17 +990,21 @@ export const useConversationStore = defineStore('conversation', () => {
         false
       )
     } catch (error: any) {
-      console.error('Error starting OpenAI response stream:', error)
-      const errorMsg = `Error: Could not start assistant (${error.message})`
-      generalStore.statusMessage = errorMsg
-      if (placeholderTempId)
-        generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
-      else
-        generalStore.addMessageToHistory({
-          role: 'assistant',
-          content: [{ type: 'app_text', text: errorMsg }],
-        })
-      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      if (error.name !== 'AbortError') {
+        console.error('Error starting OpenAI response stream:', error)
+        const errorMsg = `Error: Could not start assistant (${error.message})`
+        generalStore.statusMessage = errorMsg
+        if (placeholderTempId)
+          generalStore.updateMessageContentByTempId(placeholderTempId, errorMsg)
+        else
+          generalStore.addMessageToHistory({
+            role: 'assistant',
+            content: [{ type: 'app_text', text: errorMsg }],
+          })
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      }
+    } finally {
+      llmAbortController.value = null
     }
   }
 

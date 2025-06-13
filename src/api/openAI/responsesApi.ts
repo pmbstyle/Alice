@@ -48,6 +48,8 @@ export const getOpenAIClient = (): OpenAI => {
   return new OpenAI({
     apiKey: settings.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
   })
 }
 
@@ -55,7 +57,8 @@ export const createOpenAIResponse = async (
   input: OpenAI.Responses.Request.InputItemLike[],
   previousResponseId: string | null,
   stream: boolean = false,
-  customInstructions?: string
+  customInstructions?: string,
+  signal?: AbortSignal
 ): Promise<any> => {
   const openai = getOpenAIClient()
   const settings = useSettingsStore().config
@@ -135,23 +138,32 @@ export const createOpenAIResponse = async (
     truncation: 'auto',
   }
 
-  //console.log('[REQUEST PARAMS]', JSON.stringify(params, null, 2)) // dev debugging
+  const requestOptions: OpenAI.RequestOptions = {}
+  if (signal) {
+    requestOptions.signal = signal
+  }
 
   if (stream) {
-    return openai.responses.create(params as any)
+    return openai.responses.create(params as any, requestOptions)
   } else {
-    return openai.responses.create(params as any)
+    return openai.responses.create(params as any, requestOptions)
   }
 }
 
-export const ttsStream = async (text: string): Promise<Response> => {
+export const ttsStream = async (
+  text: string,
+  signal: AbortSignal
+): Promise<Response> => {
   const openai = getOpenAIClient()
-  const response = await openai.audio.speech.create({
-    model: 'tts-1',
-    voice: 'nova',
-    input: text,
-    response_format: 'mp3',
-  })
+  const response = await openai.audio.speech.create(
+    {
+      model: 'tts-1',
+      voice: 'nova',
+      input: text,
+      response_format: 'mp3',
+    },
+    { signal }
+  )
   return response
 }
 
@@ -178,14 +190,6 @@ export const createSummarizationResponse = async (
   systemPrompt: string
 ): Promise<string | null> => {
   const openai = getOpenAIClient()
-
-  const apiInput: OpenAI.Responses.Request.InputItemLike[] =
-    messagesToSummarize.map(msg => {
-      return {
-        role: 'user',
-        content: [{ type: 'input_text', text: `${msg.role}: ${msg.content}` }],
-      }
-    })
 
   const combinedTextForSummarization = messagesToSummarize
     .map(msg => `${msg.role}: ${msg.content}`)
@@ -237,6 +241,66 @@ export const createSummarizationResponse = async (
     return null
   } catch (error) {
     console.error('Error creating summarization response with OpenAI:', error)
+    return null
+  }
+}
+
+export const createContextAnalysisResponse = async (
+  messagesToAnalyze: { role: string; content: string }[],
+  analysisModel: string = 'gpt-4.1-nano'
+): Promise<string | null> => {
+  const openai = getOpenAIClient()
+
+  const analysisSystemPrompt = `You are an expert in emotional intelligence. Analyze the tone and emotional state of the 'user' in the following conversation transcript. Provide a single, concise sentence describing their likely emotional state. Do not add any extra commentary. Examples: "User seems curious and engaged.", "User sounds stressed and is looking for reassurance."`
+
+  const combinedTextForAnalysis = messagesToAnalyze
+    .map(msg => `${msg.role}: ${msg.content}`)
+    .join('\n\n')
+
+  const analysisApiInput: OpenAI.Responses.Request.InputItemLike[] = [
+    {
+      role: 'user',
+      content: [{ type: 'input_text', text: combinedTextForAnalysis }],
+    },
+  ]
+
+  const params: OpenAI.Responses.ResponseCreateParams = {
+    model: analysisModel,
+    input: analysisApiInput,
+    instructions: analysisSystemPrompt,
+    temperature: 0.3,
+    top_p: 1.0,
+    stream: false,
+    store: false,
+  }
+
+  try {
+    const response = await openai.responses.create(params as any)
+    if (
+      response.output &&
+      Array.isArray(response.output) &&
+      response.output.length > 0
+    ) {
+      const messageOutput = response.output.find(
+        (item: any) => item.type === 'message' && item.role === 'assistant'
+      )
+      if (
+        messageOutput &&
+        messageOutput.content &&
+        Array.isArray(messageOutput.content) &&
+        messageOutput.content.length > 0
+      ) {
+        const textPart = messageOutput.content.find(
+          (part: any) => part.type === 'output_text'
+        )
+        if (textPart && textPart.text) {
+          return textPart.text.trim().replace(/"/g, '')
+        }
+      }
+    }
+    return null
+  } catch (error) {
+    console.error('Error creating context analysis response:', error)
     return null
   }
 }

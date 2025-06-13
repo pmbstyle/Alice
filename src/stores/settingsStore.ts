@@ -5,7 +5,7 @@ import { useGeneralStore } from './generalStore'
 import defaultSystemPromptFromMD from '../../docs/systemPrompt.md?raw'
 
 const DEFAULT_SUMMARIZATION_SYSTEM_PROMPT = `You are an expert conversation summarizer.
-Your task is to create a **concise and brief** summary of the following conversation segment.
+Your task is to create a **concise and brief** factual summary of the following conversation segment.
 Focus on:
 - Key topics discussed.
 - Important information, facts, or preferences shared by the user or assistant.
@@ -13,7 +13,7 @@ Focus on:
 - Any unresolved questions or outstanding tasks.
 
 The summary should help provide context for future interactions, allowing the conversation to resume naturally.
-**Keep the summary to 2-4 sentences if possible, and definitely no more than 150 words.**
+**Keep the summary to 2-4 sentences and definitely no more than 150 words.**
 Do not add any conversational fluff, commentary, or an introductory/concluding sentence like "Here is the summary:". Just provide the factual summary of the conversation transcript.`
 
 export interface AliceSettings {

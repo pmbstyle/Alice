@@ -7,6 +7,7 @@ import {
   ttsStream,
   getOpenAIClient,
   createSummarizationResponse,
+  createContextAnalysisResponse,
 } from '../api/openAI/responsesApi'
 import { transcribeAudio as transcribeAudioGroq } from '../api/groq/stt'
 import { transcribeAudioOpenAI } from '../api/openAI/stt'
@@ -69,6 +70,7 @@ export const useConversationStore = defineStore('conversation', () => {
   const isSummarizing = ref<boolean>(false)
   const ttsAbortController = ref<AbortController | null>(null)
   const llmAbortController = ref<AbortController | null>(null)
+  const ephemeralEmotionalContext = ref<string | null>(null)
 
   const handleCancelTTS = () => {
     if (ttsAbortController.value) {
@@ -179,26 +181,43 @@ export const useConversationStore = defineStore('conversation', () => {
         messagesResult.data.length > 0
       ) {
         const rawMessages: RawMessageForSummarization[] = messagesResult.data
-        const formattedMessagesForSummary = rawMessages.map(m => ({
+        const formattedMessages = rawMessages.map(m => ({
           role: m.role,
           content: m.text_content || '[content missing]',
         }))
 
-        const summaryText = await createSummarizationResponse(
-          formattedMessagesForSummary,
-          settingsStore.config.SUMMARIZATION_MODEL,
-          settingsStore.config.SUMMARIZATION_SYSTEM_PROMPT
-        )
+        const [emotionalContext, factualSummary] = await Promise.all([
+          createContextAnalysisResponse(
+            formattedMessages,
+            settingsStore.config.SUMMARIZATION_MODEL
+          ),
+          createSummarizationResponse(
+            formattedMessages,
+            settingsStore.config.SUMMARIZATION_MODEL,
+            settingsStore.config.SUMMARIZATION_SYSTEM_PROMPT
+          ),
+        ])
 
-        if (summaryText) {
+        if (emotionalContext) {
+          ephemeralEmotionalContext.value = emotionalContext
+          console.log(
+            '[Summarizer] Captured ephemeral emotional context:',
+            emotionalContext
+          )
+        }
+
+        if (factualSummary) {
           await window.ipcRenderer.invoke('summaries:save-summary', {
-            summaryText,
+            summaryText: factualSummary,
             summarizedMessagesCount: rawMessages.length,
             conversationId: conversationIdForSummary,
           })
-          console.log('[Summarizer] Conversation summary saved.', summaryText)
+          console.log(
+            '[Summarizer] Factual conversation summary saved.',
+            factualSummary
+          )
         } else {
-          console.warn('[Summarizer] Failed to generate summary text.')
+          console.warn('[Summarizer] Failed to generate factual summary.')
         }
       } else if (messagesResult.data && messagesResult.data.length === 0) {
         console.log(
@@ -662,59 +681,30 @@ export const useConversationStore = defineStore('conversation', () => {
     } finally {
       llmAbortController.value = null
       if (streamEndedNormally) {
-        if (
-          (audioState.value === 'WAITING_FOR_RESPONSE' ||
-            audioState.value === 'GENERATING_IMAGE') &&
-          generalStore.audioQueue.length === 0 &&
-          !activeImageGenerationCallId.value
-        ) {
-          setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-        }
-
-        const finalAssistantMessage = chatHistory.value.find(
-          m => m.local_id_temp === placeholderTempId && m.role === 'assistant'
-        )
-        if (finalAssistantMessage) {
-          try {
-            let assistantTextForIndexing = ''
-            if (Array.isArray(finalAssistantMessage.content)) {
-              const textPart = finalAssistantMessage.content.find(
-                p => p.type === 'app_text'
-              )
-              if (textPart && textPart.text) {
-                assistantTextForIndexing = textPart.text
-              }
-            } else if (typeof finalAssistantMessage.content === 'string') {
-              assistantTextForIndexing = finalAssistantMessage.content
-            }
-
-            if (assistantTextForIndexing) {
-              await indexMessageForThoughts(
-                currentConversationTurnId.value ||
-                  currentResponseId.value ||
-                  placeholderTempId,
-                'assistant',
-                {
-                  content: [
-                    { type: 'app_text', text: assistantTextForIndexing },
-                  ],
-                }
-              )
-            }
-          } catch (e) {
-            console.error(
-              '[ProcessStream] Error indexing assistant message for thoughts:',
-              e
-            )
+        const finalizationInterval = setInterval(() => {
+          if (generalStore.audioPlayer && !generalStore.audioPlayer.paused) {
+            return
           }
-        }
 
-        if (
-          !activeImageGenerationCallId.value &&
-          !event?.item?.type?.includes('call')
-        ) {
-          await triggerConversationSummarization()
-        }
+          if (generalStore.audioQueue.length > 0) {
+            return
+          }
+
+          console.log(
+            '[Finalizer] Playback and queue are empty. Finalizing state.'
+          )
+          if (
+            audioState.value === 'SPEAKING' ||
+            audioState.value === 'WAITING_FOR_RESPONSE'
+          ) {
+            setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+          }
+          clearInterval(finalizationInterval)
+
+          if (!activeImageGenerationCallId.value && !isContinuationAfterTool) {
+            triggerConversationSummarization()
+          }
+        }, 250)
       }
     }
     return { streamEndedNormally }
@@ -934,20 +924,7 @@ export const useConversationStore = defineStore('conversation', () => {
     setAudioState('WAITING_FOR_RESPONSE')
     const constructedApiInput = await buildApiInput()
 
-    if (
-      constructedApiInput.length === 0 &&
-      !settingsStore.config.assistantSystemPrompt
-    ) {
-      console.warn(
-        'Chat called with empty history and no system prompt. Aborting.'
-      )
-      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-      return
-    }
-
-    let finalInstructions = settingsStore.config.assistantSystemPrompt || ''
     let currentUserInputTextForThoughts = ''
-
     const latestMessageInHistory = chatHistory.value[0]
     if (latestMessageInHistory && latestMessageInHistory.role === 'user') {
       if (typeof latestMessageInHistory.content === 'string') {
@@ -961,24 +938,33 @@ export const useConversationStore = defineStore('conversation', () => {
       }
     }
 
+    let thoughtsBlock = ''
     if (currentUserInputTextForThoughts) {
       try {
         const relevantThoughtsArray = await retrieveRelevantThoughtsForPrompt(
           currentUserInputTextForThoughts
         )
-        let thoughtsBlock =
+        thoughtsBlock =
           'Relevant thoughts from past conversation (use these to inform your answer if applicable):\n'
         thoughtsBlock +=
           relevantThoughtsArray.length > 0
             ? relevantThoughtsArray.map(t => `- ${t}`).join('\n')
             : 'No relevant thoughts...'
-        finalInstructions = `${thoughtsBlock}\n\n---\n\n${settingsStore.config.assistantSystemPrompt || ''}`
       } catch (error) {
         console.error('Error retrieving or formatting thoughts:', error)
       }
     } else {
-      finalInstructions = `Relevant thoughts from past conversation (use these to inform your answer if applicable):\nNo relevant thoughts...\n\n---\n\n${settingsStore.config.assistantSystemPrompt || ''}`
+      thoughtsBlock =
+        'Relevant thoughts from past conversation (use these to inform your answer if applicable):\nNo relevant thoughts...'
     }
+
+    let dynamicSystemNote = ''
+    if (ephemeralEmotionalContext.value) {
+      dynamicSystemNote = `[System Note for Alice: Based on the last conversation segment, the user's tone was: "${ephemeralEmotionalContext.value}". Adapt your response accordingly.]\n\n`
+      ephemeralEmotionalContext.value = null
+    }
+
+    const finalInstructions = `${dynamicSystemNote}${thoughtsBlock}\n\n---\n\n${settingsStore.config.assistantSystemPrompt || ''}`
 
     const assistantMessagePlaceholder: ChatMessage = {
       role: 'assistant',

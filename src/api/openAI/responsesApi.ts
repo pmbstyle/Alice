@@ -191,14 +191,6 @@ export const createSummarizationResponse = async (
 ): Promise<string | null> => {
   const openai = getOpenAIClient()
 
-  const apiInput: OpenAI.Responses.Request.InputItemLike[] =
-    messagesToSummarize.map(msg => {
-      return {
-        role: 'user',
-        content: [{ type: 'input_text', text: `${msg.role}: ${msg.content}` }],
-      }
-    })
-
   const combinedTextForSummarization = messagesToSummarize
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
@@ -249,6 +241,66 @@ export const createSummarizationResponse = async (
     return null
   } catch (error) {
     console.error('Error creating summarization response with OpenAI:', error)
+    return null
+  }
+}
+
+export const createContextAnalysisResponse = async (
+  messagesToAnalyze: { role: string; content: string }[],
+  analysisModel: string = 'gpt-4.1-nano'
+): Promise<string | null> => {
+  const openai = getOpenAIClient()
+
+  const analysisSystemPrompt = `You are an expert in emotional intelligence. Analyze the tone and emotional state of the 'user' in the following conversation transcript. Provide a single, concise sentence describing their likely emotional state. Do not add any extra commentary. Examples: "User seems curious and engaged.", "User sounds stressed and is looking for reassurance."`
+
+  const combinedTextForAnalysis = messagesToAnalyze
+    .map(msg => `${msg.role}: ${msg.content}`)
+    .join('\n\n')
+
+  const analysisApiInput: OpenAI.Responses.Request.InputItemLike[] = [
+    {
+      role: 'user',
+      content: [{ type: 'input_text', text: combinedTextForAnalysis }],
+    },
+  ]
+
+  const params: OpenAI.Responses.ResponseCreateParams = {
+    model: analysisModel,
+    input: analysisApiInput,
+    instructions: analysisSystemPrompt,
+    temperature: 0.3,
+    top_p: 1.0,
+    stream: false,
+    store: false,
+  }
+
+  try {
+    const response = await openai.responses.create(params as any)
+    if (
+      response.output &&
+      Array.isArray(response.output) &&
+      response.output.length > 0
+    ) {
+      const messageOutput = response.output.find(
+        (item: any) => item.type === 'message' && item.role === 'assistant'
+      )
+      if (
+        messageOutput &&
+        messageOutput.content &&
+        Array.isArray(messageOutput.content) &&
+        messageOutput.content.length > 0
+      ) {
+        const textPart = messageOutput.content.find(
+          (part: any) => part.type === 'output_text'
+        )
+        if (textPart && textPart.text) {
+          return textPart.text.trim().replace(/"/g, '')
+        }
+      }
+    }
+    return null
+  } catch (error) {
+    console.error('Error creating context analysis response:', error)
     return null
   }
 }

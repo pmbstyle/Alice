@@ -156,20 +156,19 @@ export function useAudioPlayback() {
       isTTSEnabled.value
     ) {
       console.log(
-        '[Playback Initiator] Queue has items and not speaking, setting state to SPEAKING.'
+        '[Playback Initiator] Queue has items and mic is on, setting state to SPEAKING.'
       )
       setAudioState('SPEAKING')
     }
   }
 
   watch(
-    audioQueue,
-    (newQueue, oldQueue) => {
-      if (newQueue.length > oldQueue.length) {
+    () => audioQueue.value.length,
+    (newLength, oldLength) => {
+      if (newLength > oldLength) {
         initiatePlaybackIfNeeded()
       }
-    },
-    { deep: true }
+    }
   )
 
   onUnmounted(() => {

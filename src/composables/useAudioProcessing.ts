@@ -233,7 +233,7 @@ export function useAudioProcessing() {
       }
     } else {
       destroyVAD()
-      if (audioState.value !== 'IDLE') {
+      if (audioState.value === 'LISTENING') {
         setAudioState('IDLE')
       }
     }

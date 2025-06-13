@@ -2,9 +2,9 @@
 
 Say 'Hi' to Alice 👋
 
-Alice is an open-source AI assistant that offers voice interaction, text-to-speech, and image recognition. It leverages powerful language and vision APIs to facilitate natural conversations, perform helpful tasks, and respond to visual inputs with deep context-aware intelligence.
+Alice is an open-source AI assistant for your desktop, offering voice interaction, text-to-speech, and image recognition. It leverages powerful language and vision APIs to enable natural conversations, assist with everyday tasks, and interpret visual inputs with deep, context-aware intelligence.
 
-The goal of this project is to build a personal AI assistant that lives on your desktop — intuitive, responsive, and emotionally engaging. Alice is not just another soulless chatbot, but a thoughtfully designed companion that feels as real as current technology allows, while remaining both performance- and cost-efficient.
+This project aims to create a personal AI assistant that feels truly present, intuitive, responsive, and emotionally engaging. Alice isn’t just another soulless chatbot, but a thoughtfully crafted companion designed to feel as real as today’s technology allows, while staying both performance and cost-efficient.
 
 <p align="center">
   <img src="https://github.com/pmbstyle/Alice/blob/main/animation.gif?raw=true" alt="Alice Animation">
@@ -13,13 +13,13 @@ The goal of this project is to build a personal AI assistant that lives on your 
 ## Features
 
 - 🗣️ **Voice recognition**  
-  Speak to Alice using voice with fast Voice Activity Detection (VAD), transcribed via OpenAI's gpt-4o-transcribe or Groq's whisper-large-v3 API.
+  Speak to Alice using voice with fast Voice Activity Detection (VAD), transcribed via OpenAI's `gpt-4o-transcribe` or Groq's `whisper-large-v3 API`.
 
 - 💬 **Text-to-speech**  
-  Alice responds with natural-sounding speech using OpenAI's TTS API.
+  Alice responds with natural-sounding speech using `OpenAI's TTS` API.
 
 - 🖼️ **Image recognition & Image generation**  
-  Capture screenshots and let Alice interpret them using OpenAI's Vision API. Generate images using OpenAI gpt-image-1.
+  Capture screenshots and let Alice interpret them using OpenAI's `Vision API`. Generate images using OpenAI `gpt-image-1`.
 
 - 📝 **Memory system**  
   All Alice interactions are stored in a local database, allowing her to remember past conversations and facts.  

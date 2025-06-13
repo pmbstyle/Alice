@@ -2,7 +2,7 @@
 
 Say 'Hi' to Alice 👋
 
-Alice is an open-source AI assistant that offers voice interaction, text-to-speech, and image recognition. It wraps around powerful language and vision APIs to provide natural conversations, perform helpful tasks, and respond to visual inputs with context-aware intelligence.
+Alice is an open-source AI assistant that offers voice interaction, text-to-speech, and image recognition. It leverages powerful language and vision APIs to facilitate natural conversations, perform helpful tasks, and respond to visual inputs with deep context-aware intelligence.
 
 <p align="center">
   <img src="https://github.com/pmbstyle/Alice/blob/main/animation.gif?raw=true" alt="Alice Animation">
@@ -10,66 +10,60 @@ Alice is an open-source AI assistant that offers voice interaction, text-to-spee
 
 ## Features
 
-- 🗣️ **Voice recognition**
-  
-  Speak to Alice using voice with fast Voice Activity Detection (VAD), transcribed via Groq's whisper-large-v3 API.
-  
-- 💬 **Text-to-speech**
-  
+- 🗣️ **Voice recognition**  
+  Speak to Alice using voice with fast Voice Activity Detection (VAD), transcribed via OpenAI's gpt-4o-transcribe or Groq's whisper-large-v3 API.
+
+- 💬 **Text-to-speech**  
   Alice responds with natural-sounding speech using OpenAI's TTS API.
-  
-- 🖼️ **Image recognition & Image generation**
-  
+
+- 🖼️ **Image recognition & Image generation**  
   Capture screenshots and let Alice interpret them using OpenAI's Vision API. Generate images using OpenAI gpt-image-1.
-  
-- 📝**Memory system**
-  
-  All Alice interactions are stored in a local database, allowing her to remember past conversations and facts.
-  
+
+- 📝 **Memory system**  
+  All Alice interactions are stored in a local database, allowing her to remember past conversations and facts.  
   - **Thoughts:** Past conversation fragments embedded in a local Hnswlib vector database for quick context inspiration.  
-  - **Memories:** Long-term structured facts stored in a local database, retrievable on demand via memory tools.
-  - **Summarization** Past messages are automatically summirizing and serving to Alice to have context from previous conversations and longer context awareness.
-    
-- 🎞️ **Animated assistant appearance**
-  
+  - **Memories:** Long-term structured facts stored in a local database, retrievable on demand via memory tools.  
+  - **Summarization:** Past messages are automatically summarized and served to Alice for longer context awareness.
+  - **User emotion awareness:** Summarization includes a user emotion summary, enabling more empathetic replies.
+
+- 🎞️ **Animated assistant appearance**  
   Several video states (standby, thinking, speaking) are used to make interactions lively.
-  
-- 🪪 **Advanced system prompt**
 
+- 🪪 **Advanced system prompt**  
   Alice comes with an advanced system prompt that allows a seamless user experience and tool usage. The system prompt can be updated in settings at any time.
-  
-- ⚙️ **Function calling**
-  
-  Data retrieval:
-  - Web search
-  - Google calendar integration
-  - Gmail integration
-  - Torrent search
-  - Current date and time awareness
 
-  Computer and software use:
-  - MCP support
-  - Image generation
-  - Open applications
-  - Open URLs
-  - Read/write clipboard content
+- ⏹️ **Interruptible responses**  
+  Alice can cancel her response mid-stream when interrupted, including both text and TTS pipelines.
+
+- ⚙️ **Function calling**  
+  Data retrieval:  
+  - Web search  
+  - Google calendar integration  
+  - Gmail integration  
+  - Torrent search  
+  - Current date and time awareness  
+
+  Computer and software use:  
+  - MCP support  
+  - Image generation  
+  - Open applications  
+  - Open URLs  
+  - Read/write clipboard content  
   - Add torrents to the download client
 
-- 📃 **Flexible settings**
-  
-  Configure Alice for your needs, including:
-  
-  - Model
-  - System prompt
-  - Temperature
-  - Top P
-  - Max History Messages
-  - Summarization Message Count
-  - Summarization Model
-  - Summarization System Prompt
-  - Microphone/Audio toggle, take screenshot hot keys
-  - Available tools
-  - MCP servers
+- 📃 **Flexible settings**  
+  Configure Alice for your needs, including:  
+  - Model  
+  - System prompt  
+  - Temperature  
+  - Top P  
+  - Max History Messages  
+  - Summarization Message Count  
+  - Summarization Model  
+  - Summarization System Prompt  
+  - Microphone/Audio toggle, take screenshot hot keys  
+  - Available tools  
+  - MCP servers  
   - Google integration
 
 ## Download
@@ -126,5 +120,11 @@ Create `app-config.json` file in the root directory with the following content t
 
 2. Install the app from the `release` folder.
 
+
 ## Community links
 - [ArchLinux port](https://aur.archlinux.org/packages/alice-ai-app-bin)
+
+## Contributing
+I welcome your ideas, suggestions, and pull requests!
+Whether it’s a bug fix, a feature idea, or just a creative thought — feel free to open an issue or a PR.
+Your input helps make Alice smarter and more helpful for everyone 💚

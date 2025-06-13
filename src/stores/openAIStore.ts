@@ -85,6 +85,7 @@ export const useConversationStore = defineStore('conversation', () => {
       console.log('[LLM Abort] Cancelling in-flight LLM stream request.')
       llmAbortController.value.abort()
       llmAbortController.value = null
+      currentResponseId.value = null
     }
   }
 

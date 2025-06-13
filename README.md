@@ -4,7 +4,7 @@ Say 'Hi' to Alice 👋
 
 Alice is an open-source AI assistant that offers voice interaction, text-to-speech, and image recognition. It leverages powerful language and vision APIs to facilitate natural conversations, perform helpful tasks, and respond to visual inputs with deep context-aware intelligence.
 
-The goal of this project is to create a personal AI assistant that is pleasant to use and interact with. Not a soulless chatbot, but as much "real" AI companion as possible.
+The goal of this project is to build a personal AI assistant that lives on your desktop — intuitive, responsive, and emotionally engaging. Alice is not just another soulless chatbot, but a thoughtfully designed companion that feels as real as current technology allows, while remaining both performance- and cost-efficient.
 
 <p align="center">
   <img src="https://github.com/pmbstyle/Alice/blob/main/animation.gif?raw=true" alt="Alice Animation">

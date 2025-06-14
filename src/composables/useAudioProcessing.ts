@@ -133,7 +133,6 @@ export function useAudioProcessing() {
             )
             eventBus.emit('cancel-llm-stream')
             generalStore.stopPlaybackAndClearQueue()
-            setAudioState('LISTENING')
           }
           isSpeechDetected.value = true
           console.log('[VAD Callback] Speech started.')

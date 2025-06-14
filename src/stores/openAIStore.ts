@@ -238,9 +238,9 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  const buildApiInput = async (): Promise<
-    OpenAI.Responses.Request.InputItemLike[]
-  > => {
+  const buildApiInput = async (
+    isNewChain: boolean
+  ): Promise<OpenAI.Responses.Request.InputItemLike[]> => {
     const historyToBuildFrom = [...chatHistory.value]
     const apiInput: OpenAI.Responses.Request.InputItemLike[] = []
     const recentHistory = historyToBuildFrom
@@ -299,13 +299,27 @@ export const useConversationStore = defineStore('conversation', () => {
       }
 
       if (msg.role === 'tool') {
-        apiItemPartial = {
-          type: 'function_call_output',
-          call_id: msg.tool_call_id || `unknown_call_id_${Date.now()}`,
-          output:
-            typeof msg.content === 'string'
-              ? msg.content
-              : JSON.stringify(msg.content),
+        if (isNewChain) {
+          apiItemPartial = {
+            role: 'system',
+            content: `[System Note: The following is the result of a tool execution from a previous, now-disconnected, turn] Tool '${msg.name}' executed with result: ${
+              typeof msg.content === 'string'
+                ? msg.content
+                : JSON.stringify(msg.content)
+            }`,
+          }
+          console.warn(
+            `[buildApiInput] Formatting tool message as system message for new chain: ${msg.name}`
+          )
+        } else {
+          apiItemPartial = {
+            type: 'function_call_output',
+            call_id: msg.tool_call_id || `unknown_call_id_${Date.now()}`,
+            output:
+              typeof msg.content === 'string'
+                ? msg.content
+                : JSON.stringify(msg.content),
+          }
         }
       } else if (msg.role === 'system') {
         apiItemPartial = { role: 'system', content: '' }
@@ -696,7 +710,8 @@ export const useConversationStore = defineStore('conversation', () => {
           )
           if (
             audioState.value === 'SPEAKING' ||
-            audioState.value === 'WAITING_FOR_RESPONSE'
+            audioState.value === 'WAITING_FOR_RESPONSE' ||
+            audioState.value === 'GENERATING_IMAGE'
           ) {
             setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
           }
@@ -818,7 +833,8 @@ export const useConversationStore = defineStore('conversation', () => {
       finalInstructionsForToolFollowUp = `Relevant thoughts from past conversation (use these to inform your answer if applicable):\nNo relevant thoughts...\n\n---\n\n${settingsStore.config.assistantSystemPrompt || ''}`
     }
 
-    const nextApiInput = await buildApiInput()
+    const isNewChainAfterTool = currentResponseId.value === null
+    const nextApiInput = await buildApiInput(isNewChainAfterTool)
 
     try {
       llmAbortController.value = new AbortController()
@@ -859,6 +875,13 @@ export const useConversationStore = defineStore('conversation', () => {
             content: [{ type: 'app_text', text: errorMsg }],
           })
         }
+
+        if (error.message && error.message.includes('No tool call found')) {
+          console.warn(
+            '[handleToolCall] Resetting response ID due to tool follow-up failure.'
+          )
+          currentResponseId.value = null
+        }
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       }
     } finally {
@@ -878,11 +901,14 @@ export const useConversationStore = defineStore('conversation', () => {
 
     const lastMessage = chatHistory.value[0]
 
+    const isNewChain = currentResponseId.value === null
+
     if (
       lastMessage &&
       lastMessage.role === 'assistant' &&
       lastMessage.tool_calls &&
-      lastMessage.tool_calls.length > 0
+      lastMessage.tool_calls.length > 0 &&
+      !isNewChain
     ) {
       const pendingToolCallsToProcess = [...lastMessage.tool_calls]
       const originalMessageTempId = lastMessage.local_id_temp
@@ -923,7 +949,7 @@ export const useConversationStore = defineStore('conversation', () => {
     }
 
     setAudioState('WAITING_FOR_RESPONSE')
-    const constructedApiInput = await buildApiInput()
+    const constructedApiInput = await buildApiInput(isNewChain)
 
     let currentUserInputTextForThoughts = ''
     const latestMessageInHistory = chatHistory.value[0]
@@ -1001,6 +1027,13 @@ export const useConversationStore = defineStore('conversation', () => {
             role: 'assistant',
             content: [{ type: 'app_text', text: errorMsg }],
           })
+
+        if (error.message && error.message.includes('No tool call found')) {
+          console.warn(
+            '[chat] Resetting response ID due to initial chat failure.'
+          )
+          currentResponseId.value = null
+        }
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       }
     } finally {

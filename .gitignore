@@ -30,3 +30,4 @@ yarn.lock
 .env
 app-config.json
 dev-app-update.yml
+CLAUDE.md

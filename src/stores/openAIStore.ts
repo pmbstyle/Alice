@@ -85,7 +85,6 @@ export const useConversationStore = defineStore('conversation', () => {
       console.log('[LLM Abort] Cancelling in-flight LLM stream request.')
       llmAbortController.value.abort()
       llmAbortController.value = null
-      currentResponseId.value = null
     }
   }
 
@@ -875,13 +874,6 @@ export const useConversationStore = defineStore('conversation', () => {
             content: [{ type: 'app_text', text: errorMsg }],
           })
         }
-
-        if (error.message && error.message.includes('No tool call found')) {
-          console.warn(
-            '[handleToolCall] Resetting response ID due to tool follow-up failure.'
-          )
-          currentResponseId.value = null
-        }
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       }
     } finally {
@@ -1027,13 +1019,6 @@ export const useConversationStore = defineStore('conversation', () => {
             role: 'assistant',
             content: [{ type: 'app_text', text: errorMsg }],
           })
-
-        if (error.message && error.message.includes('No tool call found')) {
-          console.warn(
-            '[chat] Resetting response ID due to initial chat failure.'
-          )
-          currentResponseId.value = null
-        }
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       }
     } finally {

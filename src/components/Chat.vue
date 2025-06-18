@@ -28,7 +28,7 @@ import { useGeneralStore } from '../stores/generalStore'
 import type {
   ChatMessage,
   AppChatMessageContentPart,
-} from '../stores/openAIStore'
+} from '../stores/conversationStore'
 import { messageMarkdown } from '../utils/markdown'
 import { storeToRefs } from 'pinia'
 

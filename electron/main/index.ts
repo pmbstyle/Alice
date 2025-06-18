@@ -111,8 +111,8 @@ autoUpdater.on('update-available', info => {
   })
 })
 
-autoUpdater.on('update-not-available', info => {
-  console.log('[AutoUpdater] Update not available.', info)
+autoUpdater.on('update-not-available', () => {
+  console.log('[AutoUpdater] Update not available.')
 })
 
 autoUpdater.on('error', err => {
@@ -1041,7 +1041,6 @@ app.whenReady().then(async () => {
 
   const initialSettings = await loadSettings()
   if (initialSettings) {
-    console.log('Initial settings loaded in main process:', initialSettings)
     registerMicrophoneToggleHotkey(initialSettings.microphoneToggleHotkey)
     registerMutePlaybackHotkey(initialSettings.mutePlaybackHotkey)
     registerTakeScreenshotHotkey(initialSettings.takeScreenshotHotkey)

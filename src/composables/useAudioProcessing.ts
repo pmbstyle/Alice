@@ -2,7 +2,7 @@ import { ref, watch, onUnmounted, onMounted } from 'vue'
 import * as vad from '@ricky0123/vad-web'
 import { float32ArrayToWav } from '../utils/audioProcess'
 import { useGeneralStore } from '../stores/generalStore'
-import { useConversationStore } from '../stores/openAIStore'
+import { useConversationStore } from '../stores/conversationStore'
 import { storeToRefs } from 'pinia'
 import eventBus from '../utils/eventBus'
 

@@ -1,6 +1,6 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { useConversationStore } from './openAIStore'
+import { useConversationStore } from './conversationStore'
 import { useGeneralStore } from './generalStore'
 import defaultSystemPromptFromMD from '../../docs/systemPrompt.md?raw'
 

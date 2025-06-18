@@ -112,7 +112,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
-import { embedTextForThoughts } from '../api/openAI/assistant'
+import { createEmbedding } from '../services/apiService'
 import { useSettingsStore } from '../stores/settingsStore'
 
 interface Memory {
@@ -183,7 +183,7 @@ async function handleSaveMemory() {
 
     if (shouldGenerateEmbedding) {
       try {
-        generatedEmbedding = await embedTextForThoughts(form.content)
+        generatedEmbedding = await createEmbedding(form.content)
         if (generatedEmbedding.length === 0) {
           console.warn(
             '[MemoryManager UI] Generated empty embedding for content:',

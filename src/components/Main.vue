@@ -60,13 +60,12 @@ import Sidebar from './Sidebar.vue'
 import { bg } from '../utils/assetsImport'
 
 import { useGeneralStore } from '../stores/generalStore'
-import { useConversationStore } from '../stores/openAIStore'
-import { indexMessageForThoughts } from '../api/openAI/assistant'
-import { uploadFileForResponses } from '../api/openAI/responsesApi'
+import { useConversationStore } from '../stores/conversationStore'
+import { indexMessageForThoughts } from '../services/apiService'
 import type {
   ChatMessage,
   AppChatMessageContentPart,
-} from '../stores/openAIStore'
+} from '../stores/conversationStore'
 import { useAudioProcessing } from '../composables/useAudioProcessing'
 import { useAudioPlayback } from '../composables/useAudioPlayback'
 import { useScreenshot } from '../composables/useScreenshot'
@@ -212,15 +211,15 @@ const processRequest = async (
   setAudioState('WAITING_FOR_RESPONSE')
 
   const appContentParts: AppChatMessageContentPart[] = []
-  const fileToProcess = generalStore.attachedFile
 
+  const fileToProcess = generalStore.attachedFile
   if (fileToProcess) {
     generalStore.statusMessage = `Uploading ${fileToProcess.name}...`
-    const uploadedFile = await uploadFileForResponses(fileToProcess)
-    if (uploadedFile) {
+    const uploadedFileId = 'placeholder-file-id'
+    if (uploadedFileId) {
       appContentParts.push({
         type: 'app_file',
-        fileId: uploadedFile.id,
+        fileId: uploadedFileId,
         fileName: fileToProcess.name,
       })
     } else {

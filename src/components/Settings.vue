@@ -705,7 +705,7 @@
 import { ref, watch, onMounted, onUnmounted, reactive, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSettingsStore, type AliceSettings } from '../stores/settingsStore'
-import { useConversationStore } from '../stores/openAIStore'
+import { useConversationStore } from '../stores/conversationStore'
 import { newTabIcon, heartIcon } from '../utils/assetsImport'
 import { PREDEFINED_OPENAI_TOOLS } from '../utils/assistantTools'
 

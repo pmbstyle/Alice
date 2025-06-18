@@ -12,612 +12,685 @@
       <p>Loading settings...</p>
     </div>
 
-    <form @submit.prevent="handleSaveAndTestSettings" v-else class="space-y-8">
-      <fieldset
-        class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
-      >
-        <legend class="fieldset-legend">Core API Keys & STT</legend>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
-          <div>
-            <label for="openai-key" class="block mb-1 text-sm"
-              >OpenAI API Key *</label
-            >
-            <input
-              id="openai-key"
-              type="password"
-              v-model="currentSettings.VITE_OPENAI_API_KEY"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-              placeholder="sk-..."
-            />
-          </div>
-          <div>
-            <label for="stt-provider" class="block mb-1 text-sm"
-              >Speech-to-Text Provider *</label
-            >
-            <select
-              id="stt-provider"
-              v-model="currentSettings.sttProvider"
-              class="select select-bordered w-full focus:select-primary"
-            >
-              <option value="openai">OpenAI (gpt-4o-transcribe)</option>
-              <option value="groq">Groq (whisper-large-v3)</option>
-            </select>
-          </div>
-          <div v-if="currentSettings.sttProvider === 'groq'">
-            <label for="groq-key" class="block mb-1 text-sm"
-              >Groq API Key (for STT) *</label
-            >
-            <input
-              id="groq-key"
-              type="password"
-              v-model="currentSettings.VITE_GROQ_API_KEY"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-              placeholder="gsk_..."
-            />
-            <p class="text-xs text-gray-400 mt-1">
-              Required only if Groq STT is selected above.
-            </p>
-          </div>
-        </div>
-      </fieldset>
+    <form @submit.prevent="handleSaveAndTestSettings" v-else class="space-y-6">
+      <div class="tabs tabs-border tabs-lg w-full mb-6">
+        <button
+          type="button"
+          class="tab"
+          :class="{ 'tab-active': activeTab === 'core' }"
+          @click="activeTab = 'core'"
+        >
+          🔑 Core APIs
+        </button>
+        <button
+          type="button"
+          class="tab"
+          :class="{ 'tab-active': activeTab === 'assistant' }"
+          @click="activeTab = 'assistant'"
+        >
+          🤖 Assistant
+        </button>
+        <button
+          type="button"
+          class="tab"
+          :class="{ 'tab-active': activeTab === 'hotkeys' }"
+          @click="activeTab = 'hotkeys'"
+        >
+          ⌨️ Hotkeys
+        </button>
+        <button
+          type="button"
+          class="tab"
+          :class="{ 'tab-active': activeTab === 'integrations' }"
+          @click="activeTab = 'integrations'"
+        >
+          🔌 Integrations
+        </button>
+      </div>
 
-      <fieldset
-        class="fieldset bg-gray-900/90 border-green-500/50 rounded-box w-full border p-4"
-      >
-        <legend class="fieldset-legend">Alice Assistant Configuration</legend>
-        <div class="space-y-4 p-2">
-          <div>
-            <label for="assistant-model" class="block mb-1 text-sm"
-              >Assistant Model *</label
-            >
-            <select
-              id="assistant-model"
-              v-model="currentSettings.assistantModel"
-              class="select select-bordered w-full focus:select-primary"
-            >
-              <option disabled value="">Select a model</option>
-              <option
-                v-if="
-                  conversationStore.availableModels.length === 0 &&
-                  settingsStore.coreOpenAISettingsValid
-                "
-                value=""
-              >
-                Loading models...
-              </option>
-              <option
-                v-for="model in availableModelsForSelect"
-                :key="model.id"
-                :value="model.id"
-              >
-                {{ model.id }}
-              </option>
-            </select>
-            <p
-              v-if="
-                !settingsStore.coreOpenAISettingsValid &&
-                currentSettings.VITE_OPENAI_API_KEY &&
-                conversationStore.availableModels.length === 0
-              "
-              class="text-xs text-warning mt-1"
-            >
-              OpenAI API key needs to be validated (Save & Test) to load models.
-            </p>
-          </div>
-
-          <div>
-            <label for="assistant-system-prompt" class="block mb-1 text-sm"
-              >Assistant System Prompt</label
-            >
-            <textarea
-              id="assistant-system-prompt"
-              v-model="currentSettings.assistantSystemPrompt"
-              rows="8"
-              class="textarea textarea-bordered w-full focus:textarea-primary h-48"
-              placeholder="You are a helpful AI assistant..."
-            ></textarea>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="assistant-temperature" class="block mb-1 text-sm">
-                Assistant Temperature ({{
-                  currentSettings.assistantTemperature.toFixed(1)
-                }})
-              </label>
-              <input
-                id="assistant-temperature"
-                type="range"
-                min="0"
-                max="2"
-                step="0.1"
-                v-model.number="currentSettings.assistantTemperature"
-                class="range range-primary"
-              />
-            </div>
-            <div>
-              <label for="assistant-top-p" class="block mb-1 text-sm">
-                Assistant Top P ({{ currentSettings.assistantTopP.toFixed(1) }})
-              </label>
-              <input
-                id="assistant-top-p"
-                type="range"
-                min="0"
-                max="1"
-                step="0.1"
-                v-model.number="currentSettings.assistantTopP"
-                class="range range-success"
-              />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label for="max-history-messages" class="block mb-1 text-sm"
-                >Max History Messages (API)</label
-              >
-              <input
-                id="max-history-messages"
-                type="number"
-                min="1"
-                max="50"
-                step="1"
-                v-model.number="currentSettings.MAX_HISTORY_MESSAGES_FOR_API"
-                class="input input-bordered w-full focus:input-primary"
-              />
-              <p class="text-xs text-gray-400 mt-1">
-                Number of recent messages sent to the API (e.g., 10-20).
-              </p>
-            </div>
-            <div>
-              <label for="summarization-messages" class="block mb-1 text-sm"
-                >Summarization Message Count</label
-              >
-              <input
-                id="summarization-messages"
-                type="number"
-                min="5"
-                max="100"
-                step="1"
-                v-model.number="currentSettings.SUMMARIZATION_MESSAGE_COUNT"
-                class="input input-bordered w-full focus:input-primary"
-              />
-              <p class="text-xs text-gray-400 mt-1">
-                Number of messages to summarize for context (e.g., 20-40).
-              </p>
-            </div>
-          </div>
-          <div>
-            <label for="summarization-model" class="block mb-1 text-sm"
-              >Summarization Model *</label
-            >
-            <select
-              id="summarization-model"
-              v-model="currentSettings.SUMMARIZATION_MODEL"
-              class="select select-bordered w-full focus:select-primary"
-            >
-              <option disabled value="">Select a summarization model</option>
-              <option
-                v-if="
-                  conversationStore.availableModels.length === 0 &&
-                  settingsStore.coreOpenAISettingsValid
-                "
-                value=""
-              >
-                Loading models...
-              </option>
-              <option
-                v-for="model in availableModelsForSelect"
-                :key="`summ-${model.id}`"
-                :value="model.id"
-              >
-                {{ model.id }}
-              </option>
-            </select>
-            <p
-              v-if="
-                !settingsStore.coreOpenAISettingsValid &&
-                currentSettings.VITE_OPENAI_API_KEY &&
-                conversationStore.availableModels.length === 0
-              "
-              class="text-xs text-warning mt-1"
-            >
-              OpenAI API key needs to be validated (Save & Test) to load models.
-            </p>
-            <p class="text-xs text-gray-400 mt-1">
-              Model used for generating conversation summaries (e.g.,
-              gpt-4.1-nano).
-            </p>
-          </div>
-
-          <div>
-            <label for="summarization-system-prompt" class="block mb-1 text-sm"
-              >Summarization System Prompt</label
-            >
-            <textarea
-              id="summarization-system-prompt"
-              v-model="currentSettings.SUMMARIZATION_SYSTEM_PROMPT"
-              rows="6"
-              class="textarea textarea-bordered w-full focus:textarea-primary h-40"
-              placeholder="You are an expert conversation summarizer..."
-            ></textarea>
-            <p class="text-xs text-gray-400 mt-1">
-              System prompt to guide the summarization model.
-            </p>
-          </div>
-
-          <div>
-            <label class="block mb-2 text-sm font-medium"
-              >Enabled Assistant Tools</label
-            >
-            <div
-              class="space-y-2 p-3 border border-neutral-content/20 rounded-md max-h-60 overflow-y-auto bg-gray-800/50"
-            >
-              <div
-                v-if="availableToolsForSelect.length === 0"
-                class="text-xs text-gray-400"
-              >
-                No tools defined.
-              </div>
-              <div
-                v-for="tool in availableToolsForSelect"
-                :key="tool.name"
-                class="form-control"
-              >
-                <label
-                  class="label cursor-pointer py-1 justify-start gap-3"
-                  :class="{
-                    'opacity-50 cursor-not-allowed': !isToolConfigured(
-                      tool.name
-                    ),
-                  }"
-                >
-                  <input
-                    type="checkbox"
-                    :value="tool.name"
-                    v-model="currentSettings.assistantTools"
-                    class="checkbox checkbox-accent checkbox-sm"
-                    :disabled="!isToolConfigured(tool.name)"
-                  />
-                  <span
-                    class="label-text"
-                    :title="
-                      tool.description +
-                      (!isToolConfigured(tool.name)
-                        ? ' (API key for this tool not configured in Optional Tool APIs section)'
-                        : '')
-                    "
-                  >
-                    {{ tool.displayName }}
-                    <span
-                      v-if="!isToolConfigured(tool.name)"
-                      class="text-xs text-warning normal-case"
-                    >
-                      (Needs config below)
-                    </span>
-                  </span>
-                </label>
-              </div>
-            </div>
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset
-        class="fieldset bg-gray-900/90 border-yellow-500/50 rounded-box w-full border p-4"
-      >
-        <legend class="fieldset-legend">Global Hotkeys</legend>
-        <div class="p-2 space-y-4">
-          <div>
-            <label for="mic-toggle-hotkey" class="block mb-1 text-sm"
-              >Microphone Toggle Hotkey</label
-            >
-            <div class="flex items-center justify-between">
-              <kbd class="kbd kbd-xl">{{
-                formatAccelerator(currentSettings.microphoneToggleHotkey)
-              }}</kbd>
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  @click="startRecordingHotkey('microphoneToggleHotkey')"
-                  class="btn btn-secondary btn-active btn-sm"
-                  :disabled="isRecordingHotkeyFor === 'microphoneToggleHotkey'"
-                >
-                  {{
-                    isRecordingHotkeyFor === 'microphoneToggleHotkey'
-                      ? 'Recording...'
-                      : 'Record'
-                  }}
-                </button>
-                <button
-                  type="button"
-                  @click="clearHotkey('microphoneToggleHotkey')"
-                  class="btn btn-warning btn-outline btn-sm"
-                  :disabled="!currentSettings.microphoneToggleHotkey"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            <p
-              v-if="isRecordingHotkeyFor === 'microphoneToggleHotkey'"
-              class="text-xs text-yellow-400 mt-1"
-            >
-              Press the desired key combination. Press Esc to cancel.
-            </p>
-          </div>
-
-          <div>
-            <label for="mute-playback-hotkey" class="block mb-1 text-sm"
-              >Mute Playback Hotkey</label
-            >
-            <div class="flex items-center justify-between">
-              <kbd class="kbd kbd-xl">{{
-                formatAccelerator(currentSettings.mutePlaybackHotkey)
-              }}</kbd>
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  @click="startRecordingHotkey('mutePlaybackHotkey')"
-                  class="btn btn-secondary btn-active btn-sm"
-                  :disabled="isRecordingHotkeyFor === 'mutePlaybackHotkey'"
-                >
-                  {{
-                    isRecordingHotkeyFor === 'mutePlaybackHotkey'
-                      ? 'Recording...'
-                      : 'Record'
-                  }}
-                </button>
-                <button
-                  type="button"
-                  @click="clearHotkey('mutePlaybackHotkey')"
-                  class="btn btn-warning btn-outline btn-sm"
-                  :disabled="!currentSettings.mutePlaybackHotkey"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            <p
-              v-if="isRecordingHotkeyFor === 'mutePlaybackHotkey'"
-              class="text-xs text-yellow-400 mt-1"
-            >
-              Press the desired key combination. Press Esc to cancel.
-            </p>
-          </div>
-
-          <div>
-            <label for="take-screenshot-hotkey" class="block mb-1 text-sm"
-              >Take Screenshot Hotkey</label
-            >
-            <div class="flex items-center justify-between">
-              <kbd class="kbd kbd-xl">{{
-                formatAccelerator(currentSettings.takeScreenshotHotkey)
-              }}</kbd>
-              <div class="flex items-center gap-2">
-                <button
-                  type="button"
-                  @click="startRecordingHotkey('takeScreenshotHotkey')"
-                  class="btn btn-secondary btn-active btn-sm"
-                  :disabled="isRecordingHotkeyFor === 'takeScreenshotHotkey'"
-                >
-                  {{
-                    isRecordingHotkeyFor === 'takeScreenshotHotkey'
-                      ? 'Recording...'
-                      : 'Record'
-                  }}
-                </button>
-                <button
-                  type="button"
-                  @click="clearHotkey('takeScreenshotHotkey')"
-                  class="btn btn-warning btn-outline btn-sm"
-                  :disabled="!currentSettings.takeScreenshotHotkey"
-                >
-                  Clear
-                </button>
-              </div>
-            </div>
-            <p
-              v-if="isRecordingHotkeyFor === 'takeScreenshotHotkey'"
-              class="text-xs text-yellow-400 mt-1"
-            >
-              Press the desired key combination. Press Esc to cancel.
-            </p>
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset
-        class="fieldset bg-gray-900/90 border-purple-500/50 rounded-box w-full border p-4"
-      >
-        <legend class="fieldset-legend">Google Services Integration</legend>
-        <div class="p-2 space-y-4">
-          <div
-            v-if="
-              !googleAuthStatus.isAuthenticated &&
-              !googleAuthStatus.authInProgress
-            "
+      <div class="min-h-[500px]">
+        <div v-if="activeTab === 'core'" class="space-y-6">
+          <h3 class="text-xl font-semibold mb-4 text-blue-400">
+            Core API Configuration
+          </h3>
+          <fieldset
+            class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
           >
-            <button
-              type="button"
-              @click="connectGoogleServices"
-              class="btn btn-info btn-active"
-              :disabled="googleAuthStatus.isLoading"
-            >
-              {{
-                googleAuthStatus.isLoading
-                  ? 'Connecting...'
-                  : 'Connect to Google Services'
-              }}
-            </button>
-          </div>
-          <div
-            v-if="
-              googleAuthStatus.authInProgress &&
-              !googleAuthStatus.isAuthenticated
-            "
-          >
-            <p class="text-sm mb-2">
-              Awaiting authorization in your browser. Please follow the
-              instructions there.
-            </p>
-            <span class="loading loading-dots loading-md"></span>
-          </div>
-          <div v-if="googleAuthStatus.isAuthenticated">
-            <div role="alert" class="alert alert-success mb-4">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                class="h-6 w-6 shrink-0 stroke-current"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  stroke-width="2"
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            <legend class="fieldset-legend">API Keys & STT Provider</legend>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
+              <div>
+                <label for="openai-key" class="block mb-1 text-sm"
+                  >OpenAI API Key *</label
+                >
+                <input
+                  id="openai-key"
+                  type="password"
+                  v-model="currentSettings.VITE_OPENAI_API_KEY"
+                  class="input focus:outline-none w-full"
+                  autocomplete="new-password"
+                  placeholder="sk-..."
                 />
-              </svg>
-              <span>Successfully connected to Google Services.</span>
+              </div>
+              <div>
+                <label for="stt-provider" class="block mb-1 text-sm"
+                  >Speech-to-Text Provider *</label
+                >
+                <select
+                  id="stt-provider"
+                  v-model="currentSettings.sttProvider"
+                  class="select select-bordered w-full focus:select-primary"
+                >
+                  <option value="openai">OpenAI (gpt-4o-transcribe)</option>
+                  <option value="groq">Groq (whisper-large-v3)</option>
+                </select>
+              </div>
+              <div v-if="currentSettings.sttProvider === 'groq'">
+                <label for="groq-key" class="block mb-1 text-sm"
+                  >Groq API Key (for STT) *</label
+                >
+                <input
+                  id="groq-key"
+                  type="password"
+                  v-model="currentSettings.VITE_GROQ_API_KEY"
+                  class="input focus:outline-none w-full"
+                  autocomplete="new-password"
+                  placeholder="gsk_..."
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  Required only if Groq STT is selected above.
+                </p>
+              </div>
             </div>
-            <button
-              type="button"
-              @click="disconnectGoogleServices"
-              class="btn btn-warning btn-outline"
-            >
-              Disconnect from Google Services
-            </button>
-          </div>
-          <p
-            v-if="googleAuthStatus.error"
-            class="text-xs text-error-content mt-1"
-          >
-            {{ googleAuthStatus.error }}
-          </p>
-          <p
-            v-if="
-              googleAuthStatus.message &&
-              !googleAuthStatus.isAuthenticated &&
-              !googleAuthStatus.error
-            "
-            class="text-xs text-white mt-1"
-          >
-            {{ googleAuthStatus.message }}
-          </p>
+          </fieldset>
         </div>
-      </fieldset>
 
-      <fieldset
-        class="fieldset bg-gray-900/90 border-cyan-500/50 rounded-box w-full border p-4"
-      >
-        <legend class="fieldset-legend">
-          Remote MCP Servers
-          <a href="#" target="_blank" class="ml-2">
-            <span class="badge badge-sm badge-soft whitespace-nowrap">
-              MCP Info
-              <img :src="newTabIcon" class="size-3 inline-block ml-1" />
-            </span>
-          </a>
-        </legend>
-        <div class="p-2 space-y-4">
-          <div>
-            <label for="mcp-servers-config" class="block mb-1 text-sm">
-              MCP Servers JSON Configuration (Array)
-            </label>
-            <textarea
-              id="mcp-servers-config"
-              v-model="currentSettings.mcpServersConfig"
-              rows="10"
-              class="textarea textarea-bordered w-full focus:textarea-primary h-60 bg-gray-800"
-              :placeholder="mcpPlaceholder"
-            ></textarea>
-            <p class="text-xs text-gray-400 mt-1">
-              Enter a JSON array of MCP server configurations. Each object
-              should follow the OpenAI MCP tool format. Refer to MCP
-              documentation for details on fields like server_label, server_url,
-              require_approval, allowed_tools, and headers.
-            </p>
-          </div>
-        </div>
-      </fieldset>
-
-      <fieldset
-        class="fieldset bg-gray-900/90 border-gray-600/50 rounded-box w-full border p-4"
-      >
-        <legend class="fieldset-legend">
-          Optional Tool APIs
-          <a
-            href="https://github.com/pmbstyle/Alice/blob/main/docs/toolsInstructions.md"
-            target="_blank"
-            class="ml-2"
+        <div v-if="activeTab === 'assistant'" class="space-y-6">
+          <h3 class="text-xl font-semibold mb-4 text-green-400">
+            Assistant Configuration
+          </h3>
+          <fieldset
+            class="fieldset bg-gray-900/90 border-green-500/50 rounded-box w-full border p-4"
           >
-            <span class="badge badge-sm badge-soft whitespace-nowrap">
-              Info <img :src="newTabIcon" class="size-3 inline-block ml-1" />
-            </span>
-          </a>
-        </legend>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
-          <div>
-            <label for="jackett-url" class="block mb-1 text-sm"
-              >Jackett URL (Torrent Search)</label
-            >
-            <input
-              id="jackett-url"
-              type="text"
-              v-model="currentSettings.VITE_JACKETT_URL"
-              class="input focus:outline-none w-full"
-            />
-          </div>
-          <div>
-            <label for="jackett-key" class="block mb-1 text-sm"
-              >Jackett API Key</label
-            >
-            <input
-              id="jackett-key"
-              type="password"
-              v-model="currentSettings.VITE_JACKETT_API_KEY"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-            />
-          </div>
-          <div>
-            <label for="qb-url" class="block mb-1 text-sm"
-              >qBittorrent URL</label
-            >
-            <input
-              id="qb-url"
-              type="text"
-              v-model="currentSettings.VITE_QB_URL"
-              class="input focus:outline-none w-full"
-            />
-          </div>
-          <div>
-            <label for="qb-user" class="block mb-1 text-sm"
-              >qBittorrent Username</label
-            >
-            <input
-              id="qb-user"
-              type="text"
-              v-model="currentSettings.VITE_QB_USERNAME"
-              class="input focus:outline-none w-full"
-            />
-          </div>
-          <div>
-            <label for="qb-pass" class="block mb-1 text-sm"
-              >qBittorrent Password</label
-            >
-            <input
-              id="qb-pass"
-              type="password"
-              v-model="currentSettings.VITE_QB_PASSWORD"
-              class="input focus:outline-none w-full"
-              autocomplete="new-password"
-            />
-          </div>
+            <legend class="fieldset-legend">Model & Behavior Settings</legend>
+            <div class="space-y-4 p-2">
+              <div>
+                <label for="assistant-model" class="block mb-1 text-sm"
+                  >Assistant Model *</label
+                >
+                <select
+                  id="assistant-model"
+                  v-model="currentSettings.assistantModel"
+                  class="select select-bordered w-full focus:select-primary"
+                >
+                  <option disabled value="">Select a model</option>
+                  <option
+                    v-if="
+                      conversationStore.availableModels.length === 0 &&
+                      settingsStore.coreOpenAISettingsValid
+                    "
+                    value=""
+                  >
+                    Loading models...
+                  </option>
+                  <option
+                    v-for="model in availableModelsForSelect"
+                    :key="model.id"
+                    :value="model.id"
+                  >
+                    {{ model.id }}
+                  </option>
+                </select>
+                <p
+                  v-if="
+                    !settingsStore.coreOpenAISettingsValid &&
+                    currentSettings.VITE_OPENAI_API_KEY &&
+                    conversationStore.availableModels.length === 0
+                  "
+                  class="text-xs text-warning mt-1"
+                >
+                  OpenAI API key needs to be validated (Save & Test) to load
+                  models.
+                </p>
+              </div>
+
+              <div>
+                <label for="assistant-system-prompt" class="block mb-1 text-sm"
+                  >Assistant System Prompt</label
+                >
+                <textarea
+                  id="assistant-system-prompt"
+                  v-model="currentSettings.assistantSystemPrompt"
+                  rows="8"
+                  class="textarea textarea-bordered w-full focus:textarea-primary h-48"
+                  placeholder="You are a helpful AI assistant..."
+                ></textarea>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="assistant-temperature" class="block mb-1 text-sm">
+                    Assistant Temperature ({{
+                      currentSettings.assistantTemperature.toFixed(1)
+                    }})
+                  </label>
+                  <input
+                    id="assistant-temperature"
+                    type="range"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    v-model.number="currentSettings.assistantTemperature"
+                    class="range range-primary"
+                  />
+                </div>
+                <div>
+                  <label for="assistant-top-p" class="block mb-1 text-sm">
+                    Assistant Top P ({{
+                      currentSettings.assistantTopP.toFixed(1)
+                    }})
+                  </label>
+                  <input
+                    id="assistant-top-p"
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    v-model.number="currentSettings.assistantTopP"
+                    class="range range-success"
+                  />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label for="max-history-messages" class="block mb-1 text-sm"
+                    >Max History Messages (API)</label
+                  >
+                  <input
+                    id="max-history-messages"
+                    type="number"
+                    min="1"
+                    max="50"
+                    step="1"
+                    v-model.number="
+                      currentSettings.MAX_HISTORY_MESSAGES_FOR_API
+                    "
+                    class="input input-bordered w-full focus:input-primary"
+                  />
+                  <p class="text-xs text-gray-400 mt-1">
+                    Number of recent messages sent to the API (e.g., 10-20).
+                  </p>
+                </div>
+                <div>
+                  <label for="summarization-messages" class="block mb-1 text-sm"
+                    >Summarization Message Count</label
+                  >
+                  <input
+                    id="summarization-messages"
+                    type="number"
+                    min="5"
+                    max="100"
+                    step="1"
+                    v-model.number="currentSettings.SUMMARIZATION_MESSAGE_COUNT"
+                    class="input input-bordered w-full focus:input-primary"
+                  />
+                  <p class="text-xs text-gray-400 mt-1">
+                    Number of messages to summarize for context (e.g., 20-40).
+                  </p>
+                </div>
+              </div>
+              <div>
+                <label for="summarization-model" class="block mb-1 text-sm"
+                  >Summarization Model *</label
+                >
+                <select
+                  id="summarization-model"
+                  v-model="currentSettings.SUMMARIZATION_MODEL"
+                  class="select select-bordered w-full focus:select-primary"
+                >
+                  <option disabled value="">
+                    Select a summarization model
+                  </option>
+                  <option
+                    v-if="
+                      conversationStore.availableModels.length === 0 &&
+                      settingsStore.coreOpenAISettingsValid
+                    "
+                    value=""
+                  >
+                    Loading models...
+                  </option>
+                  <option
+                    v-for="model in availableModelsForSelect"
+                    :key="`summ-${model.id}`"
+                    :value="model.id"
+                  >
+                    {{ model.id }}
+                  </option>
+                </select>
+                <p
+                  v-if="
+                    !settingsStore.coreOpenAISettingsValid &&
+                    currentSettings.VITE_OPENAI_API_KEY &&
+                    conversationStore.availableModels.length === 0
+                  "
+                  class="text-xs text-warning mt-1"
+                >
+                  OpenAI API key needs to be validated (Save & Test) to load
+                  models.
+                </p>
+                <p class="text-xs text-gray-400 mt-1">
+                  Model used for generating conversation summaries (e.g.,
+                  gpt-4.1-nano).
+                </p>
+              </div>
+
+              <div>
+                <label
+                  for="summarization-system-prompt"
+                  class="block mb-1 text-sm"
+                  >Summarization System Prompt</label
+                >
+                <textarea
+                  id="summarization-system-prompt"
+                  v-model="currentSettings.SUMMARIZATION_SYSTEM_PROMPT"
+                  rows="6"
+                  class="textarea textarea-bordered w-full focus:textarea-primary h-40"
+                  placeholder="You are an expert conversation summarizer..."
+                ></textarea>
+                <p class="text-xs text-gray-400 mt-1">
+                  System prompt to guide the summarization model.
+                </p>
+              </div>
+
+              <div>
+                <label class="block mb-2 text-sm font-medium"
+                  >Enabled Assistant Tools</label
+                >
+                <div
+                  class="space-y-2 p-3 border border-neutral-content/20 rounded-md max-h-60 overflow-y-auto bg-gray-800/50"
+                >
+                  <div
+                    v-if="availableToolsForSelect.length === 0"
+                    class="text-xs text-gray-400"
+                  >
+                    No tools defined.
+                  </div>
+                  <div
+                    v-for="tool in availableToolsForSelect"
+                    :key="tool.name"
+                    class="form-control"
+                  >
+                    <label
+                      class="label cursor-pointer py-1 justify-start gap-3"
+                      :class="{
+                        'opacity-50 cursor-not-allowed': !isToolConfigured(
+                          tool.name
+                        ),
+                      }"
+                    >
+                      <input
+                        type="checkbox"
+                        :value="tool.name"
+                        v-model="currentSettings.assistantTools"
+                        class="checkbox checkbox-accent checkbox-sm"
+                        :disabled="!isToolConfigured(tool.name)"
+                      />
+                      <span
+                        class="label-text"
+                        :title="
+                          tool.description +
+                          (!isToolConfigured(tool.name)
+                            ? ' (API key for this tool not configured in Optional Tool APIs section)'
+                            : '')
+                        "
+                      >
+                        {{ tool.displayName }}
+                        <span
+                          v-if="!isToolConfigured(tool.name)"
+                          class="text-xs text-warning normal-case"
+                        >
+                          (Needs config below)
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </fieldset>
         </div>
-      </fieldset>
+
+        <div v-if="activeTab === 'hotkeys'" class="space-y-6">
+          <h3 class="text-xl font-semibold mb-4 text-yellow-400">
+            Global Hotkeys
+          </h3>
+          <fieldset
+            class="fieldset bg-gray-900/90 border-yellow-500/50 rounded-box w-full border p-4"
+          >
+            <legend class="fieldset-legend">Keyboard Shortcuts</legend>
+            <div class="p-2 space-y-4">
+              <div>
+                <label for="mic-toggle-hotkey" class="block mb-1 text-sm"
+                  >Microphone Toggle Hotkey</label
+                >
+                <div class="flex items-center justify-between">
+                  <kbd class="kbd kbd-xl">{{
+                    formatAccelerator(currentSettings.microphoneToggleHotkey)
+                  }}</kbd>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      @click="startRecordingHotkey('microphoneToggleHotkey')"
+                      class="btn btn-secondary btn-active btn-sm"
+                      :disabled="
+                        isRecordingHotkeyFor === 'microphoneToggleHotkey'
+                      "
+                    >
+                      {{
+                        isRecordingHotkeyFor === 'microphoneToggleHotkey'
+                          ? 'Recording...'
+                          : 'Record'
+                      }}
+                    </button>
+                    <button
+                      type="button"
+                      @click="clearHotkey('microphoneToggleHotkey')"
+                      class="btn btn-warning btn-outline btn-sm"
+                      :disabled="!currentSettings.microphoneToggleHotkey"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <p
+                  v-if="isRecordingHotkeyFor === 'microphoneToggleHotkey'"
+                  class="text-xs text-yellow-400 mt-1"
+                >
+                  Press the desired key combination. Press Esc to cancel.
+                </p>
+              </div>
+
+              <div>
+                <label for="mute-playback-hotkey" class="block mb-1 text-sm"
+                  >Mute Playback Hotkey</label
+                >
+                <div class="flex items-center justify-between">
+                  <kbd class="kbd kbd-xl">{{
+                    formatAccelerator(currentSettings.mutePlaybackHotkey)
+                  }}</kbd>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      @click="startRecordingHotkey('mutePlaybackHotkey')"
+                      class="btn btn-secondary btn-active btn-sm"
+                      :disabled="isRecordingHotkeyFor === 'mutePlaybackHotkey'"
+                    >
+                      {{
+                        isRecordingHotkeyFor === 'mutePlaybackHotkey'
+                          ? 'Recording...'
+                          : 'Record'
+                      }}
+                    </button>
+                    <button
+                      type="button"
+                      @click="clearHotkey('mutePlaybackHotkey')"
+                      class="btn btn-warning btn-outline btn-sm"
+                      :disabled="!currentSettings.mutePlaybackHotkey"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <p
+                  v-if="isRecordingHotkeyFor === 'mutePlaybackHotkey'"
+                  class="text-xs text-yellow-400 mt-1"
+                >
+                  Press the desired key combination. Press Esc to cancel.
+                </p>
+              </div>
+
+              <div>
+                <label for="take-screenshot-hotkey" class="block mb-1 text-sm"
+                  >Take Screenshot Hotkey</label
+                >
+                <div class="flex items-center justify-between">
+                  <kbd class="kbd kbd-xl">{{
+                    formatAccelerator(currentSettings.takeScreenshotHotkey)
+                  }}</kbd>
+                  <div class="flex items-center gap-2">
+                    <button
+                      type="button"
+                      @click="startRecordingHotkey('takeScreenshotHotkey')"
+                      class="btn btn-secondary btn-active btn-sm"
+                      :disabled="
+                        isRecordingHotkeyFor === 'takeScreenshotHotkey'
+                      "
+                    >
+                      {{
+                        isRecordingHotkeyFor === 'takeScreenshotHotkey'
+                          ? 'Recording...'
+                          : 'Record'
+                      }}
+                    </button>
+                    <button
+                      type="button"
+                      @click="clearHotkey('takeScreenshotHotkey')"
+                      class="btn btn-warning btn-outline btn-sm"
+                      :disabled="!currentSettings.takeScreenshotHotkey"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <p
+                  v-if="isRecordingHotkeyFor === 'takeScreenshotHotkey'"
+                  class="text-xs text-yellow-400 mt-1"
+                >
+                  Press the desired key combination. Press Esc to cancel.
+                </p>
+              </div>
+            </div>
+          </fieldset>
+        </div>
+
+        <div v-if="activeTab === 'integrations'" class="space-y-6">
+          <h3 class="text-xl font-semibold mb-4 text-purple-400">
+            Integrations & APIs
+          </h3>
+
+          <fieldset
+            class="fieldset bg-gray-900/90 border-purple-500/50 rounded-box w-full border p-4"
+          >
+            <legend class="fieldset-legend">Google Services Integration</legend>
+            <div class="p-2 space-y-4">
+              <div
+                v-if="
+                  !googleAuthStatus.isAuthenticated &&
+                  !googleAuthStatus.authInProgress
+                "
+              >
+                <button
+                  type="button"
+                  @click="connectGoogleServices"
+                  class="btn btn-info btn-active"
+                  :disabled="googleAuthStatus.isLoading"
+                >
+                  {{
+                    googleAuthStatus.isLoading
+                      ? 'Connecting...'
+                      : 'Connect to Google Services'
+                  }}
+                </button>
+              </div>
+              <div
+                v-if="
+                  googleAuthStatus.authInProgress &&
+                  !googleAuthStatus.isAuthenticated
+                "
+              >
+                <p class="text-sm mb-2">
+                  Awaiting authorization in your browser. Please follow the
+                  instructions there.
+                </p>
+                <span class="loading loading-dots loading-md"></span>
+              </div>
+              <div v-if="googleAuthStatus.isAuthenticated">
+                <div role="alert" class="alert alert-success mb-4">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="h-6 w-6 shrink-0 stroke-current"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span>Successfully connected to Google Services.</span>
+                </div>
+                <button
+                  type="button"
+                  @click="disconnectGoogleServices"
+                  class="btn btn-warning btn-outline"
+                >
+                  Disconnect from Google Services
+                </button>
+              </div>
+              <p
+                v-if="googleAuthStatus.error"
+                class="text-xs text-error-content mt-1"
+              >
+                {{ googleAuthStatus.error }}
+              </p>
+              <p
+                v-if="
+                  googleAuthStatus.message &&
+                  !googleAuthStatus.isAuthenticated &&
+                  !googleAuthStatus.error
+                "
+                class="text-xs text-white mt-1"
+              >
+                {{ googleAuthStatus.message }}
+              </p>
+            </div>
+          </fieldset>
+
+          <fieldset
+            class="fieldset bg-gray-900/90 border-cyan-500/50 rounded-box w-full border p-4"
+          >
+            <legend class="fieldset-legend">
+              Remote MCP Servers
+              <a href="#" target="_blank" class="ml-2">
+                <span class="badge badge-sm badge-soft whitespace-nowrap">
+                  MCP Info
+                  <img :src="newTabIcon" class="size-3 inline-block ml-1" />
+                </span>
+              </a>
+            </legend>
+            <div class="p-2 space-y-4">
+              <div>
+                <label for="mcp-servers-config" class="block mb-1 text-sm">
+                  MCP Servers JSON Configuration (Array)
+                </label>
+                <textarea
+                  id="mcp-servers-config"
+                  v-model="currentSettings.mcpServersConfig"
+                  rows="10"
+                  class="textarea textarea-bordered w-full focus:textarea-primary h-60 bg-gray-800"
+                  :placeholder="mcpPlaceholder"
+                ></textarea>
+                <p class="text-xs text-gray-400 mt-1">
+                  Enter a JSON array of MCP server configurations. Each object
+                  should follow the OpenAI MCP tool format. Refer to MCP
+                  documentation for details on fields like server_label,
+                  server_url, require_approval, allowed_tools, and headers.
+                </p>
+              </div>
+            </div>
+          </fieldset>
+
+          <fieldset
+            class="fieldset bg-gray-900/90 border-gray-600/50 rounded-box w-full border p-4"
+          >
+            <legend class="fieldset-legend">
+              Optional Tool APIs
+              <a
+                href="https://github.com/pmbstyle/Alice/blob/main/docs/toolsInstructions.md"
+                target="_blank"
+                class="ml-2"
+              >
+                <span class="badge badge-sm badge-soft whitespace-nowrap">
+                  Info
+                  <img :src="newTabIcon" class="size-3 inline-block ml-1" />
+                </span>
+              </a>
+            </legend>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
+              <div>
+                <label for="jackett-url" class="block mb-1 text-sm"
+                  >Jackett URL (Torrent Search)</label
+                >
+                <input
+                  id="jackett-url"
+                  type="text"
+                  v-model="currentSettings.VITE_JACKETT_URL"
+                  class="input focus:outline-none w-full"
+                />
+              </div>
+              <div>
+                <label for="jackett-key" class="block mb-1 text-sm"
+                  >Jackett API Key</label
+                >
+                <input
+                  id="jackett-key"
+                  type="password"
+                  v-model="currentSettings.VITE_JACKETT_API_KEY"
+                  class="input focus:outline-none w-full"
+                  autocomplete="new-password"
+                />
+              </div>
+              <div>
+                <label for="qb-url" class="block mb-1 text-sm"
+                  >qBittorrent URL</label
+                >
+                <input
+                  id="qb-url"
+                  type="text"
+                  v-model="currentSettings.VITE_QB_URL"
+                  class="input focus:outline-none w-full"
+                />
+              </div>
+              <div>
+                <label for="qb-user" class="block mb-1 text-sm"
+                  >qBittorrent Username</label
+                >
+                <input
+                  id="qb-user"
+                  type="text"
+                  v-model="currentSettings.VITE_QB_USERNAME"
+                  class="input focus:outline-none w-full"
+                />
+              </div>
+              <div>
+                <label for="qb-pass" class="block mb-1 text-sm"
+                  >qBittorrent Password</label
+                >
+                <input
+                  id="qb-pass"
+                  type="password"
+                  v-model="currentSettings.VITE_QB_PASSWORD"
+                  class="input focus:outline-none w-full"
+                  autocomplete="new-password"
+                />
+              </div>
+            </div>
+          </fieldset>
+        </div>
+      </div>
 
       <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
         <button
@@ -714,6 +787,7 @@ const settingsStore = useSettingsStore()
 const conversationStore = useConversationStore()
 
 const currentSettings = ref<AliceSettings>({ ...settingsStore.config })
+const activeTab = ref<'core' | 'assistant' | 'hotkeys' | 'integrations'>('core')
 
 const isRecordingHotkeyFor = ref<keyof AliceSettings | null>(null)
 const activeRecordingKeys = ref<Set<string>>(new Set())

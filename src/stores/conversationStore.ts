@@ -167,27 +167,6 @@ export const useConversationStore = defineStore('conversation', () => {
       .slice(0, settingsStore.config.MAX_HISTORY_MESSAGES_FOR_API)
       .reverse()
 
-    const summaryResult = await window.ipcRenderer.invoke(
-      'summaries:get-latest-summary',
-      {}
-    )
-    if (summaryResult.success && summaryResult.data?.summary_text) {
-      const summaryContent = `[CONVERSATION_SUMMARY_START]\nContext from previous conversation segment:\n${summaryResult.data.summary_text}\n[CONVERSATION_SUMMARY_END]`
-      apiInput.push({
-        role: 'system',
-        content: [{ type: 'input_text', text: summaryContent }],
-      })
-    }
-
-    let lastUserMessageInFullHistoryId: string | null = null
-    for (let i = 0; i < historyToBuildFrom.length; i++) {
-      if (historyToBuildFrom[i].role === 'user') {
-        lastUserMessageInFullHistoryId =
-          historyToBuildFrom[i].local_id_temp || null
-        break
-      }
-    }
-
     for (const msg of recentHistory) {
       let apiItemPartial: any
 
@@ -468,29 +447,56 @@ export const useConversationStore = defineStore('conversation', () => {
     const isNewChain = currentResponseId.value === null
     const constructedApiInput = await buildApiInput(isNewChain)
 
-    let finalInstructions = settingsStore.config.assistantSystemPrompt
-    const latestUserMessageContent = chatHistory.value.find(
-      m => m.role === 'user'
-    )?.content
-    if (
-      typeof latestUserMessageContent === 'string' &&
-      latestUserMessageContent
-    ) {
-      const relevantThoughts = await api.retrieveRelevantThoughtsForPrompt(
-        latestUserMessageContent
-      )
-      if (relevantThoughts.length > 0) {
-        const thoughtsBlock =
-          'Relevant thoughts from past conversation:\n' +
-          relevantThoughts.map(t => `- ${t}`).join('\n')
-        finalInstructions = `${thoughtsBlock}\n\n---\n\n${finalInstructions}`
-      }
+    const contextMessages: OpenAI.Responses.Request.InputItemLike[] = []
+
+    const summaryResult = await window.ipcRenderer.invoke(
+      'summaries:get-latest-summary',
+      {}
+    )
+    if (summaryResult.success && summaryResult.data?.summary_text) {
+      const summaryContent = `[CONVERSATION_SUMMARY_START]\nContext from a previous part of our conversation:\n${summaryResult.data.summary_text}\n[CONVERSATION_SUMMARY_END]`
+      contextMessages.push({
+        role: 'user',
+        content: [{ type: 'input_text', text: summaryContent }],
+      })
     }
 
     if (ephemeralEmotionalContext.value) {
-      finalInstructions = `[System Note: User's tone was: "${ephemeralEmotionalContext.value}"]\n${finalInstructions}`
+      const emotionalContextContent = `[SYSTEM_NOTE: Based on our recent interaction, the user's emotional state seems to be: ${ephemeralEmotionalContext.value}]`
+      contextMessages.push({
+        role: 'user',
+        content: [{ type: 'input_text', text: emotionalContextContent }],
+      })
       ephemeralEmotionalContext.value = null
     }
+
+    const latestUserMessageContent = chatHistory.value.find(
+      m => m.role === 'user'
+    )?.content
+    if (latestUserMessageContent && Array.isArray(latestUserMessageContent)) {
+      const textForThoughtRetrieval = latestUserMessageContent
+        .filter(p => p.type === 'app_text' && p.text)
+        .map(p => p.text)
+        .join(' ')
+
+      if (textForThoughtRetrieval) {
+        const relevantThoughts = await api.retrieveRelevantThoughtsForPrompt(
+          textForThoughtRetrieval
+        )
+        if (relevantThoughts.length > 0) {
+          const thoughtsBlock =
+            'Relevant thoughts from our past conversation (for context):\n' +
+            relevantThoughts.map(t => `- ${t}`).join('\n')
+          contextMessages.push({
+            role: 'user',
+            content: [{ type: 'input_text', text: thoughtsBlock }],
+          })
+        }
+      }
+    }
+
+    const finalApiInput = [...contextMessages, ...constructedApiInput]
+    const finalInstructions = settingsStore.config.assistantSystemPrompt
 
     const assistantMessagePlaceholder: ChatMessage = {
       role: 'assistant',
@@ -503,7 +509,7 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       llmAbortController.value = new AbortController()
       const streamResult = await api.createOpenAIResponse(
-        constructedApiInput,
+        finalApiInput,
         currentResponseId.value,
         true,
         finalInstructions,

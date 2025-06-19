@@ -48,7 +48,7 @@
         </button>
       </div>
 
-      <div class="min-h-[500px]">
+      <div>
         <div v-if="activeTab === 'core'" class="space-y-6">
           <h3 class="text-xl font-semibold mb-4 text-blue-400">
             Core API Configuration
@@ -758,12 +758,19 @@
       <div
         class="text-xs text-gray-400 mt-4 flex justify-center items-center gap-1"
       >
-        <span>Alice v{{ appVersion }}. Built with</span>
+        <span>Alice 
+          <a
+            :href="'https://github.com/pmbstyle/Alice/releases/tag/v' + appVersion"
+            target="_blank"
+            class="link link-hover"
+            >v{{ appVersion }}</a
+          >.
+          Built with</span>
         <img :src="heartIcon" class="size-3 inline-block ml-1" />
         <span
           >by
           <a
-            href="https://github.com/pmbstyle/Alice"
+            href="https://github.com/pmbstyle"
             target="_blank"
             class="link link-hover"
             >pmbstyle</a

@@ -70,6 +70,10 @@ export const useConversationStore = defineStore('conversation', () => {
       console.log('[LLM Abort] Cancelling in-flight LLM stream request.')
       llmAbortController.value.abort()
       llmAbortController.value = null
+      currentResponseId.value = null
+      console.log(
+        '[LLM Abort] Reset currentResponseId to start new conversation chain.'
+      )
     }
   }
 
@@ -167,6 +171,10 @@ export const useConversationStore = defineStore('conversation', () => {
       .slice(0, settingsStore.config.MAX_HISTORY_MESSAGES_FOR_API)
       .reverse()
 
+    const lastUserMessageInFullHistoryId = historyToBuildFrom
+      .filter(msg => msg.role === 'user')
+      .slice(-1)[0]?.local_id_temp
+
     for (const msg of recentHistory) {
       let apiItemPartial: any
 
@@ -205,6 +213,10 @@ export const useConversationStore = defineStore('conversation', () => {
               : 'output_text'
           messageContentParts = [{ type: typeForPart, text: msg.content }]
         } else if (Array.isArray(msg.content)) {
+          const isThisTheLastUserMessageWithPotentialNewImage =
+            currentApiRole === 'user' &&
+            msg.local_id_temp === lastUserMessageInFullHistoryId
+
           messageContentParts = msg.content
             .map((appPart: AppChatMessageContentPart) => {
               if (appPart.type === 'app_text') {
@@ -213,17 +225,49 @@ export const useConversationStore = defineStore('conversation', () => {
                     ? 'input_text'
                     : 'output_text'
                 return { type: typeForPart, text: appPart.text || '' }
-              }
-              if (appPart.type === 'app_image_uri' && appPart.uri) {
+              } else if (appPart.type === 'app_image_uri') {
+                if (!appPart.uri) return null
                 if (
-                  currentApiRole === 'user' ||
-                  currentApiRole === 'developer'
+                  isThisTheLastUserMessageWithPotentialNewImage &&
+                  (currentApiRole === 'user' || currentApiRole === 'developer')
                 ) {
                   return {
                     type: 'input_image',
                     image_url: appPart.uri,
                   } as OpenAI.Responses.Request.InputImagePart
+                } else if (
+                  currentApiRole === 'user' ||
+                  currentApiRole === 'developer'
+                ) {
+                  return {
+                    type: 'input_text',
+                    text: '[User previously sent an image]',
+                  }
                 }
+                return null
+              } else if (appPart.type === 'app_file') {
+                if (!appPart.fileId) return null
+                if (
+                  currentApiRole === 'user' ||
+                  currentApiRole === 'developer'
+                ) {
+                  return {
+                    type: 'input_file',
+                    file_id: appPart.fileId,
+                  } as OpenAI.Responses.Request.InputFilePart
+                }
+                return null
+              } else if (appPart.type === 'app_generated_image_path') {
+                if (
+                  currentApiRole !== 'user' &&
+                  currentApiRole !== 'developer'
+                ) {
+                  return {
+                    type: 'output_text',
+                    text: '[Assistant previously generated an image]',
+                  }
+                }
+                return null
               }
               return null
             })
@@ -275,6 +319,7 @@ export const useConversationStore = defineStore('conversation', () => {
 
     try {
       for await (const event of stream) {
+        
         if (event.type === 'response.created') {
           currentResponseId.value = event.response.id
           generalStore.updateMessageApiResponseIdByTempId(
@@ -341,6 +386,82 @@ export const useConversationStore = defineStore('conversation', () => {
           )
           await handleToolCall(functionCallPayload, currentResponseId.value)
           return { streamEndedNormally: true }
+        }
+
+        if (event.type === 'response.image_generation_call.in_progress') {
+          console.log('Image generation started:', event.item_id)
+          setAudioState('GENERATING_IMAGE')
+        }
+
+        if (event.type === 'response.image_generation_call.partial_image') {
+          const imageGenerationId = event.item_id
+          const base64Content = event.partial_image_b64
+          const partialIndex = event.partial_image_index + 1 // 0-indexed, so add 1 for display
+
+          console.log(
+            `Received partial image ${partialIndex} for generation ${imageGenerationId}`
+          )
+
+          try {
+            const saveResult = await window.ipcRenderer.invoke(
+              'save-image-from-base64',
+              {
+                base64Data: base64Content,
+                fileName: `partial_${imageGenerationId}_${partialIndex}_${Date.now()}.png`,
+                isPartial: true,
+              }
+            )
+
+            if (saveResult.success) {
+              updateImageContentPartByGenerationId(
+                placeholderTempId,
+                imageGenerationId,
+                saveResult.relativePath,
+                saveResult.absolutePath,
+                true,
+                partialIndex
+              )
+            }
+          } catch (error) {
+            console.error('Failed to save partial image:', error)
+          }
+        }
+
+        if (event.type === 'response.output_item.done' && event.item?.type === 'image_generation_call') {
+          const imageItem = event.item
+          if (imageItem.result) {
+            const imageGenerationId = imageItem.id
+            const finalBase64Content = imageItem.result
+
+            console.log(`Received final image for generation ${imageGenerationId}`)
+
+            try {
+              const saveResult = await window.ipcRenderer.invoke(
+                'save-image-from-base64',
+                {
+                  base64Data: finalBase64Content,
+                  fileName: `final_${imageGenerationId}_${Date.now()}.png`,
+                  isPartial: false,
+                }
+              )
+
+              if (saveResult.success) {
+                updateImageContentPartByGenerationId(
+                  placeholderTempId,
+                  imageGenerationId,
+                  saveResult.relativePath,
+                  saveResult.absolutePath,
+                  false
+                )
+              }
+            } catch (error) {
+              console.error('Failed to save final image:', error)
+            }
+
+            if (audioState.value === 'GENERATING_IMAGE') {
+              setAudioState('WAITING_FOR_RESPONSE')
+            }
+          }
         }
 
         if (event.type === 'error') {

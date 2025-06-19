@@ -140,7 +140,7 @@ const getDisplayableMessageContent = (message: ChatMessage): string => {
               data-absolute-path="${part.absolutePathForOpening}"
               title="${titleText}"
             />
-            ${part.isPartial ? `<span class="text-xs text-gray-400 block text-center">Preview ${part.partialIndex || ''}</span>` : ''}
+            ${part.isPartial ? `<span class="text-xs text-gray-400 block text-center">Generating ...</span>` : ''}
           </div>
           <br/>`
       } else if (part.type === 'app_image_uri' && part.uri) {

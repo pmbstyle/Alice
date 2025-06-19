@@ -1,47 +1,12 @@
 import OpenAI from 'openai'
-import Groq from 'groq-sdk'
 import { toFile, type FileLike } from 'openai/uploads'
 import { useSettingsStore } from '../stores/settingsStore'
+import { getOpenAIClient, getGroqClient } from './apiClients'
 import type { AppChatMessageContentPart } from '../stores/conversationStore'
 import {
   PREDEFINED_OPENAI_TOOLS,
   type ApiRequestBodyFunctionTool,
 } from '../utils/assistantTools'
-
-/* 
-Client Initialization Helpers
-*/
-
-function getOpenAIClient(): OpenAI {
-  const settings = useSettingsStore().config
-  if (!settings.VITE_OPENAI_API_KEY) {
-    console.error('OpenAI API Key is not configured.')
-    throw new Error('OpenAI API Key is not configured.')
-  }
-  return new OpenAI({
-    apiKey: settings.VITE_OPENAI_API_KEY,
-    dangerouslyAllowBrowser: true,
-    timeout: 20 * 1000,
-    maxRetries: 1,
-  })
-}
-
-function getGroqClient(): Groq {
-  const settingsStore = useSettingsStore()
-  const settings = settingsStore.config
-
-  if (settingsStore.isProduction && !settings.VITE_GROQ_API_KEY) {
-    console.error('Groq API Key is not configured in production.')
-    throw new Error('Groq API Key is not configured in production.')
-  }
-  if (!settings.VITE_GROQ_API_KEY) {
-    console.warn('Groq API Key is not set. STT functionality will fail.')
-  }
-  return new Groq({
-    apiKey: settings.VITE_GROQ_API_KEY,
-    dangerouslyAllowBrowser: true,
-  })
-}
 
 /* 
 API Function Exports

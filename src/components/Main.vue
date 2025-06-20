@@ -291,14 +291,75 @@ const processRequest = async (
 
   generalStore.addMessageToHistory(userMessage)
   try {
-    await conversationStore.chat()
+    const chatPromise = conversationStore.chat()
+
+    const timeoutPromise = new Promise((_, reject) => {
+      let timeoutId: NodeJS.Timeout
+      let hasImageGeneration = false
+
+      const startTimeout = () => {
+        timeoutId = setTimeout(() => {
+          if (generalStore.audioState === 'GENERATING_IMAGE') {
+            console.log(
+              '[Timeout] Skipping timeout - image generation in progress'
+            )
+            startTimeout()
+            return
+          }
+          reject(new Error('Chat request timeout after 30 seconds'))
+        }, 30000)
+      }
+
+      const stateWatcher = () => {
+        if (
+          generalStore.audioState === 'GENERATING_IMAGE' &&
+          !hasImageGeneration
+        ) {
+          console.log('[Timeout] Image generation started, disabling timeout')
+          clearTimeout(timeoutId)
+          hasImageGeneration = true
+        }
+      }
+
+      startTimeout()
+      const intervalId = setInterval(stateWatcher, 500)
+
+      chatPromise.finally(() => {
+        clearTimeout(timeoutId)
+        clearInterval(intervalId)
+      })
+    })
+
+    await Promise.race([chatPromise, timeoutPromise])
   } catch (e) {
     console.error(
       `[Main.vue processRequest (${source})] Error during conversationStore.chat():`,
       e
     )
+
+    if (
+      generalStore.audioState !== 'IDLE' &&
+      generalStore.audioState !== 'LISTENING' &&
+      generalStore.audioState !== 'GENERATING_IMAGE'
+    ) {
+      console.log('[Error Recovery] Resetting audio state to prevent UI lock')
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+    }
   } finally {
     isProcessingRequest = false
+
+    setTimeout(() => {
+      if (
+        (generalStore.audioState === 'WAITING_FOR_RESPONSE' ||
+          generalStore.audioState === 'PROCESSING_AUDIO') &&
+        generalStore.audioState !== 'GENERATING_IMAGE'
+      ) {
+        console.log(
+          '[Safety Recovery] Detected stuck audio state, resetting to interactive mode'
+        )
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      }
+    }, 2000)
   }
 }
 </script>

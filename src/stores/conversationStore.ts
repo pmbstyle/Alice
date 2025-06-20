@@ -70,9 +70,8 @@ export const useConversationStore = defineStore('conversation', () => {
       console.log('[LLM Abort] Cancelling in-flight LLM stream request.')
       llmAbortController.value.abort()
       llmAbortController.value = null
-      currentResponseId.value = null
       console.log(
-        '[LLM Abort] Reset currentResponseId to start new conversation chain.'
+        '[LLM Abort] Stream cancelled but preserving currentResponseId for conversation continuity.'
       )
     }
   }
@@ -319,7 +318,6 @@ export const useConversationStore = defineStore('conversation', () => {
 
     try {
       for await (const event of stream) {
-        
         if (event.type === 'response.created') {
           currentResponseId.value = event.response.id
           generalStore.updateMessageApiResponseIdByTempId(
@@ -396,7 +394,7 @@ export const useConversationStore = defineStore('conversation', () => {
         if (event.type === 'response.image_generation_call.partial_image') {
           const imageGenerationId = event.item_id
           const base64Content = event.partial_image_b64
-          const partialIndex = event.partial_image_index + 1 // 0-indexed, so add 1 for display
+          const partialIndex = event.partial_image_index + 1
 
           console.log(
             `Received partial image ${partialIndex} for generation ${imageGenerationId}`
@@ -427,13 +425,18 @@ export const useConversationStore = defineStore('conversation', () => {
           }
         }
 
-        if (event.type === 'response.output_item.done' && event.item?.type === 'image_generation_call') {
+        if (
+          event.type === 'response.output_item.done' &&
+          event.item?.type === 'image_generation_call'
+        ) {
           const imageItem = event.item
           if (imageItem.result) {
             const imageGenerationId = imageItem.id
             const finalBase64Content = imageItem.result
 
-            console.log(`Received final image for generation ${imageGenerationId}`)
+            console.log(
+              `Received final image for generation ${imageGenerationId}`
+            )
 
             try {
               const saveResult = await window.ipcRenderer.invoke(
@@ -640,11 +643,28 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error starting OpenAI response stream:', error)
-        generalStore.updateMessageContentByTempId(
-          placeholderTempId,
-          `Error: ${error.message}`
-        )
+
+        if (
+          error.message?.includes('No tool call found for function call output')
+        ) {
+          console.log(
+            '[Error Recovery] Function call context lost, resetting conversation chain'
+          )
+          currentResponseId.value = null
+          generalStore.updateMessageContentByTempId(
+            placeholderTempId,
+            'I apologize, there was an issue with the previous function call. Let me help you with a fresh start.'
+          )
+        } else {
+          generalStore.updateMessageContentByTempId(
+            placeholderTempId,
+            `Error: ${error.message}`
+          )
+        }
+
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+
+        llmAbortController.value = null
       }
     }
   }

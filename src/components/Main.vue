@@ -61,7 +61,10 @@ import { bg } from '../utils/assetsImport'
 
 import { useGeneralStore } from '../stores/generalStore'
 import { useConversationStore } from '../stores/conversationStore'
-import { indexMessageForThoughts } from '../services/apiService'
+import {
+  indexMessageForThoughts,
+  uploadFileToOpenAI,
+} from '../services/apiService'
 import type {
   ChatMessage,
   AppChatMessageContentPart,
@@ -215,14 +218,23 @@ const processRequest = async (
   const fileToProcess = generalStore.attachedFile
   if (fileToProcess) {
     generalStore.statusMessage = `Uploading ${fileToProcess.name}...`
-    const uploadedFileId = 'placeholder-file-id'
-    if (uploadedFileId) {
-      appContentParts.push({
-        type: 'app_file',
-        fileId: uploadedFileId,
-        fileName: fileToProcess.name,
-      })
-    } else {
+    try {
+      const uploadedFileId = await uploadFileToOpenAI(fileToProcess)
+      if (uploadedFileId) {
+        appContentParts.push({
+          type: 'app_file',
+          fileId: uploadedFileId,
+          fileName: fileToProcess.name,
+        })
+      } else {
+        generalStore.statusMessage = 'Error: PDF file upload failed.'
+        isProcessingRequest = false
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+        generalStore.attachedFile = null
+        return
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error)
       generalStore.statusMessage = 'Error: PDF file upload failed.'
       isProcessingRequest = false
       setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')

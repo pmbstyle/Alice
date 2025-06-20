@@ -260,3 +260,61 @@ export const createContextAnalysisResponse = async (
   }
   return null
 }
+
+export const uploadFileToOpenAI = async (
+  file: File
+): Promise<string | null> => {
+  try {
+    const supportedTypes = [
+      'application/pdf',
+      'text/plain',
+      'text/csv',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ]
+    if (!supportedTypes.includes(file.type)) {
+      console.error(
+        `Unsupported file type: ${file.type}. Supported types: ${supportedTypes.join(', ')}`
+      )
+      return null
+    }
+
+    const maxSize = 32 * 1024 * 1024
+    if (file.size > maxSize) {
+      console.error(
+        `File too large: ${file.size} bytes. Maximum allowed: ${maxSize} bytes (32MB)`
+      )
+      return null
+    }
+
+    const openai = getOpenAIClient()
+    const fileUpload = await openai.files.create({
+      file: file,
+      purpose: 'user_data',
+    })
+
+    console.log(
+      `File uploaded successfully: ${fileUpload.id} (${file.name}, ${file.type})`
+    )
+    return fileUpload.id
+  } catch (error) {
+    console.error('Error uploading file to OpenAI:', error)
+    if (error instanceof Error && error.message.includes('purpose')) {
+      try {
+        console.log('Retrying with assistants purpose...')
+        const openai = getOpenAIClient()
+        const fileUpload = await openai.files.create({
+          file: file,
+          purpose: 'assistants',
+        })
+        console.log(
+          `File uploaded successfully with assistants purpose: ${fileUpload.id}`
+        )
+        return fileUpload.id
+      } catch (fallbackError) {
+        console.error('Fallback upload also failed:', fallbackError)
+        return null
+      }
+    }
+    return null
+  }
+}

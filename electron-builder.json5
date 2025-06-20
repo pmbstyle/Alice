@@ -11,7 +11,8 @@
     {
       "provider": "github",
       "owner": "pmbstyle",
-      "repo": "Alice"
+      "repo": "Alice",
+      "releaseType": "release"
     }
   ],
   files: ['dist', 'dist-electron'],

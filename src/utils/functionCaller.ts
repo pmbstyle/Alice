@@ -1,7 +1,6 @@
 import axios from 'axios'
 import { useSettingsStore } from '../stores/settingsStore'
-import { embedTextForThoughts } from '../api/openAI/assistant'
-
+import { createEmbedding } from '../services/apiService'
 
 interface Crawl4AiArgs {
   url: string
@@ -59,7 +58,7 @@ async function save_memory(args: SaveMemoryArgs) {
   try {
     let generatedEmbedding: number[] | undefined = undefined
     try {
-      generatedEmbedding = await embedTextForThoughts(args.content)
+      generatedEmbedding = await createEmbedding(args.content)
       if (generatedEmbedding.length === 0) {
         console.warn(
           '[FunctionCaller save_memory] Generated empty embedding for content:',
@@ -120,7 +119,7 @@ async function recall_memories(args: GetRecentMemoriesArgs) {
     let queryEmbedding: number[] | undefined = undefined
     if (args.query && args.query.trim()) {
       try {
-        queryEmbedding = await embedTextForThoughts(args.query)
+        queryEmbedding = await createEmbedding(args.query)
         if (queryEmbedding.length === 0) {
           console.warn(
             '[FunctionCaller recall_memories] Generated empty embedding for query:',

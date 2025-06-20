@@ -1,7 +1,8 @@
 import { ref, computed } from 'vue'
 import { defineStore } from 'pinia'
-import { useConversationStore } from './openAIStore'
+import { useConversationStore } from './conversationStore'
 import { useGeneralStore } from './generalStore'
+import { reinitializeClients } from '../services/apiClients'
 import defaultSystemPromptFromMD from '../../docs/systemPrompt.md?raw'
 
 const DEFAULT_SUMMARIZATION_SYSTEM_PROMPT = `You are an expert conversation summarizer.
@@ -369,6 +370,8 @@ export const useSettingsStore = defineStore('settings', () => {
       generalStore.statusMessage = 'Error saving settings to file.'
       return
     }
+
+    reinitializeClients()
 
     let openAIServiceTestSuccess = false
     try {

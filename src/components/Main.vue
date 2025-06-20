@@ -60,13 +60,15 @@ import Sidebar from './Sidebar.vue'
 import { bg } from '../utils/assetsImport'
 
 import { useGeneralStore } from '../stores/generalStore'
-import { useConversationStore } from '../stores/openAIStore'
-import { indexMessageForThoughts } from '../api/openAI/assistant'
-import { uploadFileForResponses } from '../api/openAI/responsesApi'
+import { useConversationStore } from '../stores/conversationStore'
+import {
+  indexMessageForThoughts,
+  uploadFileToOpenAI,
+} from '../services/apiService'
 import type {
   ChatMessage,
   AppChatMessageContentPart,
-} from '../stores/openAIStore'
+} from '../stores/conversationStore'
 import { useAudioProcessing } from '../composables/useAudioProcessing'
 import { useAudioPlayback } from '../composables/useAudioPlayback'
 import { useScreenshot } from '../composables/useScreenshot'
@@ -212,18 +214,27 @@ const processRequest = async (
   setAudioState('WAITING_FOR_RESPONSE')
 
   const appContentParts: AppChatMessageContentPart[] = []
-  const fileToProcess = generalStore.attachedFile
 
+  const fileToProcess = generalStore.attachedFile
   if (fileToProcess) {
     generalStore.statusMessage = `Uploading ${fileToProcess.name}...`
-    const uploadedFile = await uploadFileForResponses(fileToProcess)
-    if (uploadedFile) {
-      appContentParts.push({
-        type: 'app_file',
-        fileId: uploadedFile.id,
-        fileName: fileToProcess.name,
-      })
-    } else {
+    try {
+      const uploadedFileId = await uploadFileToOpenAI(fileToProcess)
+      if (uploadedFileId) {
+        appContentParts.push({
+          type: 'app_file',
+          fileId: uploadedFileId,
+          fileName: fileToProcess.name,
+        })
+      } else {
+        generalStore.statusMessage = 'Error: PDF file upload failed.'
+        isProcessingRequest = false
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+        generalStore.attachedFile = null
+        return
+      }
+    } catch (error) {
+      console.error('Error uploading file:', error)
       generalStore.statusMessage = 'Error: PDF file upload failed.'
       isProcessingRequest = false
       setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
@@ -280,14 +291,75 @@ const processRequest = async (
 
   generalStore.addMessageToHistory(userMessage)
   try {
-    await conversationStore.chat()
+    const chatPromise = conversationStore.chat()
+
+    const timeoutPromise = new Promise((_, reject) => {
+      let timeoutId: NodeJS.Timeout
+      let hasImageGeneration = false
+
+      const startTimeout = () => {
+        timeoutId = setTimeout(() => {
+          if (generalStore.audioState === 'GENERATING_IMAGE') {
+            console.log(
+              '[Timeout] Skipping timeout - image generation in progress'
+            )
+            startTimeout()
+            return
+          }
+          reject(new Error('Chat request timeout after 30 seconds'))
+        }, 30000)
+      }
+
+      const stateWatcher = () => {
+        if (
+          generalStore.audioState === 'GENERATING_IMAGE' &&
+          !hasImageGeneration
+        ) {
+          console.log('[Timeout] Image generation started, disabling timeout')
+          clearTimeout(timeoutId)
+          hasImageGeneration = true
+        }
+      }
+
+      startTimeout()
+      const intervalId = setInterval(stateWatcher, 500)
+
+      chatPromise.finally(() => {
+        clearTimeout(timeoutId)
+        clearInterval(intervalId)
+      })
+    })
+
+    await Promise.race([chatPromise, timeoutPromise])
   } catch (e) {
     console.error(
       `[Main.vue processRequest (${source})] Error during conversationStore.chat():`,
       e
     )
+
+    if (
+      generalStore.audioState !== 'IDLE' &&
+      generalStore.audioState !== 'LISTENING' &&
+      generalStore.audioState !== 'GENERATING_IMAGE'
+    ) {
+      console.log('[Error Recovery] Resetting audio state to prevent UI lock')
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+    }
   } finally {
     isProcessingRequest = false
+
+    setTimeout(() => {
+      if (
+        (generalStore.audioState === 'WAITING_FOR_RESPONSE' ||
+          generalStore.audioState === 'PROCESSING_AUDIO') &&
+        generalStore.audioState !== 'GENERATING_IMAGE'
+      ) {
+        console.log(
+          '[Safety Recovery] Detected stuck audio state, resetting to interactive mode'
+        )
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      }
+    }, 2000)
   }
 }
 </script>

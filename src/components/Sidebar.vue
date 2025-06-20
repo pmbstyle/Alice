@@ -124,7 +124,7 @@ import Settings from './Settings.vue'
 import MemoryManagerComponent from './MemoryManager.vue'
 import { useGeneralStore } from '../stores/generalStore'
 import { useSettingsStore } from '../stores/settingsStore'
-import { useConversationStore } from '../stores/openAIStore'
+import { useConversationStore } from '../stores/conversationStore'
 import { storeToRefs } from 'pinia'
 import { pdfIcon } from '../utils/assetsImport'
 

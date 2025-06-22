@@ -6,6 +6,7 @@ Run in your terminal `xattr -cr "/Applications/Alice AI App.app"`
 
 - Go to [OpenAI Platform](https://platform.openai.com/assistants)
 - Get OpenAI API key and add it to settings.
+- You might need to [verify your organization](https://platform.openai.com/settings/organization/general)
 
 # Groq STT setup (optional)
 
@@ -14,7 +15,7 @@ Run in your terminal `xattr -cr "/Applications/Alice AI App.app"`
 
 # Google services connection
 
-- In settings click 'Connect to Google Services', authorize your Google account to connect to Alice
+- In settings, click 'Connect to Google Services', authorize your Google account to connect to Alice
 
 
 Continue with [tools](https://github.com/pmbstyle/Alice/blob/main/docs/toolsInstructions.md) setup if not done during previous steps (optional).

@@ -115,13 +115,15 @@
             <legend class="fieldset-legend">Model & Behavior</legend>
             <div class="space-y-4 p-2">
               <div>
-                <label for="assistant-model" class="block mb-1 text-sm flex items-center"
+                <label
+                  for="assistant-model"
+                  class="block mb-1 text-sm flex items-center"
                   >Assistant Model *
                   <div
                     class="tooltip tooltip-right"
                     data-tip="The core model used for generating responses. A more powerful model will provide better results but will be more expensive."
                   >
-                    <img :src="infoIcon" class="size-4 ml-1"></div
+                    <img :src="infoIcon" class="size-4 ml-1" /></div
                 ></label>
                 <select
                   id="assistant-model"
@@ -183,7 +185,10 @@
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label for="assistant-temperature" class="block mb-1 text-sm flex items-center">
+                  <label
+                    for="assistant-temperature"
+                    class="block mb-1 text-sm flex items-center"
+                  >
                     Assistant Temperature ({{
                       currentSettings.assistantTemperature.toFixed(1)
                     }})
@@ -191,7 +196,7 @@
                       class="tooltip tooltip-right"
                       data-tip="Controls the randomness of the AI's responses. Higher values (e.g., 0.8) make the output more creative, while lower values (e.g., 0.2) make it more deterministic."
                     >
-                      <img :src="infoIcon" class="size-4 ml-1"></div
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
                   ></label>
                   <input
                     id="assistant-temperature"
@@ -204,7 +209,10 @@
                   />
                 </div>
                 <div>
-                  <label for="assistant-top-p" class="block mb-1 text-sm flex items-center">
+                  <label
+                    for="assistant-top-p"
+                    class="block mb-1 text-sm flex items-center"
+                  >
                     Assistant Top P ({{
                       currentSettings.assistantTopP.toFixed(1)
                     }})
@@ -212,7 +220,7 @@
                       class="tooltip tooltip-left"
                       data-tip="An alternative to temperature sampling, where the model considers the results of the tokens with top-p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered."
                     >
-                      <img :src="infoIcon" class="size-4 ml-1"></div
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
                   ></label>
                   <input
                     id="assistant-top-p"
@@ -235,13 +243,15 @@
             <div class="space-y-4 p-2">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label for="max-history-messages" class="block mb-1 text-sm flex items-center"
+                  <label
+                    for="max-history-messages"
+                    class="block mb-1 text-sm flex items-center"
                     >Max History Messages (API)
                     <div
                       class="tooltip tooltip-right"
                       data-tip="The number of recent messages to send to the AI. A higher number provides more context but increases cost."
                     >
-                      <img :src="infoIcon" class="size-4 ml-1"></div
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
                   ></label>
                   <input
                     id="max-history-messages"
@@ -256,13 +266,15 @@
                   />
                 </div>
                 <div>
-                  <label for="summarization-messages" class="block mb-1 text-sm flex items-center"
+                  <label
+                    for="summarization-messages"
+                    class="block mb-1 text-sm flex items-center"
                     >Summarization Message Count
                     <div
                       class="tooltip tooltip-left"
                       data-tip="The number of messages to summarize for providing context to the AI. This helps the AI remember the conversation over a longer period."
                     >
-                      <img :src="infoIcon" class="size-4 ml-1"></div
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
                   ></label>
                   <input
                     id="summarization-messages"
@@ -276,13 +288,15 @@
                 </div>
               </div>
               <div>
-                <label for="summarization-model" class="block mb-1 text-sm flex items-center"
+                <label
+                  for="summarization-model"
+                  class="block mb-1 text-sm flex items-center"
                   >Summarization Model *
                   <div
                     class="tooltip tooltip-right"
                     data-tip="The AI model used to summarize the conversation. A smaller, faster model is recommended."
                   >
-                    <img :src="infoIcon" class="size-4 ml-1"></div
+                    <img :src="infoIcon" class="size-4 ml-1" /></div
                 ></label>
                 <select
                   id="summarization-model"

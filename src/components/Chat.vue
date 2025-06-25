@@ -1,24 +1,27 @@
 <template>
   <div class="flex-1" @click="handleChatClick">
-    <div
-      class="chat mb-2"
-      v-for="(message, index) in chatHistoryDisplay"
-      :key="message.api_message_id || `local-${index}`"
-      :class="{
-        'chat-start': message.role === 'assistant' || message.role === 'system',
-        'chat-end': message.role === 'user',
-      }"
-    >
+    <transition-group name="list" tag="div">
       <div
-        class="chat-bubble mb-2"
+        class="chat mb-2"
+        v-for="(message, index) in chatHistoryDisplay"
+        :key="message.api_message_id || `local-${index}`"
         :class="{
-          'chat-bubble-primary': message.role === 'assistant',
-          'chat-bubble-accent': message.role === 'developer',
-          'chat-bubble-info': message.role === 'system',
+          'chat-start':
+            message.role === 'assistant' || message.role === 'system',
+          'chat-end': message.role === 'user',
         }"
-        v-html="getDisplayableMessageContent(message)"
-      ></div>
-    </div>
+      >
+        <div
+          class="chat-bubble mb-2"
+          :class="{
+            'chat-bubble-primary': message.role === 'assistant',
+            'chat-bubble-accent': message.role === 'developer',
+            'chat-bubble-info': message.role === 'system',
+          }"
+          v-html="getDisplayableMessageContent(message)"
+        ></div>
+      </div>
+    </transition-group>
   </div>
 </template>
 
@@ -210,6 +213,16 @@ const handleChatClick = (event: MouseEvent) => {
 </script>
 
 <style scoped>
+.list-enter-active,
+.list-leave-active {
+  transition: all 0.5s ease;
+}
+.list-enter-from,
+.list-leave-to {
+  opacity: 0;
+  transform: translateY(30px);
+}
+
 .partial-image-preview img {
   border: 2px dashed #00f5cc;
   opacity: 0.8;

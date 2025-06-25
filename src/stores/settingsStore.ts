@@ -5,6 +5,8 @@ import { useGeneralStore } from './generalStore'
 import { reinitializeClients } from '../services/apiClients'
 import defaultSystemPromptFromMD from '../../docs/systemPrompt.md?raw'
 
+export const DEFAULT_ASSISTANT_SYSTEM_PROMPT = defaultSystemPromptFromMD
+
 const DEFAULT_SUMMARIZATION_SYSTEM_PROMPT = `You are an expert conversation summarizer.
 Your task is to create a **concise and brief** factual summary of the following conversation segment.
 Focus on:

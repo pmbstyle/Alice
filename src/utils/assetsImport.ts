@@ -11,6 +11,7 @@ import hamburgerIcon from '../assets/images/hamburger.svg'
 import newTabIcon from '../assets/images/new-tab.svg'
 import heartIcon from '../assets/images/heart.svg'
 import pdfIcon from '../assets/images/pdf.svg'
+import infoIcon from '../assets/images/info.svg'
 
 export {
   bg,
@@ -26,4 +27,5 @@ export {
   newTabIcon,
   heartIcon,
   pdfIcon,
+  infoIcon,
 }

@@ -887,7 +887,7 @@ const availableToolsForSelect = computed(() => {
 })
 
 const availableModelsForSelect = computed(() => {
-  return availableModels.value.filter(model => model.id.startsWith('gpt-'))
+  return availableModels.value
 })
 
 const toolDependencies: Record<string, string[]> = {

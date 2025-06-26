@@ -93,11 +93,17 @@ export const createOpenAIResponse = async (
     }
   }
 
-  const isOModel = (settings.assistantModel || '').startsWith('o')
+  const modelName = settings.assistantModel || ''
+  const isOModel = modelName.startsWith('o')
 
   if (!isOModel) {
     finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
     finalToolsForApi.push({ type: 'web_search_preview' })
+  } else {
+    if(modelName.includes('o3-pro') && modelName === 'o3'){
+      finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
+      finalToolsForApi.push({ type: 'web_search_preview' })
+    }
   }
 
   const params: OpenAI.Responses.ResponseCreateParams = {

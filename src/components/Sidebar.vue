@@ -23,14 +23,14 @@
           !isConversationReady &&
           !settingsStore.isLoading
         "
-        class="absolute inset-0 bg-gray-900/80 backdrop-blur-sm flex items-center justify-center text-center p-4 z-10"
+        class="absolute inset-0 flex items-center justify-center text-center p-4 z-10"
       >
         <div class="text-white">
           <p class="text-lg font-semibold mb-2">
             {{
               generalStore.statusMessage.includes('Error:')
                 ? 'Initialization Failed'
-                : 'Initializing AI...'
+                : 'Initializing Alice'
             }}
           </p>
           <p
@@ -59,7 +59,7 @@
       </div>
     </div>
 
-    <div class="w-full pt-4 pr-4" v-if="sideBarView === 'chat'">
+    <div class="w-full pt-4 pr-4" v-if="sideBarView === 'chat' && isConversationReady">
       <div
         class="gradient-border-wrapper"
         :class="{ 'opacity-50': !isConversationReady }"

@@ -44,6 +44,8 @@ export interface AliceSettings {
   VITE_QB_URL: string
   VITE_QB_USERNAME: string
   VITE_QB_PASSWORD: string
+
+  onboardingCompleted: boolean
 }
 
 const defaultSettings: AliceSettings = {
@@ -71,6 +73,8 @@ const defaultSettings: AliceSettings = {
   VITE_QB_URL: '',
   VITE_QB_USERNAME: '',
   VITE_QB_PASSWORD: '',
+
+  onboardingCompleted: false,
 }
 
 const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
@@ -97,6 +101,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_QB_USERNAME: 'qBittorrent Username',
   VITE_QB_PASSWORD: 'qBittorrent Password',
   mcpServersConfig: 'MCP Servers JSON Configuration',
+  onboardingCompleted: 'Onboarding Completed',
 }
 
 const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = ['VITE_OPENAI_API_KEY']
@@ -153,7 +158,8 @@ export const useSettingsStore = defineStore('settings', () => {
                   key === 'SUMMARIZATION_MESSAGE_COUNT' ||
                   key === 'SUMMARIZATION_MODEL' ||
                   key === 'SUMMARIZATION_SYSTEM_PROMPT' ||
-                  key === 'sttProvider'
+                  key === 'sttProvider' ||
+                  key === 'onboardingCompleted'
               )
               .map(([key, value]) => {
                 if (
@@ -435,6 +441,32 @@ export const useSettingsStore = defineStore('settings', () => {
     isSaving.value = false
   }
 
+  async function completeOnboarding(onboardingData: {
+    VITE_OPENAI_API_KEY: string
+    sttProvider: 'openai' | 'groq'
+    VITE_GROQ_API_KEY: string
+  }) {
+    console.log('[SettingsStore] Completing onboarding...')
+
+    settings.value.VITE_OPENAI_API_KEY = onboardingData.VITE_OPENAI_API_KEY
+    settings.value.sttProvider = onboardingData.sttProvider
+    settings.value.VITE_GROQ_API_KEY = onboardingData.VITE_GROQ_API_KEY
+
+    settings.value.onboardingCompleted = true
+
+    const success = await saveSettingsToFile()
+    if (success) {
+      console.log(
+        '[SettingsStore] Onboarding settings saved. Re-initializing clients.'
+      )
+      reinitializeClients()
+      const conversationStore = useConversationStore()
+      await conversationStore.initialize()
+      isSaving.value = false
+    }
+    return success
+  }
+
   return {
     settings,
     isLoading,
@@ -451,5 +483,6 @@ export const useSettingsStore = defineStore('settings', () => {
     updateSetting,
     saveSettingsToFile,
     saveAndTestSettings,
+    completeOnboarding,
   }
 })

@@ -1,5 +1,6 @@
 <template>
-  <Main v-if="!showOverlay" />
+  <OnboardingWizard v-if="showOnboarding" />
+  <Main v-else-if="!showOverlay" />
   <Overlay v-else />
   <div
     role="alert"
@@ -38,11 +39,19 @@
 import { useRoute } from 'vue-router'
 import Main from './components/Main.vue'
 import Overlay from './components/Overlay.vue'
+import OnboardingWizard from './components/OnboardingWizard.vue'
+import { useSettingsStore } from './stores/settingsStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const route = useRoute()
+const settingsStore = useSettingsStore()
+
 const showOverlay = computed(() => {
   return route.hash === '#overlay'
+})
+
+const showOnboarding = computed(() => {
+  return !settingsStore.settings.onboardingCompleted
 })
 
 const updateAvailable = ref(false)
@@ -52,7 +61,9 @@ const installUpdate = () => {
   window.ipcRenderer.send('restart-and-install-update')
 }
 
-onMounted(() => {
+onMounted(async () => {
+  await settingsStore.loadSettings()
+
   if (window.ipcRenderer) {
     window.ipcRenderer.on('update-downloaded', (event, info) => {
       console.log('Update downloaded in renderer:', info)

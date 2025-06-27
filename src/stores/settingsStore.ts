@@ -206,6 +206,16 @@ export const useSettingsStore = defineStore('settings', () => {
             ...defaultSettings,
             ...(loaded as Partial<AliceSettings>),
           }
+          if (
+            !settings.value.onboardingCompleted &&
+            settings.value.VITE_OPENAI_API_KEY?.trim()
+          ) {
+            console.log(
+              '[SettingsStore] Existing user with API key found, auto-completing onboarding'
+            )
+            settings.value.onboardingCompleted = true
+            await saveSettingsToFile()
+          }
         } else {
           settings.value = { ...defaultSettings }
         }
@@ -251,6 +261,19 @@ export const useSettingsStore = defineStore('settings', () => {
           }
         }
         settings.value = devCombinedSettings
+
+        if (
+          !settings.value.onboardingCompleted &&
+          settings.value.VITE_OPENAI_API_KEY?.trim()
+        ) {
+          console.log(
+            '[SettingsStore] Dev: Existing user with API key found, auto-completing onboarding'
+          )
+          settings.value.onboardingCompleted = true
+          if (window.settingsAPI?.saveSettings) {
+            await saveSettingsToFile()
+          }
+        }
       }
 
       if (config.value.VITE_OPENAI_API_KEY) {

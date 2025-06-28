@@ -108,15 +108,23 @@
           <h3 class="text-xl font-semibold mb-4 text-green-400">
             Assistant Configuration
           </h3>
+
           <fieldset
             class="fieldset bg-gray-900/90 border-green-500/50 rounded-box w-full border p-4"
           >
-            <legend class="fieldset-legend">Model & Behavior Settings</legend>
+            <legend class="fieldset-legend">Model & Behavior</legend>
             <div class="space-y-4 p-2">
               <div>
-                <label for="assistant-model" class="block mb-1 text-sm"
-                  >Assistant Model *</label
-                >
+                <label
+                  for="assistant-model"
+                  class="block mb-1 text-sm flex items-center"
+                  >Assistant Model *
+                  <div
+                    class="tooltip tooltip-right"
+                    data-tip="The core model used for generating responses. A more powerful model will provide better results but will be more expensive."
+                  >
+                    <img :src="infoIcon" class="size-4 ml-1" /></div
+                ></label>
                 <select
                   id="assistant-model"
                   v-model="currentSettings.assistantModel"
@@ -154,9 +162,18 @@
               </div>
 
               <div>
-                <label for="assistant-system-prompt" class="block mb-1 text-sm"
-                  >Assistant System Prompt</label
-                >
+                <div class="flex justify-between items-center mb-1">
+                  <label for="assistant-system-prompt" class="block text-sm"
+                    >Assistant System Prompt</label
+                  >
+                  <button
+                    type="button"
+                    @click="resetSystemPrompt"
+                    class="btn btn-xs btn-ghost"
+                  >
+                    Reset
+                  </button>
+                </div>
                 <textarea
                   id="assistant-system-prompt"
                   v-model="currentSettings.assistantSystemPrompt"
@@ -168,11 +185,19 @@
 
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label for="assistant-temperature" class="block mb-1 text-sm">
+                  <label
+                    for="assistant-temperature"
+                    class="block mb-1 text-sm flex items-center"
+                  >
                     Assistant Temperature ({{
                       currentSettings.assistantTemperature.toFixed(1)
                     }})
-                  </label>
+                    <div
+                      class="tooltip tooltip-right"
+                      data-tip="Controls the randomness of the AI's responses. Higher values (e.g., 0.8) make the output more creative, while lower values (e.g., 0.2) make it more deterministic."
+                    >
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
+                  ></label>
                   <input
                     id="assistant-temperature"
                     type="range"
@@ -184,11 +209,19 @@
                   />
                 </div>
                 <div>
-                  <label for="assistant-top-p" class="block mb-1 text-sm">
+                  <label
+                    for="assistant-top-p"
+                    class="block mb-1 text-sm flex items-center"
+                  >
                     Assistant Top P ({{
                       currentSettings.assistantTopP.toFixed(1)
                     }})
-                  </label>
+                    <div
+                      class="tooltip tooltip-left"
+                      data-tip="An alternative to temperature sampling, where the model considers the results of the tokens with top-p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered."
+                    >
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
+                  ></label>
                   <input
                     id="assistant-top-p"
                     type="range"
@@ -200,12 +233,26 @@
                   />
                 </div>
               </div>
+            </div>
+          </fieldset>
 
+          <fieldset
+            class="fieldset bg-gray-900/90 border-green-500/50 rounded-box w-full border p-4"
+          >
+            <legend class="fieldset-legend">Context & Memory</legend>
+            <div class="space-y-4 p-2">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label for="max-history-messages" class="block mb-1 text-sm"
-                    >Max History Messages (API)</label
-                  >
+                  <label
+                    for="max-history-messages"
+                    class="block mb-1 text-sm flex items-center"
+                    >Max History Messages (API)
+                    <div
+                      class="tooltip tooltip-right"
+                      data-tip="The number of recent messages to send to the AI. A higher number provides more context but increases cost."
+                    >
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
+                  ></label>
                   <input
                     id="max-history-messages"
                     type="number"
@@ -217,14 +264,18 @@
                     "
                     class="input input-bordered w-full focus:input-primary"
                   />
-                  <p class="text-xs text-gray-400 mt-1">
-                    Number of recent messages sent to the API (e.g., 10-20).
-                  </p>
                 </div>
                 <div>
-                  <label for="summarization-messages" class="block mb-1 text-sm"
-                    >Summarization Message Count</label
-                  >
+                  <label
+                    for="summarization-messages"
+                    class="block mb-1 text-sm flex items-center"
+                    >Summarization Message Count
+                    <div
+                      class="tooltip tooltip-left"
+                      data-tip="The number of messages to summarize for providing context to the AI. This helps the AI remember the conversation over a longer period."
+                    >
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
+                  ></label>
                   <input
                     id="summarization-messages"
                     type="number"
@@ -234,15 +285,19 @@
                     v-model.number="currentSettings.SUMMARIZATION_MESSAGE_COUNT"
                     class="input input-bordered w-full focus:input-primary"
                   />
-                  <p class="text-xs text-gray-400 mt-1">
-                    Number of messages to summarize for context (e.g., 20-40).
-                  </p>
                 </div>
               </div>
               <div>
-                <label for="summarization-model" class="block mb-1 text-sm"
-                  >Summarization Model *</label
-                >
+                <label
+                  for="summarization-model"
+                  class="block mb-1 text-sm flex items-center"
+                  >Summarization Model *
+                  <div
+                    class="tooltip tooltip-right"
+                    data-tip="The AI model used to summarize the conversation. A smaller, faster model is recommended."
+                  >
+                    <img :src="infoIcon" class="size-4 ml-1" /></div
+                ></label>
                 <select
                   id="summarization-model"
                   v-model="currentSettings.SUMMARIZATION_MODEL"
@@ -302,7 +357,14 @@
                   System prompt to guide the summarization model.
                 </p>
               </div>
+            </div>
+          </fieldset>
 
+          <fieldset
+            class="fieldset bg-gray-900/90 border-green-500/50 rounded-box w-full border p-4"
+          >
+            <legend class="fieldset-legend">Enabled Tools</legend>
+            <div class="space-y-4 p-2">
               <div>
                 <label class="block mb-2 text-sm font-medium"
                   >Enabled Assistant Tools</label
@@ -758,14 +820,17 @@
       <div
         class="text-xs text-gray-400 mt-4 flex justify-center items-center gap-1"
       >
-        <span>Alice 
+        <span
+          >Alice
           <a
-            :href="'https://github.com/pmbstyle/Alice/releases/tag/v' + appVersion"
+            :href="
+              'https://github.com/pmbstyle/Alice/releases/tag/v' + appVersion
+            "
             target="_blank"
             class="link link-hover"
             >v{{ appVersion }}</a
-          >.
-          Built with</span>
+          >. Built with</span
+        >
         <img :src="heartIcon" class="size-3 inline-block ml-1" />
         <span
           >by
@@ -786,8 +851,9 @@ import { ref, watch, onMounted, onUnmounted, reactive, computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useSettingsStore, type AliceSettings } from '../stores/settingsStore'
 import { useConversationStore } from '../stores/conversationStore'
-import { newTabIcon, heartIcon } from '../utils/assetsImport'
+import { newTabIcon, heartIcon, infoIcon } from '../utils/assetsImport'
 import { PREDEFINED_OPENAI_TOOLS } from '../utils/assistantTools'
+import { DEFAULT_ASSISTANT_SYSTEM_PROMPT } from '../stores/settingsStore'
 
 const appVersion = ref(import.meta.env.VITE_APP_VERSION || '')
 const settingsStore = useSettingsStore()
@@ -821,7 +887,7 @@ const availableToolsForSelect = computed(() => {
 })
 
 const availableModelsForSelect = computed(() => {
-  return availableModels.value.filter(model => model.id.startsWith('gpt-'))
+  return availableModels.value
 })
 
 const toolDependencies: Record<string, string[]> = {
@@ -868,6 +934,10 @@ const mcpPlaceholder = `[
     "require_approval": "never"
   }
 ]`
+
+const resetSystemPrompt = () => {
+  currentSettings.value.assistantSystemPrompt = DEFAULT_ASSISTANT_SYSTEM_PROMPT
+}
 
 function isToolConfigured(toolName: string): boolean {
   const currentLocalSettings = currentSettings.value

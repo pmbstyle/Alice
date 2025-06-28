@@ -102,9 +102,6 @@ function setupAutoUpdaterEvents(): void {
     log.info(
       '[AutoUpdater] No update available. Current version is up to date.'
     )
-    if (info) {
-      log.info('[AutoUpdater] Update info:', info)
-    }
   })
 
   autoUpdater.on('error', err => {

@@ -16,7 +16,29 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
   const openai = getOpenAIClient()
   const modelsPage = await openai.models.list()
   return modelsPage.data
-    .filter(model => model.id.startsWith('gpt-'))
+    .filter(model => {
+      const id = model.id
+
+      const isSupportedPrefix =
+        id.startsWith('gpt-4') ||
+        id.startsWith('o1') ||
+        id.startsWith('o2') ||
+        id.startsWith('o3') ||
+        id.startsWith('o4')
+
+      const isExcluded =
+        id.includes('research') ||
+        id.includes('search') ||
+        id.includes('realtime') ||
+        id.includes('transcribe') ||
+        id.includes('audio') ||
+        id.includes('tts') ||
+        id.includes('4-') ||
+        id.includes('4.5') ||
+        id == 'gpt-4'
+
+      return isSupportedPrefix && !isExcluded
+    })
     .sort((a, b) => a.id.localeCompare(b.id))
 }
 
@@ -71,15 +93,29 @@ export const createOpenAIResponse = async (
     }
   }
 
-  finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
-  finalToolsForApi.push({ type: 'web_search_preview' })
+  const modelName = settings.assistantModel || ''
+  const isOModel = modelName.startsWith('o')
+
+  if (!isOModel) {
+    finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
+    finalToolsForApi.push({ type: 'web_search_preview' })
+  } else {
+    if(modelName.includes('o3-pro') && modelName === 'o3'){
+      finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
+      finalToolsForApi.push({ type: 'web_search_preview' })
+    }
+  }
 
   const params: OpenAI.Responses.ResponseCreateParams = {
     model: settings.assistantModel || 'gpt-4.1-mini',
     input: input,
     instructions: customInstructions || settings.assistantSystemPrompt,
-    temperature: settings.assistantTemperature,
-    top_p: settings.assistantTopP,
+    ...(isOModel
+      ? {}
+      : {
+          temperature: settings.assistantTemperature,
+          top_p: settings.assistantTopP,
+        }),
     tools: finalToolsForApi.length > 0 ? finalToolsForApi : undefined,
     previous_response_id: previousResponseId || undefined,
     stream: stream,

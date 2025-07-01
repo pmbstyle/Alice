@@ -56,7 +56,7 @@
     "electron-updater": "^6.6.2",
     "fs": "^0.0.1-security",
     "googleapis": "^149.0.0",
-    "groq-sdk": "^0.9.1",
+    "groq-sdk": "^0.26.0",
     "hnswlib-node": "^3.0.0",
     "path": "^0.12.7",
     "prettier": "^3.5.1",

@@ -9,19 +9,12 @@
       "properties": {
         "format": {
           "type": "string",
-          "enum": [
-            "full",
-            "date_only",
-            "time_only",
-            "year_only"
-          ],
+          "enum": ["full", "date_only", "time_only", "year_only"],
           "description": "The format of the datetime information to return. 'full', 'date_only', 'time_only' or 'year_only' are your options. Default is 'full' if not specified."
         }
       },
       "additionalProperties": false,
-      "required": [
-        "format"
-      ],
+      "required": ["format"],
       "additionalProperties": false
     }
   },
@@ -38,9 +31,7 @@
           "description": "The target to open. Can be an absolute file path (e.g., '/Users/(username)/file.txt'), a folder path (e.g., 'C:\\Users\\(username)\\Documents'), or a full URL (e.g., 'https://www.google.com'). User is using Windows 11, when you need to open an application define a path to it in this OS. Use this tool to open web search result url for user command."
         }
       },
-      "required": [
-        "target"
-      ],
+      "required": ["target"],
       "additionalProperties": false
     }
   },
@@ -54,10 +45,7 @@
       "properties": {
         "action": {
           "type": "string",
-          "enum": [
-            "read",
-            "write"
-          ],
+          "enum": ["read", "write"],
           "description": "Specifies the operation to perform: 'read' to get text from the clipboard, 'write' to put text onto the clipboard."
         },
         "content": {
@@ -65,9 +53,7 @@
           "description": "The text content to write to the clipboard. Required only when the action is 'write'. Ignored for 'read'."
         }
       },
-      "required": [
-        "action"
-      ],
+      "required": ["action"],
       "additionalProperties": false
     }
   },
@@ -84,9 +70,7 @@
           "description": "The name of the movie, show, or content to search for."
         }
       },
-      "required": [
-        "query"
-      ],
+      "required": ["query"],
       "additionalProperties": false
     }
   },
@@ -103,9 +87,7 @@
           "description": "The magnet link of the torrent to be added to the download queue."
         }
       },
-      "required": [
-        "magnet"
-      ],
+      "required": ["magnet"],
       "additionalProperties": false
     }
   },
@@ -126,10 +108,7 @@
           "description": "The type of memory, like 'personal', 'work', 'hobby'. Default is 'general'."
         }
       },
-      "required": [
-        "content",
-        "memoryType"
-      ],
+      "required": ["content", "memoryType"],
       "additionalProperties": false
     }
   },
@@ -146,9 +125,7 @@
           "description": "The unique ID of the memory to delete. This ID identifies exactly which memory should be removed."
         }
       },
-      "required": [
-        "id"
-      ],
+      "required": ["id"],
       "additionalProperties": false
     }
   },
@@ -207,9 +184,7 @@
           "description": "The maximum number of emails to return. Defaults to 10."
         }
       },
-      "required": [
-        "query"
-      ],
+      "required": ["query"],
       "additionalProperties": false
     }
   },
@@ -226,9 +201,7 @@
           "description": "The ID of the email message to fetch."
         }
       },
-      "required": [
-        "messageId"
-      ],
+      "required": ["messageId"],
       "additionalProperties": false
     }
   },
@@ -393,9 +366,7 @@
           "description": "The absolute path of the directory to list."
         }
       },
-      "required": [
-        "path"
-      ],
+      "required": ["path"],
       "additionalProperties": false
     }
   },
@@ -412,9 +383,7 @@
           "description": "The shell command to execute."
         }
       },
-      "required": [
-        "command"
-      ],
+      "required": ["command"],
       "additionalProperties": false
     }
   }

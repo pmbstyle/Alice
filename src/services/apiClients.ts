@@ -31,7 +31,7 @@ function initializeOpenAIClient(): void {
     console.error('OpenAI API Key is not configured.')
     throw new Error('OpenAI API Key is not configured.')
   }
-  
+
   openaiClient = new OpenAI({
     apiKey: settings.VITE_OPENAI_API_KEY,
     dangerouslyAllowBrowser: true,
@@ -51,7 +51,7 @@ function initializeGroqClient(): void {
   if (!settings.VITE_GROQ_API_KEY) {
     console.warn('Groq API Key is not set. STT functionality will fail.')
   }
-  
+
   groqClient = new Groq({
     apiKey: settings.VITE_GROQ_API_KEY,
     dangerouslyAllowBrowser: true,
@@ -60,7 +60,7 @@ function initializeGroqClient(): void {
 
 export function reinitializeClients(): void {
   console.log('Reinitializing API clients with updated settings...')
-  
+
   try {
     initializeOpenAIClient()
     console.log('OpenAI client reinitialized successfully')
@@ -68,7 +68,7 @@ export function reinitializeClients(): void {
     console.error('Failed to reinitialize OpenAI client:', error)
     openaiClient = null
   }
-  
+
   try {
     initializeGroqClient()
     console.log('Groq client reinitialized successfully')

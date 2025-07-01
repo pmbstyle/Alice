@@ -40,7 +40,7 @@ async function onMouseUp(e) {
     selectionBox = null
     return
   }
-  
+
   document.body.removeChild(selectionBox)
   selectionBox = null
 

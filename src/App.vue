@@ -2,6 +2,13 @@
   <OnboardingWizard v-if="showOnboarding" />
   <Main v-else-if="!showOverlay" />
   <Overlay v-else />
+  <CommandApprovalDialog
+    :is-visible="commandApprovalVisible"
+    :command="pendingCommand"
+    :is-minified="generalStore.isMinimized"
+    @approve="handleCommandApproval"
+    @cancel="handleCommandCancel"
+  />
   <div
     role="alert"
     class="alert alert-vertical sm:alert-horizontal update-notification"
@@ -40,11 +47,14 @@ import { useRoute } from 'vue-router'
 import Main from './components/Main.vue'
 import Overlay from './components/Overlay.vue'
 import OnboardingWizard from './components/OnboardingWizard.vue'
+import CommandApprovalDialog from './components/CommandApprovalDialog.vue'
 import { useSettingsStore } from './stores/settingsStore'
+import { useGeneralStore } from './stores/generalStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const route = useRoute()
 const settingsStore = useSettingsStore()
+const generalStore = useGeneralStore()
 
 const showOverlay = computed(() => {
   return route.hash === '#overlay'
@@ -57,12 +67,51 @@ const showOnboarding = computed(() => {
 const updateAvailable = ref(false)
 const updateInfo = ref<any>({})
 
+const commandApprovalVisible = ref(false)
+const pendingCommand = ref('')
+const commandApprovalResolve = ref<(value: any) => void>()
+
 const installUpdate = () => {
   window.ipcRenderer.send('restart-and-install-update')
 }
 
+const handleCommandApproval = (
+  approvalType: 'once' | 'session' | 'forever'
+) => {
+  commandApprovalVisible.value = false
+  const commandName = pendingCommand.value.split(' ')[0]
+
+  if (approvalType === 'forever') {
+    settingsStore.addApprovedCommand(commandName)
+  } else if (approvalType === 'session') {
+    settingsStore.addSessionApprovedCommand(commandName)
+  }
+
+  if (commandApprovalResolve.value) {
+    commandApprovalResolve.value({ approved: true, approvalType })
+  }
+}
+
+const handleCommandCancel = () => {
+  commandApprovalVisible.value = false
+  if (commandApprovalResolve.value) {
+    commandApprovalResolve.value({ approved: false })
+  }
+}
+
+const requestCommandApproval = (command: string): Promise<any> => {
+  return new Promise(resolve => {
+    pendingCommand.value = command
+    commandApprovalVisible.value = true
+    commandApprovalResolve.value = resolve
+  })
+}
+
 onMounted(async () => {
   await settingsStore.loadSettings()
+
+  // Expose command approval function globally
+  ;(window as any).requestCommandApproval = requestCommandApproval
 
   if (window.ipcRenderer) {
     window.ipcRenderer.on('update-downloaded', (event, info) => {

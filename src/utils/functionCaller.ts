@@ -723,29 +723,54 @@ async function get_email_content(
   }
 }
 
-async function list_directory(args: ListDirectoryArgs): Promise<FunctionResult> {
+async function list_directory(
+  args: ListDirectoryArgs
+): Promise<FunctionResult> {
   try {
-    const result = await window.ipcRenderer.invoke('desktop:listDirectory', args.path);
+    const result = await window.ipcRenderer.invoke(
+      'desktop:listDirectory',
+      args.path
+    )
     if (result.success) {
-      return { success: true, data: result.files };
+      return { success: true, data: result.files }
     } else {
-      return { success: false, error: result.error };
+      return { success: false, error: result.error }
     }
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: error.message }
   }
 }
 
-async function execute_command(args: ExecuteCommandArgs): Promise<FunctionResult> {
+async function execute_command(
+  args: ExecuteCommandArgs
+): Promise<FunctionResult> {
   try {
-    const result = await window.ipcRenderer.invoke('desktop:executeCommand', args.command);
+    const settingsStore = useSettingsStore()
+    const commandName = args.command.split(' ')[0]
+
+    // Check if command is already approved
+    if (!settingsStore.isCommandApproved(args.command)) {
+      // Request approval from user
+      const approvalResult = await (window as any).requestCommandApproval(
+        args.command
+      )
+
+      if (!approvalResult.approved) {
+        return { success: false, error: 'Command execution denied by user' }
+      }
+    }
+
+    const result = await window.ipcRenderer.invoke(
+      'desktop:executeCommand',
+      args.command
+    )
     if (result.success) {
-      return { success: true, data: result.output };
+      return { success: true, data: result.output }
     } else {
-      return { success: false, error: result.error };
+      return { success: false, error: result.error }
     }
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: error.message }
   }
 }
 

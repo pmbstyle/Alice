@@ -46,6 +46,14 @@
         >
           🔌 Integrations
         </button>
+        <button
+          type="button"
+          class="tab"
+          :class="{ 'tab-active': activeTab === 'security' }"
+          @click="activeTab = 'security'"
+        >
+          🔒 Security
+        </button>
       </div>
 
       <div>
@@ -752,6 +760,84 @@
             </div>
           </fieldset>
         </div>
+
+        <div v-if="activeTab === 'security'" class="space-y-6">
+          <h3 class="text-xl font-semibold mb-4 text-red-400">
+            Security & Command Permissions
+          </h3>
+
+          <fieldset
+            class="fieldset bg-gray-900/90 border-red-500/50 rounded-box w-full border p-4"
+          >
+            <legend class="fieldset-legend">Approved Commands</legend>
+            <div class="p-2 space-y-4">
+              <div class="text-sm text-gray-300 mb-4">
+                These commands can be executed by Alice without requiring
+                approval. Commands approved "for session" are shown in the
+                current session column.
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="table table-zebra table-sm w-full">
+                  <thead>
+                    <tr>
+                      <th>Command</th>
+                      <th>Approval Type</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="command in settingsStore.settings.approvedCommands"
+                      :key="command"
+                    >
+                      <td class="font-mono text-sm">{{ command }}</td>
+                      <td>
+                        <span class="badge badge-success badge-sm"
+                          >Permanent</span
+                        >
+                      </td>
+                      <td>
+                        <button
+                          @click="removeCommand(command)"
+                          class="btn btn-error btn-xs"
+                          title="Remove command"
+                        >
+                          ✗
+                        </button>
+                      </td>
+                    </tr>
+                    <tr
+                      v-for="command in settingsStore.sessionApprovedCommands"
+                      :key="'session-' + command"
+                    >
+                      <td class="font-mono text-sm">{{ command }}</td>
+                      <td>
+                        <span class="badge badge-info badge-sm">Session</span>
+                      </td>
+                      <td>
+                        <span class="text-xs text-gray-500"
+                          >Auto-removed on restart</span
+                        >
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                v-if="
+                  settingsStore.settings.approvedCommands.length === 0 &&
+                  settingsStore.sessionApprovedCommands.length === 0
+                "
+                class="text-center py-4 text-gray-400"
+              >
+                No approved commands. Commands will require approval before
+                execution.
+              </div>
+            </div>
+          </fieldset>
+        </div>
       </div>
 
       <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
@@ -860,7 +946,9 @@ const settingsStore = useSettingsStore()
 const conversationStore = useConversationStore()
 
 const currentSettings = ref<AliceSettings>({ ...settingsStore.config })
-const activeTab = ref<'core' | 'assistant' | 'hotkeys' | 'integrations'>('core')
+const activeTab = ref<
+  'core' | 'assistant' | 'hotkeys' | 'integrations' | 'security'
+>('core')
 
 const isRecordingHotkeyFor = ref<keyof AliceSettings | null>(null)
 const activeRecordingKeys = ref<Set<string>>(new Set())
@@ -1248,5 +1336,9 @@ const handleSaveAndTestSettings = async () => {
   }
 
   await settingsStore.saveAndTestSettings()
+}
+
+const removeCommand = async (command: string) => {
+  await settingsStore.removeApprovedCommand(command)
 }
 </script>

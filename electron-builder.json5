@@ -7,20 +7,20 @@
   directories: {
     output: 'release/${version}',
   },
-  "publish": [
+  publish: [
     {
-      "provider": "github",
-      "owner": "pmbstyle",
-      "repo": "Alice",
-      "releaseType": "release"
-    }
+      provider: 'github',
+      owner: 'pmbstyle',
+      repo: 'Alice',
+      releaseType: 'release',
+    },
   ],
   files: ['dist', 'dist-electron'],
-  "extraResources": [
+  extraResources: [
     {
-      "from": "./app-config.json",
-      "to": "app-config.json"
-    }
+      from: './app-config.json',
+      to: 'app-config.json',
+    },
   ],
   mac: {
     target: ['dmg'],

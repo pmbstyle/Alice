@@ -59,7 +59,10 @@
       </div>
     </div>
 
-    <div class="w-full pt-4 pr-4" v-if="sideBarView === 'chat' && isConversationReady">
+    <div
+      class="w-full pt-4 pr-4"
+      v-if="sideBarView === 'chat' && isConversationReady"
+    >
       <div
         class="gradient-border-wrapper"
         :class="{ 'opacity-50': !isConversationReady }"

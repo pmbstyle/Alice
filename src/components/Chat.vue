@@ -230,4 +230,30 @@ const handleChatClick = (event: MouseEvent) => {
 .final-image img {
   border: 2px solid #5865f2;
 }
+
+.chat-bubble {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.chat-bubble * {
+  word-break: break-word;
+  overflow-wrap: break-word;
+  max-width: 100%;
+}
+
+.chat-bubble p, 
+.chat-bubble div, 
+.chat-bubble span,
+.chat-bubble code {
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+.chat-bubble pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
 </style>

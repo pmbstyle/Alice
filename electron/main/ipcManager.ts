@@ -20,8 +20,20 @@ import {
 import * as googleAuthManager from './googleAuthManager'
 import * as googleCalendarManager from './googleCalendarManager'
 import * as googleGmailManager from './googleGmailManager'
-import { getMainWindow, resizeMainWindow, minimizeMainWindow, showOverlay, hideOverlay, focusMainWindow, getRendererDist } from './windowManager'
-import { registerMicrophoneToggleHotkey, registerMutePlaybackHotkey, registerTakeScreenshotHotkey } from './hotkeyManager'
+import {
+  getMainWindow,
+  resizeMainWindow,
+  minimizeMainWindow,
+  showOverlay,
+  hideOverlay,
+  focusMainWindow,
+  getRendererDist,
+} from './windowManager'
+import {
+  registerMicrophoneToggleHotkey,
+  registerMutePlaybackHotkey,
+  registerTakeScreenshotHotkey,
+} from './hotkeyManager'
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_DIR_NAME = 'generated_images'
@@ -392,7 +404,7 @@ export function registerIPCHandlers(): void {
   )
 
   // Image management
-   ipcMain.handle('image:save-generated', async (event, base64Data: string) => {
+  ipcMain.handle('image:save-generated', async (event, base64Data: string) => {
     try {
       await mkdir(GENERATED_IMAGES_FULL_PATH, { recursive: true })
 
@@ -434,41 +446,53 @@ export function registerIPCHandlers(): void {
   })
 
   // Save image from base64 for streaming image generation
-  ipcMain.handle('save-image-from-base64', async (event, args: { 
-    base64Data: string; 
-    fileName: string; 
-    isPartial: boolean;
-  }) => {
-    try {
-      await mkdir(GENERATED_IMAGES_FULL_PATH, { recursive: true })
-
-      const absoluteFilePath = path.join(GENERATED_IMAGES_FULL_PATH, args.fileName)
-      const relativeImagePath = args.fileName
-
-      await writeFile(absoluteFilePath, Buffer.from(args.base64Data, 'base64'))
-
-      console.log(
-        `[Main IPC save-image-from-base64] ${args.isPartial ? 'Partial' : 'Final'} image saved to:`,
-        absoluteFilePath
-      )
-      
-      return {
-        success: true,
-        fileName: args.fileName,
-        absolutePath: absoluteFilePath,
-        relativePath: relativeImagePath,
+  ipcMain.handle(
+    'save-image-from-base64',
+    async (
+      event,
+      args: {
+        base64Data: string
+        fileName: string
+        isPartial: boolean
       }
-    } catch (error: any) {
-      console.error(
-        '[Main IPC save-image-from-base64] Error saving image:',
-        error.message
-      )
-      return {
-        success: false,
-        error: `Failed to save image: ${error.message}`,
+    ) => {
+      try {
+        await mkdir(GENERATED_IMAGES_FULL_PATH, { recursive: true })
+
+        const absoluteFilePath = path.join(
+          GENERATED_IMAGES_FULL_PATH,
+          args.fileName
+        )
+        const relativeImagePath = args.fileName
+
+        await writeFile(
+          absoluteFilePath,
+          Buffer.from(args.base64Data, 'base64')
+        )
+
+        console.log(
+          `[Main IPC save-image-from-base64] ${args.isPartial ? 'Partial' : 'Final'} image saved to:`,
+          absoluteFilePath
+        )
+
+        return {
+          success: true,
+          fileName: args.fileName,
+          absolutePath: absoluteFilePath,
+          relativePath: relativeImagePath,
+        }
+      } catch (error: any) {
+        console.error(
+          '[Main IPC save-image-from-base64] Error saving image:',
+          error.message
+        )
+        return {
+          success: false,
+          error: `Failed to save image: ${error.message}`,
+        }
       }
     }
-  })
+  )
 
   // System integration
   ipcMain.handle(

@@ -100,7 +100,7 @@ export const createOpenAIResponse = async (
     finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
     finalToolsForApi.push({ type: 'web_search_preview' })
   } else {
-    if(modelName.includes('o3-pro') && modelName === 'o3'){
+    if (modelName.includes('o3-pro') && modelName === 'o3') {
       finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
       finalToolsForApi.push({ type: 'web_search_preview' })
     }

@@ -15,6 +15,6 @@
 .avatar.open {
   @apply pr-[505px];
 }
-.avatar:hover .inside-actions{
-  opacity:1;
+.avatar:hover .inside-actions {
+  opacity: 1;
 }

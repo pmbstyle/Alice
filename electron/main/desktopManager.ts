@@ -1,50 +1,46 @@
-
-import { ipcMain } from 'electron';
-import fs from 'fs/promises';
-import path from 'path';
-import { exec } from 'child_process';
-
-const ALLOWED_COMMANDS = ['ls', 'dir'];
+import { ipcMain } from 'electron'
+import fs from 'fs/promises'
+import path from 'path'
+import { exec } from 'child_process'
 
 class DesktopManager {
   constructor() {
-    this.registerIpcHandlers();
+    this.registerIpcHandlers()
   }
 
   private registerIpcHandlers() {
     ipcMain.handle('desktop:listDirectory', async (event, dirPath) => {
       try {
-        const files = await fs.readdir(dirPath);
-        return { success: true, files };
+        const files = await fs.readdir(dirPath)
+        return { success: true, files }
       } catch (error) {
-        console.error('Error listing directory:', error);
-        return { success: false, error: error.message };
+        console.error('Error listing directory:', error)
+        return { success: false, error: error.message }
       }
-    });
+    })
 
     ipcMain.handle('desktop:executeCommand', async (event, command) => {
-      const commandName = command.split(' ')[0];
-      if (!ALLOWED_COMMANDS.includes(commandName)) {
-        return { success: false, error: `Command not allowed: ${commandName}` };
-      }
-
-      return new Promise((resolve) => {
+      return new Promise(resolve => {
         exec(command, (error, stdout, stderr) => {
           if (error) {
-            console.error(`Error executing command: ${command}`, error);
-            resolve({ success: false, error: error.message });
-            return;
+            console.error(`Error executing command: ${command}`, error)
+            resolve({ success: false, error: error.message })
+            return
           }
           if (stderr) {
-            console.error(`Command stderr: ${command}`, stderr);
-            resolve({ success: false, error: stderr });
-            return;
+            console.error(`Command stderr: ${command}`, stderr)
+            resolve({ success: false, error: stderr })
+            return
           }
-          resolve({ success: true, output: stdout });
-        });
-      });
-    });
+          resolve({ success: true, output: stdout })
+        })
+      })
+    })
+
+    ipcMain.handle('desktop:requestCommandApproval', async (event, command) => {
+      return { needsApproval: true, command }
+    })
   }
 }
 
-export default DesktopManager;
+export default DesktopManager

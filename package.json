@@ -41,7 +41,7 @@
     "postcss": "^8.5.3",
     "tailwindcss": "^4.1.4",
     "typescript": "^5.4.2",
-    "vite": "^6.3.4",
+    "vite": "^7.0.0",
     "vite-plugin-electron": "^0.29.0",
     "vite-plugin-electron-renderer": "^0.14.5",
     "vite-plugin-static-copy": "^3.0.0",

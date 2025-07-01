@@ -51,6 +51,14 @@ interface GetEmailContentArgs {
   messageId: string
 }
 
+interface ListDirectoryArgs {
+  path: string
+}
+
+interface ExecuteCommandArgs {
+  command: string
+}
+
 async function save_memory(args: SaveMemoryArgs) {
   if (!args.content) {
     return { success: false, error: 'Content is required.' }
@@ -715,6 +723,32 @@ async function get_email_content(
   }
 }
 
+async function list_directory(args: ListDirectoryArgs): Promise<FunctionResult> {
+  try {
+    const result = await window.ipcRenderer.invoke('desktop:listDirectory', args.path);
+    if (result.success) {
+      return { success: true, data: result.files };
+    } else {
+      return { success: false, error: result.error };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+async function execute_command(args: ExecuteCommandArgs): Promise<FunctionResult> {
+  try {
+    const result = await window.ipcRenderer.invoke('desktop:executeCommand', args.command);
+    if (result.success) {
+      return { success: true, data: result.output };
+    } else {
+      return { success: false, error: result.error };
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 /**
  * Helpers for parsing torrent data.
  */
@@ -821,6 +855,8 @@ const functionRegistry: {
   get_unread_emails,
   search_emails,
   get_email_content,
+  list_directory,
+  execute_command,
 }
 
 const functionSchemas = {
@@ -841,6 +877,8 @@ const functionSchemas = {
   get_unread_emails: { required: [] },
   search_emails: { required: ['query'] },
   get_email_content: { required: ['messageId'] },
+  list_directory: { required: ['path'] },
+  execute_command: { required: ['command'] },
 }
 
 /**

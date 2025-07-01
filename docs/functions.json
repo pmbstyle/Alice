@@ -379,5 +379,43 @@
       "required": ["eventId"],
       "additionalProperties": false
     }
+  },
+  {
+    "type": "function",
+    "name": "list_directory",
+    "description": "Lists the files and folders in a specified directory on the user's computer. Use this to explore the file system.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The absolute path of the directory to list."
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "execute_command",
+    "description": "Executes a shell command on the user's computer. For security, only a limited set of commands are allowed. Use this to perform simple tasks like getting the current IP address or running a script.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The shell command to execute."
+        }
+      },
+      "required": [
+        "command"
+      ],
+      "additionalProperties": false
+    }
   }
 ]

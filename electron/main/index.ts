@@ -23,6 +23,7 @@ import {
 } from './hotkeyManager'
 import { initializeUpdater, checkForUpdates } from './updaterManager'
 import { registerAuthIPCHandlers, stopAuthServer } from './authManager'
+import DesktopManager from './desktopManager'
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_FULL_PATH = path.join(USER_DATA_PATH, 'generated_images')
@@ -38,6 +39,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 function initializeManagers(): void {
+  new DesktopManager()
   initializeUpdater()
 
   registerIPCHandlers()

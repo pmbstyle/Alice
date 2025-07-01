@@ -1,8 +1,5 @@
 <template>
   <div class="settings-panel p-4 h-full overflow-y-auto text-white">
-    <h2 class="text-2xl font-semibold mb-6 text-center">
-      Application Settings
-    </h2>
 
     <div
       v-if="settingsStore.isLoading && !settingsStore.initialLoadAttempted"
@@ -13,14 +10,14 @@
     </div>
 
     <form @submit.prevent="handleSaveAndTestSettings" v-else class="space-y-6">
-      <div class="tabs tabs-border tabs-lg w-full mb-6">
+      <div class="tabs justify-between mb-6 tabs-box flex-wrap">
         <button
           type="button"
           class="tab"
           :class="{ 'tab-active': activeTab === 'core' }"
           @click="activeTab = 'core'"
         >
-          🔑 Core APIs
+          🔑 Core
         </button>
         <button
           type="button"
@@ -28,7 +25,7 @@
           :class="{ 'tab-active': activeTab === 'assistant' }"
           @click="activeTab = 'assistant'"
         >
-          🤖 Assistant
+          🤖 AI
         </button>
         <button
           type="button"
@@ -36,7 +33,7 @@
           :class="{ 'tab-active': activeTab === 'hotkeys' }"
           @click="activeTab = 'hotkeys'"
         >
-          ⌨️ Hotkeys
+          ⌨️ Keys
         </button>
         <button
           type="button"
@@ -44,7 +41,7 @@
           :class="{ 'tab-active': activeTab === 'integrations' }"
           @click="activeTab = 'integrations'"
         >
-          🔌 Integrations
+          🔌 Apps
         </button>
         <button
           type="button"
@@ -52,7 +49,7 @@
           :class="{ 'tab-active': activeTab === 'security' }"
           @click="activeTab = 'security'"
         >
-          🔒 Security
+          🔒 Permissions
         </button>
       </div>
 

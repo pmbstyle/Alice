@@ -110,7 +110,6 @@ const requestCommandApproval = (command: string): Promise<any> => {
 onMounted(async () => {
   await settingsStore.loadSettings()
 
-  // Expose command approval function globally
   ;(window as any).requestCommandApproval = requestCommandApproval
 
   if (window.ipcRenderer) {

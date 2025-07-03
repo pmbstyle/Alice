@@ -748,9 +748,7 @@ async function execute_command(
     const settingsStore = useSettingsStore()
     const commandName = args.command.split(' ')[0]
 
-    // Check if command is already approved
     if (!settingsStore.isCommandApproved(args.command)) {
-      // Request approval from user
       const approvalResult = await (window as any).requestCommandApproval(
         args.command
       )

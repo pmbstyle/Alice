@@ -1,9 +1,5 @@
 <template>
   <div class="settings-panel p-4 h-full overflow-y-auto text-white">
-    <h2 class="text-2xl font-semibold mb-6 text-center">
-      Application Settings
-    </h2>
-
     <div
       v-if="settingsStore.isLoading && !settingsStore.initialLoadAttempted"
       class="text-center p-4"
@@ -13,14 +9,14 @@
     </div>
 
     <form @submit.prevent="handleSaveAndTestSettings" v-else class="space-y-6">
-      <div class="tabs tabs-border tabs-lg w-full mb-6">
+      <div class="tabs justify-between mb-6 tabs-box flex-wrap">
         <button
           type="button"
           class="tab"
           :class="{ 'tab-active': activeTab === 'core' }"
           @click="activeTab = 'core'"
         >
-          🔑 Core APIs
+          🔑 Core
         </button>
         <button
           type="button"
@@ -28,7 +24,7 @@
           :class="{ 'tab-active': activeTab === 'assistant' }"
           @click="activeTab = 'assistant'"
         >
-          🤖 Assistant
+          🤖 AI
         </button>
         <button
           type="button"
@@ -36,7 +32,7 @@
           :class="{ 'tab-active': activeTab === 'hotkeys' }"
           @click="activeTab = 'hotkeys'"
         >
-          ⌨️ Hotkeys
+          ⌨️ Keys
         </button>
         <button
           type="button"
@@ -44,7 +40,15 @@
           :class="{ 'tab-active': activeTab === 'integrations' }"
           @click="activeTab = 'integrations'"
         >
-          🔌 Integrations
+          🔌 Apps
+        </button>
+        <button
+          type="button"
+          class="tab"
+          :class="{ 'tab-active': activeTab === 'security' }"
+          @click="activeTab = 'security'"
+        >
+          🔒 Permissions
         </button>
       </div>
 
@@ -644,15 +648,7 @@
           <fieldset
             class="fieldset bg-gray-900/90 border-cyan-500/50 rounded-box w-full border p-4"
           >
-            <legend class="fieldset-legend">
-              Remote MCP Servers
-              <a href="#" target="_blank" class="ml-2">
-                <span class="badge badge-sm badge-soft whitespace-nowrap">
-                  MCP Info
-                  <img :src="newTabIcon" class="size-3 inline-block ml-1" />
-                </span>
-              </a>
-            </legend>
+            <legend class="fieldset-legend">Remote MCP Servers</legend>
             <div class="p-2 space-y-4">
               <div>
                 <label for="mcp-servers-config" class="block mb-1 text-sm">
@@ -667,9 +663,13 @@
                 ></textarea>
                 <p class="text-xs text-gray-400 mt-1">
                   Enter a JSON array of MCP server configurations. Each object
-                  should follow the OpenAI MCP tool format. Refer to MCP
-                  documentation for details on fields like server_label,
-                  server_url, require_approval, allowed_tools, and headers.
+                  should follow the
+                  <a
+                    href="https://cookbook.openai.com/examples/mcp/mcp_tool_guide"
+                    target="_blank"
+                    class="link link-hover"
+                    >OpenAI MCP tool format</a
+                  >.
                 </p>
               </div>
             </div>
@@ -748,6 +748,84 @@
                   class="input focus:outline-none w-full"
                   autocomplete="new-password"
                 />
+              </div>
+            </div>
+          </fieldset>
+        </div>
+
+        <div v-if="activeTab === 'security'" class="space-y-6">
+          <h3 class="text-xl font-semibold mb-4 text-red-400">
+            Security & Command Permissions
+          </h3>
+
+          <fieldset
+            class="fieldset bg-gray-900/90 border-red-500/50 rounded-box w-full border p-4"
+          >
+            <legend class="fieldset-legend">Approved Commands</legend>
+            <div class="p-2 space-y-4">
+              <div class="text-sm text-gray-300 mb-4">
+                These commands can be executed by Alice without requiring
+                approval. Commands approved "for session" are shown in the
+                current session column.
+              </div>
+
+              <div class="overflow-x-auto">
+                <table class="table table-zebra table-sm w-full">
+                  <thead>
+                    <tr>
+                      <th>Command</th>
+                      <th>Approval Type</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="command in settingsStore.settings.approvedCommands"
+                      :key="command"
+                    >
+                      <td class="font-mono text-sm">{{ command }}</td>
+                      <td>
+                        <span class="badge badge-success badge-sm"
+                          >Permanent</span
+                        >
+                      </td>
+                      <td>
+                        <button
+                          @click="removeCommand(command)"
+                          class="btn btn-error btn-xs"
+                          title="Remove command"
+                        >
+                          ✗
+                        </button>
+                      </td>
+                    </tr>
+                    <tr
+                      v-for="command in settingsStore.sessionApprovedCommands"
+                      :key="'session-' + command"
+                    >
+                      <td class="font-mono text-sm">{{ command }}</td>
+                      <td>
+                        <span class="badge badge-info badge-sm">Session</span>
+                      </td>
+                      <td>
+                        <span class="text-xs text-gray-500"
+                          >Auto-removed on restart</span
+                        >
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                v-if="
+                  settingsStore.settings.approvedCommands.length === 0 &&
+                  settingsStore.sessionApprovedCommands.length === 0
+                "
+                class="text-center py-4 text-gray-400"
+              >
+                No approved commands. Commands will require approval before
+                execution.
               </div>
             </div>
           </fieldset>
@@ -860,7 +938,9 @@ const settingsStore = useSettingsStore()
 const conversationStore = useConversationStore()
 
 const currentSettings = ref<AliceSettings>({ ...settingsStore.config })
-const activeTab = ref<'core' | 'assistant' | 'hotkeys' | 'integrations'>('core')
+const activeTab = ref<
+  'core' | 'assistant' | 'hotkeys' | 'integrations' | 'security'
+>('core')
 
 const isRecordingHotkeyFor = ref<keyof AliceSettings | null>(null)
 const activeRecordingKeys = ref<Set<string>>(new Set())
@@ -1248,5 +1328,9 @@ const handleSaveAndTestSettings = async () => {
   }
 
   await settingsStore.saveAndTestSettings()
+}
+
+const removeCommand = async (command: string) => {
+  await settingsStore.removeApprovedCommand(command)
 }
 </script>

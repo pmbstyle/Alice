@@ -45,6 +45,7 @@ export interface AliceSettings {
   VITE_QB_USERNAME: string
   VITE_QB_PASSWORD: string
 
+  approvedCommands: string[]
   onboardingCompleted: boolean
 }
 
@@ -74,6 +75,7 @@ const defaultSettings: AliceSettings = {
   VITE_QB_USERNAME: '',
   VITE_QB_PASSWORD: '',
 
+  approvedCommands: ['ls', 'dir'],
   onboardingCompleted: false,
 }
 
@@ -101,6 +103,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_QB_USERNAME: 'qBittorrent Username',
   VITE_QB_PASSWORD: 'qBittorrent Password',
   mcpServersConfig: 'MCP Servers JSON Configuration',
+  approvedCommands: 'Approved Commands',
   onboardingCompleted: 'Onboarding Completed',
 }
 
@@ -114,6 +117,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const successMessage = ref<string | null>(null)
   const initialLoadAttempted = ref(false)
   const coreOpenAISettingsValid = ref(false)
+  const sessionApprovedCommands = ref<string[]>([])
 
   const isProduction = computed(() => import.meta.env.PROD)
 
@@ -341,14 +345,36 @@ export const useSettingsStore = defineStore('settings', () => {
     error.value = null
     try {
       const plainSettings: AliceSettings = {
-        ...settings.value,
+        VITE_OPENAI_API_KEY: settings.value.VITE_OPENAI_API_KEY,
+        VITE_GROQ_API_KEY: settings.value.VITE_GROQ_API_KEY,
+        sttProvider: settings.value.sttProvider,
+        assistantModel: settings.value.assistantModel,
+        assistantSystemPrompt: settings.value.assistantSystemPrompt,
+        assistantTemperature: settings.value.assistantTemperature,
+        assistantTopP: settings.value.assistantTopP,
         assistantTools: Array.from(settings.value.assistantTools || []),
+        mcpServersConfig: settings.value.mcpServersConfig,
+        MAX_HISTORY_MESSAGES_FOR_API: settings.value.MAX_HISTORY_MESSAGES_FOR_API,
+        SUMMARIZATION_MESSAGE_COUNT: settings.value.SUMMARIZATION_MESSAGE_COUNT,
+        SUMMARIZATION_MODEL: settings.value.SUMMARIZATION_MODEL,
+        SUMMARIZATION_SYSTEM_PROMPT: settings.value.SUMMARIZATION_SYSTEM_PROMPT,
+        microphoneToggleHotkey: settings.value.microphoneToggleHotkey,
+        mutePlaybackHotkey: settings.value.mutePlaybackHotkey,
+        takeScreenshotHotkey: settings.value.takeScreenshotHotkey,
+        VITE_JACKETT_API_KEY: settings.value.VITE_JACKETT_API_KEY,
+        VITE_JACKETT_URL: settings.value.VITE_JACKETT_URL,
+        VITE_QB_URL: settings.value.VITE_QB_URL,
+        VITE_QB_USERNAME: settings.value.VITE_QB_USERNAME,
+        VITE_QB_PASSWORD: settings.value.VITE_QB_PASSWORD,
+        approvedCommands: Array.from(settings.value.approvedCommands || []),
+        onboardingCompleted: settings.value.onboardingCompleted,
       }
 
       const saveResult = await window.settingsAPI.saveSettings(plainSettings)
 
       if (saveResult.success) {
         console.log('[SettingsStore] Settings saved to file successfully.')
+        isSaving.value = false
         return true
       } else {
         error.value = `Failed to save settings to file: ${saveResult.error || 'Unknown error'}`
@@ -490,6 +516,38 @@ export const useSettingsStore = defineStore('settings', () => {
     return success
   }
 
+  function addApprovedCommand(command: string) {
+    const commandName = command.split(' ')[0]
+    if (!settings.value.approvedCommands.includes(commandName)) {
+      settings.value.approvedCommands.push(commandName)
+      saveSettingsToFile()
+    }
+  }
+
+  function addSessionApprovedCommand(command: string) {
+    const commandName = command.split(' ')[0]
+    if (!sessionApprovedCommands.value.includes(commandName)) {
+      sessionApprovedCommands.value.push(commandName)
+    }
+  }
+
+  function isCommandApproved(command: string): boolean {
+    const commandName = command.split(' ')[0]
+    return (
+      settings.value.approvedCommands.includes(commandName) ||
+      sessionApprovedCommands.value.includes(commandName)
+    )
+  }
+
+  async function removeApprovedCommand(command: string) {
+    const commandName = command.split(' ')[0]
+    const index = settings.value.approvedCommands.indexOf(commandName)
+    if (index > -1) {
+      settings.value.approvedCommands.splice(index, 1)
+      await saveSettingsToFile()
+    }
+  }
+
   return {
     settings,
     isLoading,
@@ -498,6 +556,7 @@ export const useSettingsStore = defineStore('settings', () => {
     successMessage,
     initialLoadAttempted,
     coreOpenAISettingsValid,
+    sessionApprovedCommands,
     isProduction,
     areEssentialSettingsProvided,
     areCoreApiKeysSufficientForTesting,
@@ -507,5 +566,9 @@ export const useSettingsStore = defineStore('settings', () => {
     saveSettingsToFile,
     saveAndTestSettings,
     completeOnboarding,
+    addApprovedCommand,
+    addSessionApprovedCommand,
+    isCommandApproved,
+    removeApprovedCommand,
   }
 })

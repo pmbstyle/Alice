@@ -1,9 +1,9 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 @plugin "daisyui";
-@import "./css/main.css";
-@import "./css/chat.css";
-@import "./css/actions.css";
-@import "./css/settings.css";
+@import './css/main.css';
+@import './css/chat.css';
+@import './css/actions.css';
+@import './css/settings.css';
 
 html {
   background: transparent !important;

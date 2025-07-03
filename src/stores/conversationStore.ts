@@ -509,7 +509,7 @@ export const useConversationStore = defineStore('conversation', () => {
     const functionName = toolCall.name
     const functionArgs = toolCall.arguments as object
 
-    const toolStatusMessage = getToolStatusMessage(functionName)
+    const toolStatusMessage = getToolStatusMessage(functionName, functionArgs)
     generalStore.addMessageToHistory({
       role: 'system',
       content: [{ type: 'app_text', text: toolStatusMessage }],
@@ -700,8 +700,8 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  function getToolStatusMessage(toolName: string): string {
-    const messages: Record<string, string> = {
+  function getToolStatusMessage(toolName: string, args?: object): string {
+    const messages: Record<string, string | ((args: any) => string)> = {
       get_current_datetime: '🕒 Looking at the clock...',
       open_path: '📂 Opening that for you...',
       manage_clipboard: '📋 Working with your clipboard...',
@@ -717,8 +717,15 @@ export const useConversationStore = defineStore('conversation', () => {
       get_unread_emails: '📧 Looking for unread emails...',
       search_emails: '📧 Searching emails...',
       get_email_content: '📧 Reading email content...',
+      execute_command: (args: any) => `💻 Executing: ${args?.command || 'command'}`,
+      list_directory: (args: any) => `📁 Listing: ${args?.path || 'directory'}`,
     }
-    return messages[toolName] || `⚙️ Using tool: ${toolName}...`
+    
+    const message = messages[toolName]
+    if (typeof message === 'function') {
+      return message(args)
+    }
+    return message || `⚙️ Using tool: ${toolName}...`
   }
 
   return {

@@ -3,6 +3,11 @@ import {
   initializeThoughtVectorStore,
   ensureSaveOnQuit as ensureThoughtStoreSave,
 } from './thoughtVectorStore'
+import {
+  initializeSchedulerDB,
+  loadAndScheduleAllTasks,
+  shutdownScheduler,
+} from './schedulerManager'
 import { loadSettings } from './settingsManager'
 import path from 'node:path'
 import os from 'node:os'
@@ -98,6 +103,15 @@ app.whenReady().then(async () => {
     )
   }
 
+  try {
+    console.log('[Main App Ready] Initializing Task Scheduler...')
+    initializeSchedulerDB()
+    await loadAndScheduleAllTasks()
+    console.log('[Main App Ready] Task Scheduler initialization complete.')
+  } catch (error) {
+    console.error('[Main App Ready] ERROR during Task Scheduler initialization:', error)
+  }
+
   await createMainWindow()
   await createOverlayWindow()
   checkForUpdates()
@@ -110,6 +124,7 @@ app.on('before-quit', async event => {
   isHandlingQuit = true
   unregisterAllHotkeys()
   stopAuthServer()
+  shutdownScheduler()
   console.log('[Main Index] Before quit: Performing cleanup...')
   event.preventDefault()
 

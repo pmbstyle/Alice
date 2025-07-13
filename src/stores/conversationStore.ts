@@ -18,6 +18,9 @@ export interface AppChatMessageContentPart {
   partialIndex?: number
   fileId?: string
   fileName?: string
+  isScheduledReminder?: boolean
+  taskName?: string
+  timestamp?: string
 }
 
 export interface ChatMessage {
@@ -111,6 +114,58 @@ export const useConversationStore = defineStore('conversation', () => {
     generalStore.chatHistory = []
     currentResponseId.value = null
     currentConversationTurnId.value = `turn-${Date.now()}`
+
+    if (window.ipcRenderer) {
+      window.ipcRenderer.on(
+        'scheduler:reminder',
+        async (event, reminderData) => {
+          console.log(
+            '[ConversationStore] Received scheduler reminder:',
+            reminderData
+          )
+          try {
+            const reminderMessage: AppChatMessage = {
+              id: `reminder-${Date.now()}`,
+              role: 'assistant',
+              content: [
+                {
+                  type: 'app_text',
+                  text: reminderData.message,
+                  isScheduledReminder: true,
+                  taskName: reminderData.taskName,
+                  timestamp: reminderData.timestamp,
+                },
+              ],
+              created_at: Date.now(),
+            }
+
+            generalStore.chatHistory.unshift(reminderMessage)
+
+            if (reminderData.message && reminderData.message.trim()) {
+              ttsAbortController.value = new AbortController()
+              const ttsResponse = await api.ttsStream(
+                reminderData.message,
+                ttsAbortController.value.signal
+              )
+              if (
+                queueAudioForPlayback(ttsResponse) &&
+                audioState.value !== 'SPEAKING'
+              ) {
+                setAudioState('SPEAKING')
+              }
+            }
+          } catch (error: any) {
+            if (error.name !== 'AbortError') {
+              console.error(
+                '[ConversationStore] Failed to speak scheduler reminder:',
+                error
+              )
+            }
+          }
+        }
+      )
+    }
+
     return true
   }
 
@@ -717,10 +772,25 @@ export const useConversationStore = defineStore('conversation', () => {
       get_unread_emails: '📧 Looking for unread emails...',
       search_emails: '📧 Searching emails...',
       get_email_content: '📧 Reading email content...',
-      execute_command: (args: any) => `💻 Executing: ${args?.command || 'command'}`,
+      execute_command: (args: any) =>
+        `💻 Executing: ${args?.command || 'command'}`,
       list_directory: (args: any) => `📁 Listing: ${args?.path || 'directory'}`,
+      schedule_task: (args: any) =>
+        `⏰ Scheduling "${args?.name || 'task'}" to run ${args?.schedule || 'periodically'}...`,
+      manage_scheduled_tasks: (args: any) => {
+        switch (args?.action) {
+          case 'list':
+            return '📋 Checking your scheduled tasks...'
+          case 'delete':
+            return '🗑️ Removing scheduled task...'
+          case 'toggle':
+            return '🔄 Toggling task status...'
+          default:
+            return '⚙️ Managing scheduled tasks...'
+        }
+      },
     }
-    
+
     const message = messages[toolName]
     if (typeof message === 'function') {
       return message(args)

@@ -1,6 +1,10 @@
 import axios from 'axios'
 import { useSettingsStore } from '../stores/settingsStore'
 import { createEmbedding } from '../services/apiService'
+import {
+  parseNaturalLanguageToCron,
+  validateCronExpression,
+} from './cronParser'
 
 interface Crawl4AiArgs {
   url: string
@@ -57,6 +61,18 @@ interface ListDirectoryArgs {
 
 interface ExecuteCommandArgs {
   command: string
+}
+
+interface ScheduleTaskArgs {
+  name: string
+  schedule: string
+  action_type: 'command' | 'reminder'
+  details: string
+}
+
+interface ManageScheduledTasksArgs {
+  action: 'list' | 'delete' | 'toggle'
+  task_id?: string
 }
 
 async function save_memory(args: SaveMemoryArgs) {
@@ -772,6 +788,158 @@ async function execute_command(
   }
 }
 
+async function schedule_task(args: ScheduleTaskArgs): Promise<FunctionResult> {
+  try {
+    let cronExpression = parseNaturalLanguageToCron(args.schedule)
+
+    if (!cronExpression) {
+      if (validateCronExpression(args.schedule)) {
+        cronExpression = args.schedule
+      } else {
+        return {
+          success: false,
+          error: `Unable to parse schedule "${args.schedule}". Try formats like "every morning at 8 AM", "every hour", "daily at 6 PM", or use cron format like "0 8 * * *".`,
+        }
+      }
+    }
+
+    if (!validateCronExpression(cronExpression)) {
+      return {
+        success: false,
+        error: `Generated cron expression "${cronExpression}" is invalid.`,
+      }
+    }
+
+    const result = await window.ipcRenderer.invoke('scheduler:create-task', {
+      name: args.name,
+      cronExpression,
+      actionType: args.action_type,
+      details: args.details,
+    })
+
+    if (result.success) {
+      return {
+        success: true,
+        data: {
+          message: `Task "${args.name}" scheduled successfully.`,
+          taskId: result.taskId,
+          cronExpression,
+          schedule: args.schedule,
+        },
+      }
+    } else {
+      return {
+        success: false,
+        error: result.error || 'Failed to create scheduled task.',
+      }
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
+async function manage_scheduled_tasks(
+  args: ManageScheduledTasksArgs
+): Promise<FunctionResult> {
+  try {
+    switch (args.action) {
+      case 'list': {
+        const result = await window.ipcRenderer.invoke(
+          'scheduler:get-all-tasks'
+        )
+        if (result.success) {
+          const tasks = result.tasks.map((task: any) => ({
+            id: task.id,
+            name: task.name,
+            schedule: task.cronExpression,
+            actionType: task.actionType,
+            details: task.details,
+            isActive: task.isActive,
+            createdAt: task.createdAt,
+            lastRun: task.lastRun,
+            nextRun: task.nextRun,
+          }))
+          return {
+            success: true,
+            data: {
+              message: `Found ${tasks.length} scheduled tasks.`,
+              tasks,
+            },
+          }
+        } else {
+          return {
+            success: false,
+            error: result.error || 'Failed to get scheduled tasks.',
+          }
+        }
+      }
+
+      case 'delete': {
+        if (!args.task_id) {
+          return {
+            success: false,
+            error: 'Task ID is required for delete action.',
+          }
+        }
+
+        const result = await window.ipcRenderer.invoke(
+          'scheduler:delete-task',
+          {
+            taskId: args.task_id,
+          }
+        )
+
+        if (result.success) {
+          return {
+            success: true,
+            data: { message: `Task ${args.task_id} deleted successfully.` },
+          }
+        } else {
+          return {
+            success: false,
+            error: result.error || 'Failed to delete task.',
+          }
+        }
+      }
+
+      case 'toggle': {
+        if (!args.task_id) {
+          return {
+            success: false,
+            error: 'Task ID is required for toggle action.',
+          }
+        }
+
+        const result = await window.ipcRenderer.invoke(
+          'scheduler:toggle-task',
+          {
+            taskId: args.task_id,
+          }
+        )
+
+        if (result.success) {
+          return {
+            success: true,
+            data: {
+              message: `Task ${args.task_id} status toggled successfully.`,
+            },
+          }
+        } else {
+          return {
+            success: false,
+            error: result.error || 'Failed to toggle task status.',
+          }
+        }
+      }
+
+      default:
+        return { success: false, error: `Unknown action: ${args.action}` }
+    }
+  } catch (error: any) {
+    return { success: false, error: error.message }
+  }
+}
+
 /**
  * Helpers for parsing torrent data.
  */
@@ -880,6 +1048,8 @@ const functionRegistry: {
   get_email_content,
   list_directory,
   execute_command,
+  schedule_task,
+  manage_scheduled_tasks,
 }
 
 const functionSchemas = {
@@ -902,6 +1072,8 @@ const functionSchemas = {
   get_email_content: { required: ['messageId'] },
   list_directory: { required: ['path'] },
   execute_command: { required: ['command'] },
+  schedule_task: { required: ['name', 'schedule', 'action_type', 'details'] },
+  manage_scheduled_tasks: { required: ['action'] },
 }
 
 /**

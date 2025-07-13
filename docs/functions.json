@@ -150,6 +150,59 @@
       "additionalProperties": false
     }
   },
+  
+  {
+    "type": "function",
+    "name": "schedule_task",
+    "description": "Schedules a command or a verbal reminder to run on a recurring basis. IMPORTANT: Use recurring patterns, not specific dates or times. Examples: 'every morning at 8 AM', 'every hour', 'daily at 6 PM', 'every Friday at 11 PM'.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "A descriptive name for the scheduled task (e.g., 'Morning calendar check', 'Hourly stretch reminder')."
+        },
+        "schedule": {
+          "type": "string",
+          "description": "RECURRING schedule pattern. Use phrases like: 'every morning at 8 AM', 'every hour', 'daily at 9:30 PM', 'every Monday at 2 PM', 'every weekday at 9 AM'. Avoid specific dates - use recurring patterns instead."
+        },
+        "action_type": {
+          "type": "string",
+          "enum": ["command", "reminder"],
+          "description": "Type of action: 'command' to execute a shell command, 'reminder' for Alice to speak a message."
+        },
+        "details": {
+          "type": "string",
+          "description": "For 'command': the shell command to execute. For 'reminder': the message for Alice to speak."
+        }
+      },
+      "required": ["name", "schedule", "action_type", "details"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "manage_scheduled_tasks",
+    "description": "View, delete, or toggle scheduled tasks. Use this to list all scheduled tasks, remove unwanted ones, or activate/deactivate tasks.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["list", "delete", "toggle"],
+          "description": "Action to perform: 'list' to show all tasks, 'delete' to remove a task, 'toggle' to activate/deactivate a task."
+        },
+        "task_id": {
+          "type": "string",
+          "description": "The ID of the task to delete or toggle. Required for 'delete' and 'toggle' actions."
+        }
+      },
+      "required": ["action"],
+      "additionalProperties": false
+    }
+  },
   {
     "type": "function",
     "name": "get_unread_emails",

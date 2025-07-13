@@ -59,40 +59,6 @@
   },
   {
     "type": "function",
-    "name": "search_torrents",
-    "description": "Searches for torrents using Jackett. Use this tool when the user asks to find or download a specific movie, TV show, or file.",
-    "strict": false,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "The name of the movie, show, or content to search for."
-        }
-      },
-      "required": ["query"],
-      "additionalProperties": false
-    }
-  },
-  {
-    "type": "function",
-    "name": "add_torrent_to_qb",
-    "description": "Adds a torrent to qBittorrent using a magnet link. Use this tool when the user selects or confirms a torrent to download.",
-    "strict": false,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "magnet": {
-          "type": "string",
-          "description": "The magnet link of the torrent to be added to the download queue."
-        }
-      },
-      "required": ["magnet"],
-      "additionalProperties": false
-    }
-  },
-  {
-    "type": "function",
     "name": "save_memory",
     "description": "Store a long-term memory about the User. The memory should be a short, clear description that you can recall later to better understand and assist him. For example: 'User, enjoys hiking in the mountains.' Categorize the memory by type (e.g., 'personal', 'work', 'hobby').",
     "strict": false,
@@ -147,6 +113,93 @@
         }
       },
       "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "list_directory",
+    "description": "Lists the files and folders in a specified directory on the user's computer. Use this to explore the file system.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The absolute path of the directory to list."
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "execute_command",
+    "description": "Executes a shell command on the user's computer. For security, only a limited set of commands are allowed. Use this to perform simple tasks like getting the current IP address or running a script.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The shell command to execute."
+        }
+      },
+      "required": ["command"],
+      "additionalProperties": false
+    }
+  },
+  
+  {
+    "type": "function",
+    "name": "schedule_task",
+    "description": "Schedules a command or a verbal reminder to run on a recurring basis. IMPORTANT: Use recurring patterns, not specific dates or times. Examples: 'every morning at 8 AM', 'every hour', 'daily at 6 PM', 'every Friday at 11 PM'.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "A descriptive name for the scheduled task (e.g., 'Morning calendar check', 'Hourly stretch reminder')."
+        },
+        "schedule": {
+          "type": "string",
+          "description": "RECURRING schedule pattern. Use phrases like: 'every morning at 8 AM', 'every hour', 'daily at 9:30 PM', 'every Monday at 2 PM', 'every weekday at 9 AM'. Avoid specific dates - use recurring patterns instead."
+        },
+        "action_type": {
+          "type": "string",
+          "enum": ["command", "reminder"],
+          "description": "Type of action: 'command' to execute a shell command, 'reminder' for Alice to speak a message."
+        },
+        "details": {
+          "type": "string",
+          "description": "For 'command': the shell command to execute. For 'reminder': the message for Alice to speak."
+        }
+      },
+      "required": ["name", "schedule", "action_type", "details"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "manage_scheduled_tasks",
+    "description": "View, delete, or toggle scheduled tasks. Use this to list all scheduled tasks, remove unwanted ones, or activate/deactivate tasks.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "type": "string",
+          "enum": ["list", "delete", "toggle"],
+          "description": "Action to perform: 'list' to show all tasks, 'delete' to remove a task, 'toggle' to activate/deactivate a task."
+        },
+        "task_id": {
+          "type": "string",
+          "description": "The ID of the task to delete or toggle. Required for 'delete' and 'toggle' actions."
+        }
+      },
+      "required": ["action"],
       "additionalProperties": false
     }
   },
@@ -355,35 +408,35 @@
   },
   {
     "type": "function",
-    "name": "list_directory",
-    "description": "Lists the files and folders in a specified directory on the user's computer. Use this to explore the file system.",
-    "strict": true,
+    "name": "search_torrents",
+    "description": "Searches for torrents using Jackett. Use this tool when the user asks to find or download a specific movie, TV show, or file.",
+    "strict": false,
     "parameters": {
       "type": "object",
       "properties": {
-        "path": {
+        "query": {
           "type": "string",
-          "description": "The absolute path of the directory to list."
+          "description": "The name of the movie, show, or content to search for."
         }
       },
-      "required": ["path"],
+      "required": ["query"],
       "additionalProperties": false
     }
   },
   {
     "type": "function",
-    "name": "execute_command",
-    "description": "Executes a shell command on the user's computer. For security, only a limited set of commands are allowed. Use this to perform simple tasks like getting the current IP address or running a script.",
-    "strict": true,
+    "name": "add_torrent_to_qb",
+    "description": "Adds a torrent to qBittorrent using a magnet link. Use this tool when the user selects or confirms a torrent to download.",
+    "strict": false,
     "parameters": {
       "type": "object",
       "properties": {
-        "command": {
+        "magnet": {
           "type": "string",
-          "description": "The shell command to execute."
+          "description": "The magnet link of the torrent to be added to the download queue."
         }
       },
-      "required": ["command"],
+      "required": ["magnet"],
       "additionalProperties": false
     }
   }

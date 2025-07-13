@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1" @click="handleChatClick">
+  <div class="flex-1 pr-2" @click="handleChatClick">
     <transition-group name="list" tag="div">
       <div
         class="chat mb-2"
@@ -110,7 +110,24 @@ const getDisplayableMessageContent = (message: ChatMessage): string => {
     for (const part of message.content as AppChatMessageContentPart[]) {
       if (part.type === 'app_text' && part.text) {
         if (part.text.trim() !== '') {
-          combinedHtml += messageMarkdown(part.text) + '<br/>'
+          if (part.isScheduledReminder) {
+            const timeStr = part.timestamp
+              ? new Date(part.timestamp).toLocaleTimeString()
+              : ''
+            combinedHtml += `
+              <div class="scheduled-reminder-container my-2 p-3 bg-gradient-to-r from-orange-500/20 to-yellow-500/20 border-l-4 border-orange-400 rounded-r-lg">
+                <div class="flex items-center gap-2 mb-1">
+                  <span class="text-lg">⏰</span>
+                  <span class="text-sm font-medium text-orange-200">Scheduled Reminder</span>
+                  ${timeStr ? `<span class="text-xs text-gray-300 ml-auto">${timeStr}</span>` : ''}
+                </div>
+                <div class="text-white">${messageMarkdown(part.text)}</div>
+                ${part.taskName ? `<div class="text-xs text-gray-300 mt-1 italic">Task: ${part.taskName}</div>` : ''}
+              </div>
+            `
+          } else {
+            combinedHtml += messageMarkdown(part.text) + '<br/>'
+          }
         }
       } else if (part.type === 'app_file' && part.fileName) {
         combinedHtml += `
@@ -243,8 +260,8 @@ const handleChatClick = (event: MouseEvent) => {
   max-width: 100%;
 }
 
-.chat-bubble p, 
-.chat-bubble div, 
+.chat-bubble p,
+.chat-bubble div,
 .chat-bubble span,
 .chat-bubble code {
   word-break: break-all;

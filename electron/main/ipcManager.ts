@@ -20,6 +20,7 @@ import {
 import * as googleAuthManager from './googleAuthManager'
 import * as googleCalendarManager from './googleCalendarManager'
 import * as googleGmailManager from './googleGmailManager'
+import * as schedulerManager from './schedulerManager'
 import {
   getMainWindow,
   resizeMainWindow,
@@ -722,4 +723,56 @@ export function registerGoogleIPCHandlers(): void {
       'Gmail'
     )
   })
+
+  // Scheduler management
+  ipcMain.handle('scheduler:create-task', async (event, args) => {
+    try {
+      const result = await schedulerManager.createScheduledTask(
+        args.name,
+        args.cronExpression,
+        args.actionType,
+        args.details
+      )
+      return result
+    } catch (error: any) {
+      console.error('[IPC scheduler:create-task] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('scheduler:get-all-tasks', async () => {
+    try {
+      const tasks = schedulerManager.getAllScheduledTasks()
+      return { success: true, tasks }
+    } catch (error: any) {
+      console.error('[IPC scheduler:get-all-tasks] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle(
+    'scheduler:delete-task',
+    async (event, { taskId }: { taskId: string }) => {
+      try {
+        const success = await schedulerManager.deleteScheduledTask(taskId)
+        return { success }
+      } catch (error: any) {
+        console.error('[IPC scheduler:delete-task] Error:', error)
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'scheduler:toggle-task',
+    async (event, { taskId }: { taskId: string }) => {
+      try {
+        const success = await schedulerManager.toggleTaskStatus(taskId)
+        return { success }
+      } catch (error: any) {
+        console.error('[IPC scheduler:toggle-task] Error:', error)
+        return { success: false, error: error.message }
+      }
+    }
+  )
 }

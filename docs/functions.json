@@ -59,40 +59,6 @@
   },
   {
     "type": "function",
-    "name": "search_torrents",
-    "description": "Searches for torrents using Jackett. Use this tool when the user asks to find or download a specific movie, TV show, or file.",
-    "strict": false,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": "The name of the movie, show, or content to search for."
-        }
-      },
-      "required": ["query"],
-      "additionalProperties": false
-    }
-  },
-  {
-    "type": "function",
-    "name": "add_torrent_to_qb",
-    "description": "Adds a torrent to qBittorrent using a magnet link. Use this tool when the user selects or confirms a torrent to download.",
-    "strict": false,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "magnet": {
-          "type": "string",
-          "description": "The magnet link of the torrent to be added to the download queue."
-        }
-      },
-      "required": ["magnet"],
-      "additionalProperties": false
-    }
-  },
-  {
-    "type": "function",
     "name": "save_memory",
     "description": "Store a long-term memory about the User. The memory should be a short, clear description that you can recall later to better understand and assist him. For example: 'User, enjoys hiking in the mountains.' Categorize the memory by type (e.g., 'personal', 'work', 'hobby').",
     "strict": false,
@@ -147,6 +113,40 @@
         }
       },
       "required": [],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "list_directory",
+    "description": "Lists the files and folders in a specified directory on the user's computer. Use this to explore the file system.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The absolute path of the directory to list."
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "execute_command",
+    "description": "Executes a shell command on the user's computer. For security, only a limited set of commands are allowed. Use this to perform simple tasks like getting the current IP address or running a script.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The shell command to execute."
+        }
+      },
+      "required": ["command"],
       "additionalProperties": false
     }
   },
@@ -355,35 +355,35 @@
   },
   {
     "type": "function",
-    "name": "list_directory",
-    "description": "Lists the files and folders in a specified directory on the user's computer. Use this to explore the file system.",
-    "strict": true,
+    "name": "search_torrents",
+    "description": "Searches for torrents using Jackett. Use this tool when the user asks to find or download a specific movie, TV show, or file.",
+    "strict": false,
     "parameters": {
       "type": "object",
       "properties": {
-        "path": {
+        "query": {
           "type": "string",
-          "description": "The absolute path of the directory to list."
+          "description": "The name of the movie, show, or content to search for."
         }
       },
-      "required": ["path"],
+      "required": ["query"],
       "additionalProperties": false
     }
   },
   {
     "type": "function",
-    "name": "execute_command",
-    "description": "Executes a shell command on the user's computer. For security, only a limited set of commands are allowed. Use this to perform simple tasks like getting the current IP address or running a script.",
-    "strict": true,
+    "name": "add_torrent_to_qb",
+    "description": "Adds a torrent to qBittorrent using a magnet link. Use this tool when the user selects or confirms a torrent to download.",
+    "strict": false,
     "parameters": {
       "type": "object",
       "properties": {
-        "command": {
+        "magnet": {
           "type": "string",
-          "description": "The shell command to execute."
+          "description": "The magnet link of the torrent to be added to the download queue."
         }
       },
-      "required": ["command"],
+      "required": ["magnet"],
       "additionalProperties": false
     }
   }

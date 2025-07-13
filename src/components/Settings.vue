@@ -1011,8 +1011,6 @@ function betterToolName(name: string): string {
     get_current_datetime: 'Current Date & Time',
     open_path: 'Open Apps/URLs',
     manage_clipboard: 'Clipboard Read/Write',
-    search_torrents: 'Torrent Search',
-    add_torrent_to_qb: 'Add Torrent to QB',
     save_memory: 'Save Memory',
     delete_memory: 'Delete Memory',
     recall_memories: 'Recall Memories',
@@ -1023,6 +1021,8 @@ function betterToolName(name: string): string {
     get_unread_emails: 'Get Unread Emails',
     search_emails: 'Search Emails',
     get_email_content: 'Get Email Content',
+    search_torrents: 'Torrent Search',
+    add_torrent_to_qb: 'Add Torrent to QB',
   }
   return (
     nameMap[name] ||

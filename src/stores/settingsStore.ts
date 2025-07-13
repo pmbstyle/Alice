@@ -59,7 +59,7 @@ const defaultSettings: AliceSettings = {
   assistantSystemPrompt: defaultSystemPromptFromMD,
   assistantTemperature: 0.7,
   assistantTopP: 1.0,
-  assistantTools: ['get_current_datetime', 'perform_web_search'],
+  assistantTools: ['get_current_datetime', 'perform_web_search', 'save_memory', 'delete_memory', 'recall_memories'],
   mcpServersConfig: '[]',
   MAX_HISTORY_MESSAGES_FOR_API: 10,
   SUMMARIZATION_MESSAGE_COUNT: 20,

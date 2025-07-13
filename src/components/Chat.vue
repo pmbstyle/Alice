@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1" @click="handleChatClick">
+  <div class="flex-1 pr-2" @click="handleChatClick">
     <transition-group name="list" tag="div">
       <div
         class="chat mb-2"

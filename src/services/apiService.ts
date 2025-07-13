@@ -131,10 +131,11 @@ export const ttsStream = async (
   signal: AbortSignal
 ): Promise<Response> => {
   const openai = getOpenAIClient()
+  const settings = useSettingsStore().config
   return openai.audio.speech.create(
     {
       model: 'tts-1',
-      voice: 'nova',
+      voice: settings.ttsVoice || 'nova',
       input: text,
       response_format: 'mp3',
     },

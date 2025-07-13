@@ -187,6 +187,31 @@
                 ></textarea>
               </div>
 
+              <div>
+                <label
+                  for="tts-voice"
+                  class="block mb-1 text-sm flex items-center"
+                  >Text-to-Speech Voice
+                  <div
+                    class="tooltip tooltip-right"
+                    data-tip="The voice to use for text-to-speech synthesis when Alice speaks responses aloud."
+                  >
+                    <img :src="infoIcon" class="size-4 ml-1" /></div
+                ></label>
+                <select
+                  id="tts-voice"
+                  v-model="currentSettings.ttsVoice"
+                  class="select select-bordered w-full focus:select-primary"
+                >
+                  <option value="alloy">Alloy</option>
+                  <option value="echo">Echo</option>
+                  <option value="fable">Fable</option>
+                  <option value="nova">Nova</option>
+                  <option value="onyx">Onyx</option>
+                  <option value="shimmer">Shimmer</option>
+                </select>
+              </div>
+
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label

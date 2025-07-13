@@ -34,6 +34,7 @@ export interface AliceSettings {
   SUMMARIZATION_MESSAGE_COUNT: number
   SUMMARIZATION_MODEL: string
   SUMMARIZATION_SYSTEM_PROMPT: string
+  ttsVoice: 'alloy' | 'echo' | 'fable' | 'nova' | 'onyx' | 'shimmer'
 
   microphoneToggleHotkey: string
   mutePlaybackHotkey: string
@@ -64,6 +65,7 @@ const defaultSettings: AliceSettings = {
   SUMMARIZATION_MESSAGE_COUNT: 20,
   SUMMARIZATION_MODEL: 'gpt-4.1-nano',
   SUMMARIZATION_SYSTEM_PROMPT: DEFAULT_SUMMARIZATION_SYSTEM_PROMPT,
+  ttsVoice: 'nova',
 
   microphoneToggleHotkey: 'Alt+M',
   mutePlaybackHotkey: 'Alt+S',
@@ -93,6 +95,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   SUMMARIZATION_MESSAGE_COUNT: 'Summarization Message Count',
   SUMMARIZATION_MODEL: 'Summarization Model',
   SUMMARIZATION_SYSTEM_PROMPT: 'Summarization System Prompt',
+  ttsVoice: 'Text-to-Speech Voice',
   microphoneToggleHotkey: 'Microphone Toggle Hotkey',
   mutePlaybackHotkey: 'Mute Playback Hotkey',
   takeScreenshotHotkey: 'Take Screenshot Hotkey',
@@ -358,6 +361,7 @@ export const useSettingsStore = defineStore('settings', () => {
         SUMMARIZATION_MESSAGE_COUNT: settings.value.SUMMARIZATION_MESSAGE_COUNT,
         SUMMARIZATION_MODEL: settings.value.SUMMARIZATION_MODEL,
         SUMMARIZATION_SYSTEM_PROMPT: settings.value.SUMMARIZATION_SYSTEM_PROMPT,
+        ttsVoice: settings.value.ttsVoice,
         microphoneToggleHotkey: settings.value.microphoneToggleHotkey,
         mutePlaybackHotkey: settings.value.mutePlaybackHotkey,
         takeScreenshotHotkey: settings.value.takeScreenshotHotkey,

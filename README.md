@@ -51,6 +51,7 @@ Alice can now interact with your local system with user-approved permissions:
 * Torrent search & download (via Jackett + qBittorrent)
 * Time & date awareness
 * Clipboard management
+* Task scheduler (reminders and command execution)
 * Open applications & URLs
 * Image generation
 * MCP server support

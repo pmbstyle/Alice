@@ -579,6 +579,31 @@ export const useConversationStore = defineStore('conversation', () => {
       content: resultString,
     })
 
+    const isSimpleAction = [
+      'open_path',
+      'manage_clipboard',
+      'execute_command',
+    ].includes(functionName)
+    const isSuccessfulResult =
+      resultString.includes('success') || resultString.includes('Successfully')
+
+    if (isSimpleAction && isSuccessfulResult) {
+      console.log(
+        `[ConversationStore] Adding completion message for successful ${functionName} action`
+      )
+
+      const completionMessage: ChatMessage = {
+        role: 'assistant',
+        content: [
+          { type: 'app_text', text: getCompletionMessage(functionName) },
+        ],
+      }
+      generalStore.addMessageToHistory(completionMessage)
+
+      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      return
+    }
+
     const isNewChainAfterTool = currentResponseId.value === null
     const nextApiInput = await buildApiInput(isNewChainAfterTool)
 
@@ -796,6 +821,18 @@ export const useConversationStore = defineStore('conversation', () => {
       return message(args)
     }
     return message || `⚙️ Using tool: ${toolName}...`
+  }
+
+  function getCompletionMessage(functionName: string): string {
+    const completionMessages: Record<string, string> = {
+      open_path: "✅ Done! I've opened that for you.",
+      manage_clipboard: '✅ Clipboard operation completed successfully.',
+      execute_command: '✅ Command executed successfully.',
+    }
+
+    return (
+      completionMessages[functionName] || '✅ Action completed successfully.'
+    )
   }
 
   return {

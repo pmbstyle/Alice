@@ -60,20 +60,20 @@
           <fieldset
             class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
           >
-            <legend class="fieldset-legend">API Keys & STT Provider</legend>
+            <legend class="fieldset-legend">API Keys & Providers</legend>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
               <div>
-                <label for="openai-key" class="block mb-1 text-sm"
-                  >OpenAI API Key *</label
+                <label for="ai-provider" class="block mb-1 text-sm"
+                  >AI Provider *</label
                 >
-                <input
-                  id="openai-key"
-                  type="password"
-                  v-model="currentSettings.VITE_OPENAI_API_KEY"
-                  class="input focus:outline-none w-full"
-                  autocomplete="new-password"
-                  placeholder="sk-..."
-                />
+                <select
+                  id="ai-provider"
+                  v-model="currentSettings.aiProvider"
+                  class="select select-bordered w-full focus:select-primary"
+                >
+                  <option value="openai">OpenAI</option>
+                  <option value="openrouter">OpenRouter</option>
+                </select>
               </div>
               <div>
                 <label for="stt-provider" class="block mb-1 text-sm"
@@ -87,6 +87,38 @@
                   <option value="openai">OpenAI (gpt-4o-transcribe)</option>
                   <option value="groq">Groq (whisper-large-v3)</option>
                 </select>
+              </div>
+              <div>
+                <label for="openai-key" class="block mb-1 text-sm"
+                  >OpenAI API Key *</label
+                >
+                <input
+                  id="openai-key"
+                  type="password"
+                  v-model="currentSettings.VITE_OPENAI_API_KEY"
+                  class="input focus:outline-none w-full"
+                  autocomplete="new-password"
+                  placeholder="sk-..."
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  Required for TTS/STT/embeddings regardless of AI provider.
+                </p>
+              </div>
+              <div v-if="currentSettings.aiProvider === 'openrouter'">
+                <label for="openrouter-key" class="block mb-1 text-sm"
+                  >OpenRouter API Key *</label
+                >
+                <input
+                  id="openrouter-key"
+                  type="password"
+                  v-model="currentSettings.VITE_OPENROUTER_API_KEY"
+                  class="input focus:outline-none w-full"
+                  autocomplete="new-password"
+                  placeholder="sk-or-v1-..."
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  Required for chat models when using OpenRouter.
+                </p>
               </div>
               <div v-if="currentSettings.sttProvider === 'groq'">
                 <label for="groq-key" class="block mb-1 text-sm"
@@ -155,13 +187,20 @@
                 <p
                   v-if="
                     !settingsStore.coreOpenAISettingsValid &&
-                    currentSettings.VITE_OPENAI_API_KEY &&
+                    ((currentSettings.aiProvider === 'openai' &&
+                      currentSettings.VITE_OPENAI_API_KEY) ||
+                      (currentSettings.aiProvider === 'openrouter' &&
+                        currentSettings.VITE_OPENROUTER_API_KEY)) &&
                     conversationStore.availableModels.length === 0
                   "
                   class="text-xs text-warning mt-1"
                 >
-                  OpenAI API key needs to be validated (Save & Test) to load
-                  models.
+                  {{
+                    currentSettings.aiProvider === 'openai'
+                      ? 'OpenAI'
+                      : 'OpenRouter'
+                  }}
+                  API key needs to be validated (Save & Test) to load models.
                 </p>
               </div>
 
@@ -355,13 +394,20 @@
                 <p
                   v-if="
                     !settingsStore.coreOpenAISettingsValid &&
-                    currentSettings.VITE_OPENAI_API_KEY &&
+                    ((currentSettings.aiProvider === 'openai' &&
+                      currentSettings.VITE_OPENAI_API_KEY) ||
+                      (currentSettings.aiProvider === 'openrouter' &&
+                        currentSettings.VITE_OPENROUTER_API_KEY)) &&
                     conversationStore.availableModels.length === 0
                   "
                   class="text-xs text-warning mt-1"
                 >
-                  OpenAI API key needs to be validated (Save & Test) to load
-                  models.
+                  {{
+                    currentSettings.aiProvider === 'openai'
+                      ? 'OpenAI'
+                      : 'OpenRouter'
+                  }}
+                  API key needs to be validated (Save & Test) to load models.
                 </p>
                 <p class="text-xs text-gray-400 mt-1">
                   Model used for generating conversation summaries (e.g.,

@@ -1,7 +1,11 @@
 import OpenAI from 'openai'
 import { toFile, type FileLike } from 'openai/uploads'
 import { useSettingsStore } from '../stores/settingsStore'
-import { getOpenAIClient, getOpenRouterClient, getGroqClient } from './apiClients'
+import {
+  getOpenAIClient,
+  getOpenRouterClient,
+  getGroqClient,
+} from './apiClients'
 import type { AppChatMessageContentPart } from '../stores/conversationStore'
 import {
   PREDEFINED_OPENAI_TOOLS,
@@ -24,15 +28,15 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
   let responseId = `openrouter-${Date.now()}`
   let messageItemId = `message-${Date.now()}`
   let toolCallsBuffer = new Map()
-  
+
   yield {
     type: 'response.created',
     response: {
       id: responseId,
       object: 'realtime.response',
       status: 'in_progress',
-      output: []
-    }
+      output: [],
+    },
   }
 
   yield {
@@ -43,15 +47,15 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
       id: messageItemId,
       type: 'message',
       role: 'assistant',
-      content: []
-    }
+      content: [],
+    },
   }
-  
+
   try {
     for await (const chunk of stream) {
       if (chunk.choices && chunk.choices[0]) {
         const choice = chunk.choices[0]
-        
+
         if (choice.delta && choice.delta.content) {
           yield {
             type: 'response.output_text.delta',
@@ -59,52 +63,48 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
             item_id: messageItemId,
             output_index: 0,
             content_index: 0,
-            delta: choice.delta.content
+            delta: choice.delta.content,
           }
         }
-        
+
         if (choice.delta && choice.delta.tool_calls) {
           for (const toolCall of choice.delta.tool_calls) {
             if (toolCall.function || toolCall.id) {
               const toolCallIndex = toolCall.index || 0
               const toolCallId = `tool-${toolCallIndex}`
-              
+
               console.log(`[OpenRouter] Processing tool call chunk:`, {
                 originalId: toolCall.id,
                 mappedId: toolCallId,
                 name: toolCall.function?.name,
                 arguments: toolCall.function?.arguments,
-                index: toolCall.index
+                index: toolCall.index,
               })
 
               if (!toolCallsBuffer.has(toolCallId)) {
-                console.log(`[OpenRouter] Initializing new tool call buffer for ${toolCallId}`)
+                console.log(
+                  `[OpenRouter] Initializing new tool call buffer for ${toolCallId}`
+                )
                 toolCallsBuffer.set(toolCallId, {
+                  id: toolCall.id || toolCallId,
                   name: toolCall.function?.name || '',
-                  arguments: ''
+                  arguments: '',
                 })
-                
-                if (toolCall.function?.name) {
-                  yield {
-                    type: 'response.output_item.added',
-                    response_id: responseId,
-                    item_id: toolCallId,
-                    item: {
-                      id: toolCallId,
-                      type: 'function_call',
-                      name: toolCall.function.name,
-                      arguments: ''
-                    }
-                  }
-                }
               }
 
-              if (toolCall.function?.name) {
-                const bufferedCall = toolCallsBuffer.get(toolCallId)
-                if (bufferedCall && !bufferedCall.name) {
+              const bufferedCall = toolCallsBuffer.get(toolCallId)
+              if (bufferedCall) {
+                if (toolCall.id && !bufferedCall.id.startsWith('tool-')) {
+                  bufferedCall.id = toolCall.id
+                }
+
+                if (toolCall.function?.name && !bufferedCall.name) {
                   bufferedCall.name = toolCall.function.name
-                  console.log(`[OpenRouter] Updated name for ${toolCallId}:`, bufferedCall.name)
-                  
+                  console.log(
+                    `[OpenRouter] Updated name for ${toolCallId}:`,
+                    bufferedCall.name
+                  )
+
                   yield {
                     type: 'response.output_item.added',
                     response_id: responseId,
@@ -113,70 +113,97 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
                       id: toolCallId,
                       type: 'function_call',
                       name: toolCall.function.name,
-                      arguments: ''
-                    }
+                      arguments: '',
+                    },
                   }
                 }
-              }
-              
-              if (toolCall.function?.arguments) {
-                const bufferedCall = toolCallsBuffer.get(toolCallId)
-                if (bufferedCall) {
+
+                if (toolCall.function?.arguments) {
                   bufferedCall.arguments += toolCall.function.arguments
-                  console.log(`[OpenRouter] Accumulated arguments for ${toolCallId}:`, bufferedCall.arguments)
+                  console.log(
+                    `[OpenRouter] Accumulated arguments for ${toolCallId}:`,
+                    bufferedCall.arguments
+                  )
 
                   yield {
                     type: 'response.function_call_arguments.delta',
                     response_id: responseId,
                     item_id: toolCallId,
-                    delta: toolCall.function.arguments
+                    delta: toolCall.function.arguments,
                   }
                 }
               }
             }
           }
         }
-        
-        if (choice.finish_reason === 'stop' || choice.finish_reason === 'tool_calls') {
-          console.log(`[OpenRouter] Finishing stream, toolCallsBuffer size:`, toolCallsBuffer.size)
-          console.log(`[OpenRouter] toolCallsBuffer contents:`, Array.from(toolCallsBuffer.entries()))
-          
+
+        if (
+          choice.finish_reason === 'stop' ||
+          choice.finish_reason === 'tool_calls'
+        ) {
+          console.log(
+            `[OpenRouter] Finishing stream, toolCallsBuffer size:`,
+            toolCallsBuffer.size
+          )
+          console.log(
+            `[OpenRouter] toolCallsBuffer contents:`,
+            Array.from(toolCallsBuffer.entries())
+          )
+
           for (const [toolCallId, toolData] of toolCallsBuffer) {
             if (!toolData.name) {
-              console.log(`[OpenRouter] Skipping tool call ${toolCallId} - no function name`)
+              console.log(
+                `[OpenRouter] Skipping tool call ${toolCallId} - no function name`
+              )
               continue
             }
-            
-            console.log(`[OpenRouter] Completing tool call ${toolCallId}:`, toolData)
-            console.log(`[OpenRouter] Raw arguments string:`, toolData.arguments)
-            
+
+            console.log(
+              `[OpenRouter] Completing tool call ${toolCallId}:`,
+              toolData
+            )
+            console.log(
+              `[OpenRouter] Raw arguments string:`,
+              toolData.arguments
+            )
+
             let parsedArguments = toolData.arguments
-            if (typeof toolData.arguments === 'string' && toolData.arguments.trim()) {
+            if (
+              typeof toolData.arguments === 'string' &&
+              toolData.arguments.trim()
+            ) {
               try {
                 parsedArguments = JSON.parse(toolData.arguments)
                 console.log(`[OpenRouter] Parsed arguments:`, parsedArguments)
               } catch (e) {
-                console.error(`[OpenRouter] Failed to parse tool arguments:`, toolData.arguments, e)
+                console.error(
+                  `[OpenRouter] Failed to parse tool arguments:`,
+                  toolData.arguments,
+                  e
+                )
                 parsedArguments = {}
               }
             } else if (!toolData.arguments || toolData.arguments === '') {
-              console.error(`[OpenRouter] Empty arguments for tool call ${toolCallId}`)
+              console.error(
+                `[OpenRouter] Empty arguments for tool call ${toolCallId}`
+              )
               parsedArguments = {}
             }
-            
+
             yield {
               type: 'response.output_item.done',
               response_id: responseId,
               item_id: toolCallId,
               item: {
                 id: toolCallId,
+                call_id: toolData.id,
                 type: 'function_call',
                 name: toolData.name,
-                arguments: parsedArguments
-              }
+                arguments: parsedArguments,
+              },
             }
           }
-          
+
           yield {
             type: 'response.output_item.done',
             response_id: responseId,
@@ -185,8 +212,8 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
               id: messageItemId,
               type: 'message',
               role: 'assistant',
-              content: []
-            }
+              content: [],
+            },
           }
 
           yield {
@@ -195,8 +222,8 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
               id: responseId,
               object: 'realtime.response',
               status: 'completed',
-              output: []
-            }
+              output: [],
+            },
           }
         }
       }
@@ -208,8 +235,8 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
       type: 'error',
       error: {
         type: 'server_error',
-        message: error.message || 'Unknown error'
-      }
+        message: error.message || 'Unknown error',
+      },
     }
   }
 }
@@ -218,12 +245,12 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
   const settings = useSettingsStore().config
   const client = getAIClient()
   const modelsPage = await client.models.list()
-  
+
   if (settings.aiProvider === 'openrouter') {
     return modelsPage.data
       .filter(model => {
-        const id = model.id ated
-        const isExcluded = 
+        const id = model.id
+        const isExcluded =
           id.includes('instruct') ||
           id.includes('code') ||
           id.includes('completion') ||
@@ -233,7 +260,7 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
           id.includes('tts') ||
           id.includes('dall-e') ||
           id.includes('moderation')
-        
+
         return !isExcluded
       })
       .sort((a, b) => a.id.localeCompare(b.id))
@@ -331,155 +358,178 @@ export const createOpenAIResponse = async (
       }
     }
   }
-  
+
   if (settings.aiProvider === 'openrouter') {
-    const allowedTools = finalToolsForApi.filter(tool => {
-      if (tool.type === 'image_generation' || tool.type === 'web_search_preview') {
-        return false
-      }
-      return true
-    }).map(tool => {
-      if (tool.name === 'open_path') {
-        return {
-          ...tool,
-          description: tool.description?.replace(
-            'Use this tool to open web search result url for user command.',
-            'Do NOT use this tool for web searches. For web searches, use the built-in web search capabilities.'
-          )
+    const allowedTools = finalToolsForApi
+      .filter(tool => {
+        if (
+          tool.type === 'image_generation' ||
+          tool.type === 'web_search_preview'
+        ) {
+          return false
         }
-      }
-      return tool
-    })
+        return true
+      })
+      .map(tool => {
+        if (tool.name === 'open_path') {
+          return {
+            ...tool,
+            description: tool.description?.replace(
+              'Use this tool to open web search result url for user command.',
+              'Do NOT use this tool for web searches. For web searches, use the built-in web search capabilities.'
+            ),
+          }
+        }
+        return tool
+      })
     finalToolsForApi.length = 0
     finalToolsForApi.push(...allowedTools)
   }
 
   if (settings.aiProvider === 'openrouter') {
-    const messages = input.map((item: any) => {
-      if (item.role === 'user') {
-        if (Array.isArray(item.content)) {
-          const textParts = item.content
-            .filter((part: any) => part.type === 'input_text' && part.text?.trim())
-            .map((part: any) => part.text)
-            .join(' ')
-          
-          return {
-            role: 'user',
-            content: textParts || 'Hello'
+    const messages = input
+      .map((item: any) => {
+        if (item.role === 'user') {
+          if (Array.isArray(item.content)) {
+            const textParts = item.content
+              .filter(
+                (part: any) => part.type === 'input_text' && part.text?.trim()
+              )
+              .map((part: any) => part.text)
+              .join(' ')
+
+            return {
+              role: 'user',
+              content: textParts || 'Hello',
+            }
+          } else if (typeof item.content === 'string' && item.content.trim()) {
+            return {
+              role: 'user',
+              content: item.content,
+            }
+          } else {
+            return {
+              role: 'user',
+              content: 'Hello',
+            }
           }
-        } else if (typeof item.content === 'string' && item.content.trim()) {
-          return {
-            role: 'user',
-            content: item.content
-          }
-        } else {
-          return {
-            role: 'user',
-            content: 'Hello'
-          }
-        }
-      } else if (item.role === 'assistant') {
-        if (Array.isArray(item.content)) {
-          const textContent = item.content
-            .filter((part: any) => part.type === 'output_text' && part.text?.trim())
-            .map((part: any) => part.text)
-            .join(' ')
-          
+        } else if (item.role === 'assistant') {
+          const textContent = Array.isArray(item.content)
+            ? item.content
+                .filter(
+                  (part: any) =>
+                    part.type === 'output_text' && part.text?.trim()
+                )
+                .map((part: any) => part.text)
+                .join(' ')
+            : typeof item.content === 'string' && item.content.trim()
+              ? item.content
+              : null
+
+          const toolCalls = item.tool_calls || null
+
+          const openRouterToolCalls = toolCalls
+            ? toolCalls.map((toolCall: any) => ({
+                id: toolCall.call_id || toolCall.id,
+                type: 'function',
+                function: {
+                  name: toolCall.name,
+                  arguments:
+                    typeof toolCall.arguments === 'string'
+                      ? toolCall.arguments
+                      : JSON.stringify(toolCall.arguments || {}),
+                },
+              }))
+            : null
+
           return {
             role: 'assistant',
-            content: textContent || 'I understand.'
+            content: textContent,
+            tool_calls: openRouterToolCalls,
           }
-        } else if (typeof item.content === 'string' && item.content.trim()) {
+        } else if (item.role === 'system') {
+          const content =
+            typeof item.content === 'string'
+              ? item.content
+              : Array.isArray(item.content)
+                ? item.content.map(p => p.text || '').join(' ')
+                : 'You are a helpful assistant.'
+
           return {
-            role: 'assistant',
-            content: item.content
+            role: 'system',
+            content: content.trim() || 'You are a helpful assistant.',
           }
-        } else {
+        } else if (item.type === 'function_call_output') {
           return {
-            role: 'assistant',
-            content: 'I understand.'
+            role: 'tool',
+            tool_call_id: item.call_id,
+            content:
+              typeof item.output === 'string'
+                ? item.output
+                : JSON.stringify(item.output),
           }
         }
-      } else if (item.role === 'system') {
-        const content = typeof item.content === 'string' ? item.content : 
-                       Array.isArray(item.content) ? item.content.map(p => p.text || '').join(' ') : 
-                       'You are a helpful assistant.'
-        
+
         return {
-          role: 'system',
-          content: content.trim() || 'You are a helpful assistant.'
+          ...item,
+          content:
+            typeof item.content === 'string' && item.content.trim()
+              ? item.content
+              : 'Message received.',
         }
-      } else if (item.role === 'tool') {
-        const toolResult = typeof item.content === 'string' ? item.content : JSON.stringify(item.content)
-        
-        const isSuccessResult = toolResult.includes('success') || toolResult.includes('Successfully')
-        const prefix = isSuccessResult ? '✅ Tool completed successfully:' : '❌ Tool failed:'
-        
-        return {
-          role: 'assistant',
-          content: `${prefix} ${toolResult}`
-        }
-      } else if (item.type === 'function_call_output') {
-        const toolResult = typeof item.output === 'string' ? item.output : JSON.stringify(item.output)
-        
-        const isSuccessResult = toolResult.includes('success') || toolResult.includes('Successfully')
-        const prefix = isSuccessResult ? '✅ Tool completed successfully:' : '❌ Tool failed:'
-        
-        return {
-          role: 'assistant',
-          content: `${prefix} ${toolResult}`
-        }
-      }
-      
-      return {
-        ...item,
-        content: typeof item.content === 'string' && item.content.trim() ? 
-                 item.content : 
-                 'Message received.'
-      }
-    }).filter(msg => msg.content.trim())
+      })
+      .filter(msg => msg.content.trim())
 
     if (customInstructions && !messages.some(msg => msg.role === 'system')) {
-      const openrouterSystemPrompt = customInstructions + 
-        '\n\nIMPORTANT: You have built-in web search capabilities. When you need to search the web or get current information, you can directly search without using any tools. Do NOT use open_path or other tools for web searches.' +
-        '\n\nTool execution notes: When you see "Tool result:" messages, these indicate that the requested action was already completed successfully. Do not repeat the same tool call if you see a successful result.'
-      
+      const openrouterSystemPrompt =
+        customInstructions +
+        '\n\nIMPORTANT: You have built-in web search capabilities. When you need to search the web or get current information, you can directly search without using any tools. Do NOT use open_path or other tools for web searches.'
+
       messages.unshift({
         role: 'system',
-        content: openrouterSystemPrompt
+        content: openrouterSystemPrompt,
       })
     }
 
-    console.log('[OpenRouter] Final messages:', JSON.stringify(messages, null, 2))
+    console.log(
+      '[OpenRouter] Final messages:',
+      JSON.stringify(messages, null, 2)
+    )
 
     const openrouterModel = settings.assistantModel || 'gpt-4.1-mini'
-    const modelWithWebSearch = openrouterModel.includes(':online') ? 
-      openrouterModel : 
-      `${openrouterModel}:online`
+    const modelWithWebSearch = openrouterModel.includes(':online')
+      ? openrouterModel
+      : `${openrouterModel}:online`
 
     const params: OpenAI.Chat.ChatCompletionCreateParams = {
       model: modelWithWebSearch,
       messages: messages,
       temperature: settings.assistantTemperature,
       top_p: settings.assistantTopP,
-      tools: finalToolsForApi.length > 0 ? finalToolsForApi.map(tool => {
-        if (tool.type === 'function') {
-          return {
-            type: 'function',
-            function: {
-              name: tool.name,
-              description: tool.description,
-              parameters: tool.parameters
-            }
-          }
-        }
-        return tool
-      }) : undefined,
+      tools:
+        finalToolsForApi.length > 0
+          ? finalToolsForApi.map(tool => {
+              if (tool.type === 'function') {
+                return {
+                  type: 'function',
+                  function: {
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.parameters,
+                  },
+                }
+              }
+              return tool
+            })
+          : undefined,
       stream: stream,
     }
 
     if (stream) {
-      const openrouterStream = await client.chat.completions.create(params as any, { signal })
+      const openrouterStream = await client.chat.completions.create(
+        params as any,
+        { signal }
+      )
       return convertOpenRouterStreamToResponsesFormat(openrouterStream)
     } else {
       return client.chat.completions.create(params as any, { signal })
@@ -686,7 +736,9 @@ export const createContextAnalysisResponse = async (
       stream: false,
     } as any)
 
-    return response.choices[0]?.message?.content?.trim().replace(/"/g, '') || null
+    return (
+      response.choices[0]?.message?.content?.trim().replace(/"/g, '') || null
+    )
   } else {
     const response = await client.responses.create({
       model: analysisModel,

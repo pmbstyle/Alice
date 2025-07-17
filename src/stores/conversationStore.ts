@@ -333,6 +333,14 @@ export const useConversationStore = defineStore('conversation', () => {
           messageContentParts.length > 0
             ? messageContentParts
             : [{ type: 'input_text', text: '' }]
+
+        if (
+          currentApiRole === 'assistant' &&
+          msg.tool_calls &&
+          settingsStore.config.aiProvider === 'openrouter'
+        ) {
+          apiItemPartial.tool_calls = msg.tool_calls
+        }
       }
       apiInput.push(apiItemPartial)
     }
@@ -570,7 +578,13 @@ export const useConversationStore = defineStore('conversation', () => {
       content: [{ type: 'app_text', text: toolStatusMessage }],
     })
 
-    const resultString = await executeFunction(functionName, functionArgs)
+    let resultString: string
+    try {
+      resultString = await executeFunction(functionName, functionArgs)
+    } catch (error) {
+      console.error('Tool execution failed:', error)
+      resultString = `Error: Tool execution failed - ${error.message || 'Unknown error'}`
+    }
 
     generalStore.addMessageToHistory({
       role: 'tool',

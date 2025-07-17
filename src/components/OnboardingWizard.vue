@@ -1,7 +1,7 @@
 <template>
   <div class="fixed inset-0 text-base-content flex items-center justify-center">
     <div
-      class="w-full max-w-lg p-8 rounded-lg shadow-2xl bg-base-200 border border-base-300"
+      class="w-full max-w-lg max-h-[90vh] overflow-y-auto p-8 rounded-lg shadow-2xl bg-base-200 border border-base-300"
     >
       <div class="flex justify-between mb-4">
         <button class="dragable select-none">

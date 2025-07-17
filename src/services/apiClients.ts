@@ -3,6 +3,7 @@ import Groq from 'groq-sdk'
 import { useSettingsStore } from '../stores/settingsStore'
 
 let openaiClient: OpenAI | null = null
+let openrouterClient: OpenAI | null = null
 let groqClient: Groq | null = null
 
 export function getOpenAIClient(): OpenAI {
@@ -13,6 +14,16 @@ export function getOpenAIClient(): OpenAI {
     throw new Error('OpenAI client could not be initialized')
   }
   return openaiClient
+}
+
+export function getOpenRouterClient(): OpenAI {
+  if (!openrouterClient) {
+    initializeOpenRouterClient()
+  }
+  if (!openrouterClient) {
+    throw new Error('OpenRouter client could not be initialized')
+  }
+  return openrouterClient
 }
 
 export function getGroqClient(): Groq {
@@ -34,6 +45,22 @@ function initializeOpenAIClient(): void {
 
   openaiClient = new OpenAI({
     apiKey: settings.VITE_OPENAI_API_KEY,
+    dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
+  })
+}
+
+function initializeOpenRouterClient(): void {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_OPENROUTER_API_KEY) {
+    console.error('OpenRouter API Key is not configured.')
+    throw new Error('OpenRouter API Key is not configured.')
+  }
+
+  openrouterClient = new OpenAI({
+    apiKey: settings.VITE_OPENROUTER_API_KEY,
+    baseURL: 'https://openrouter.ai/api/v1',
     dangerouslyAllowBrowser: true,
     timeout: 20 * 1000,
     maxRetries: 1,
@@ -67,6 +94,14 @@ export function reinitializeClients(): void {
   } catch (error) {
     console.error('Failed to reinitialize OpenAI client:', error)
     openaiClient = null
+  }
+
+  try {
+    initializeOpenRouterClient()
+    console.log('OpenRouter client reinitialized successfully')
+  } catch (error) {
+    console.error('Failed to reinitialize OpenRouter client:', error)
+    openrouterClient = null
   }
 
   try {

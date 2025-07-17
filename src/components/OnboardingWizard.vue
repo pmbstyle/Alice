@@ -1,7 +1,7 @@
 <template>
   <div class="fixed inset-0 text-base-content flex items-center justify-center">
     <div
-      class="w-full max-w-lg p-8 rounded-lg shadow-2xl bg-base-200 border border-base-300"
+      class="w-full max-w-lg max-h-[90vh] overflow-y-auto p-8 rounded-lg shadow-2xl bg-base-200 border border-base-300"
     >
       <div class="flex justify-between mb-4">
         <button class="dragable select-none">
@@ -45,72 +45,234 @@
       </div>
 
       <div v-if="step === 2">
-        <h2 class="text-2xl font-semibold mb-4">OpenAI API Key</h2>
+        <h2 class="text-2xl font-semibold mb-4">AI Provider</h2>
         <p class="text-sm text-base-content/70 mb-4">
-          Alice needs an OpenAI API key for her core brain functions. You can
-          get one from the
-          <a
-            href="https://platform.openai.com/api-keys"
-            target="_blank"
-            class="link link-primary"
-            >OpenAI Platform</a
-          >. You might need to
-          <a
-            href="https://platform.openai.com/settings/organization/general"
-            target="_blank"
-            class="link link-primary"
-            >verify your organization</a
-          >
-          on OpenAI Platform to use image generation.
+          Choose your AI provider. OpenAI offers the original GPT models with
+          image generation, while OpenRouter provides access to 400+ models from
+          various providers.
         </p>
 
         <div class="form-control mb-4">
           <label class="label">
-            <span class="label-text">API Key</span>
+            <span class="label-text">AI Provider</span>
           </label>
-          <input
-            type="password"
-            v-model="formData.VITE_OPENAI_API_KEY"
-            placeholder="sk-..."
-            class="input focus:outline-none w-full"
-            :class="{
-              'input-error':
-                testResult.openai.error && !testResult.openai.success,
-            }"
-          />
-        </div>
-
-        <button
-          @click="testOpenAIKey"
-          class="btn btn-secondary btn-active w-full mb-4"
-          :disabled="isTesting.openai || !formData.VITE_OPENAI_API_KEY.trim()"
-        >
-          <span
-            v-if="isTesting.openai"
-            class="loading loading-spinner loading-xs mr-2"
-          ></span>
-          Test Key
-        </button>
-
-        <div v-if="testResult.openai.error" class="alert alert-error mb-4">
-          <span class="text-xs">{{ testResult.openai.error }}</span>
-        </div>
-
-        <div v-if="testResult.openai.success" class="alert alert-success mb-4">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            class="h-6 w-6 shrink-0 stroke-current"
-            fill="none"
-            viewBox="0 0 24 24"
+          <select
+            v-model="formData.aiProvider"
+            class="select select-bordered w-full focus:select-primary focus:outline-none"
+            @change="resetTestResults"
           >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+            <option value="openai">
+              OpenAI (GPT models, image generation)
+            </option>
+            <option value="openrouter">
+              OpenRouter (400+ models, no image gen)
+            </option>
+          </select>
+        </div>
+
+        <div v-if="formData.aiProvider === 'openai'">
+          <p class="text-sm text-base-content/70 mb-4">
+            You can get an OpenAI API key from the
+            <a
+              href="https://platform.openai.com/api-keys"
+              target="_blank"
+              class="link link-primary"
+              >OpenAI Platform</a
+            >. You might need to
+            <a
+              href="https://platform.openai.com/settings/organization/general"
+              target="_blank"
+              class="link link-primary"
+              >verify your organization</a
+            >
+            for image generation.
+          </p>
+
+          <div class="form-control mb-4">
+            <label class="label">
+              <span class="label-text">OpenAI API Key</span>
+            </label>
+            <input
+              type="password"
+              v-model="formData.VITE_OPENAI_API_KEY"
+              placeholder="sk-..."
+              class="input focus:outline-none w-full"
+              :class="{
+                'input-error':
+                  testResult.openai.error && !testResult.openai.success,
+              }"
             />
-          </svg>
-          <span>Success! Your API key is working.</span>
+          </div>
+
+          <button
+            @click="testOpenAIKey"
+            class="btn btn-secondary btn-active w-full mb-4"
+            :disabled="isTesting.openai || !formData.VITE_OPENAI_API_KEY.trim()"
+          >
+            <span
+              v-if="isTesting.openai"
+              class="loading loading-spinner loading-xs mr-2"
+            ></span>
+            Test OpenAI Key
+          </button>
+
+          <div v-if="testResult.openai.error" class="alert alert-error mb-4">
+            <span class="text-xs">{{ testResult.openai.error }}</span>
+          </div>
+
+          <div
+            v-if="testResult.openai.success"
+            class="alert alert-success mb-4"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 shrink-0 stroke-current"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>Success! Your OpenAI API key is working.</span>
+          </div>
+        </div>
+
+        <div v-if="formData.aiProvider === 'openrouter'">
+          <p class="text-sm text-base-content/70 mb-4">
+            OpenRouter requires both API keys: OpenRouter for chat models and
+            OpenAI for TTS/STT/embeddings.
+          </p>
+
+          <div class="form-control mb-4">
+            <label class="label">
+              <span class="label-text">OpenAI API Key (for TTS/STT)</span>
+            </label>
+            <p class="text-sm text-base-content/70 mb-2">
+              Required for voice features. Get one from
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                class="link link-primary"
+                >OpenAI Platform</a
+              >.
+            </p>
+            <input
+              type="password"
+              v-model="formData.VITE_OPENAI_API_KEY"
+              placeholder="sk-..."
+              class="input focus:outline-none w-full"
+              :class="{
+                'input-error':
+                  testResult.openai.error && !testResult.openai.success,
+              }"
+            />
+          </div>
+
+          <button
+            @click="testOpenAIKey"
+            class="btn btn-secondary btn-active w-full mb-4"
+            :disabled="isTesting.openai || !formData.VITE_OPENAI_API_KEY.trim()"
+          >
+            <span
+              v-if="isTesting.openai"
+              class="loading loading-spinner loading-xs mr-2"
+            ></span>
+            Test OpenAI Key
+          </button>
+
+          <div v-if="testResult.openai.error" class="alert alert-error mb-4">
+            <span class="text-xs">{{ testResult.openai.error }}</span>
+          </div>
+
+          <div
+            v-if="testResult.openai.success"
+            class="alert alert-success mb-4"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 shrink-0 stroke-current"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>Success! Your OpenAI API key is working.</span>
+          </div>
+
+          <div class="form-control mb-4">
+            <label class="label">
+              <span class="label-text">OpenRouter API Key</span>
+            </label>
+            <p class="text-sm text-base-content/70 mb-2">
+              You can get an OpenRouter API key from the
+              <a
+                href="https://openrouter.ai/keys"
+                target="_blank"
+                class="link link-primary"
+                >OpenRouter Platform</a
+              >. Provides access to 400+ models from various providers.
+            </p>
+            <input
+              type="password"
+              v-model="formData.VITE_OPENROUTER_API_KEY"
+              placeholder="sk-or-v1-..."
+              class="input focus:outline-none w-full"
+              :class="{
+                'input-error':
+                  testResult.openrouter.error && !testResult.openrouter.success,
+              }"
+            />
+          </div>
+
+          <button
+            @click="testOpenRouterKey"
+            class="btn btn-secondary btn-active w-full mb-4"
+            :disabled="
+              isTesting.openrouter || !formData.VITE_OPENROUTER_API_KEY.trim()
+            "
+          >
+            <span
+              v-if="isTesting.openrouter"
+              class="loading loading-spinner loading-xs mr-2"
+            ></span>
+            Test OpenRouter Key
+          </button>
+
+          <div
+            v-if="testResult.openrouter.error"
+            class="alert alert-error mb-4"
+          >
+            <span class="text-xs">{{ testResult.openrouter.error }}</span>
+          </div>
+
+          <div
+            v-if="testResult.openrouter.success"
+            class="alert alert-success mb-4"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 shrink-0 stroke-current"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>Success! Your OpenRouter API key is working.</span>
+          </div>
         </div>
 
         <div class="flex justify-between mt-6">
@@ -118,7 +280,7 @@
           <button
             @click="step = 3"
             class="btn btn-primary btn-active"
-            :disabled="!testResult.openai.success"
+            :disabled="!isCurrentProviderTested()"
           >
             Next
           </button>
@@ -199,13 +361,19 @@ const settingsStore = useSettingsStore()
 
 const formData = reactive({
   VITE_OPENAI_API_KEY: '',
+  VITE_OPENROUTER_API_KEY: '',
+  aiProvider: 'openai' as 'openai' | 'openrouter',
   sttProvider: 'openai' as 'openai' | 'groq',
   VITE_GROQ_API_KEY: '',
 })
 
-const isTesting = reactive({ openai: false })
+const isTesting = reactive({
+  openai: false,
+  openrouter: false,
+})
 const testResult = reactive({
   openai: { success: false, error: '' },
+  openrouter: { success: false, error: '' },
 })
 
 const isFinishing = ref(false)
@@ -239,6 +407,55 @@ const testOpenAIKey = async () => {
   } finally {
     isTesting.openai = false
   }
+}
+
+const testOpenRouterKey = async () => {
+  if (!formData.VITE_OPENROUTER_API_KEY.trim()) {
+    testResult.openrouter.error = 'API Key cannot be empty.'
+    testResult.openrouter.success = false
+    return
+  }
+
+  isTesting.openrouter = true
+  testResult.openrouter.error = ''
+  testResult.openrouter.success = false
+
+  try {
+    const tempClient = new OpenAI({
+      apiKey: formData.VITE_OPENROUTER_API_KEY,
+      baseURL: 'https://openrouter.ai/api/v1',
+      dangerouslyAllowBrowser: true,
+    })
+
+    await tempClient.models.list({ limit: 1 })
+    testResult.openrouter.success = true
+  } catch (e: any) {
+    testResult.openrouter.error = 'API Key is invalid or has no permissions.'
+    if (e.message?.includes('401')) {
+      testResult.openrouter.error = 'Invalid API key - please check your key.'
+    } else if (e.message?.includes('429')) {
+      testResult.openrouter.error =
+        'Rate limit exceeded - please try again later.'
+    }
+  } finally {
+    isTesting.openrouter = false
+  }
+}
+
+const resetTestResults = () => {
+  testResult.openai.success = false
+  testResult.openai.error = ''
+  testResult.openrouter.success = false
+  testResult.openrouter.error = ''
+}
+
+const isCurrentProviderTested = () => {
+  if (formData.aiProvider === 'openai') {
+    return testResult.openai.success
+  } else if (formData.aiProvider === 'openrouter') {
+    return testResult.openai.success && testResult.openrouter.success
+  }
+  return false
 }
 
 const finishOnboarding = async () => {

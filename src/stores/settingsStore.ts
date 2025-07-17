@@ -21,8 +21,10 @@ Do not add any conversational fluff, commentary, or an introductory/concluding s
 
 export interface AliceSettings {
   VITE_OPENAI_API_KEY: string
+  VITE_OPENROUTER_API_KEY: string
   VITE_GROQ_API_KEY: string
   sttProvider: 'openai' | 'groq'
+  aiProvider: 'openai' | 'openrouter'
 
   assistantModel: string
   assistantSystemPrompt: string
@@ -52,14 +54,22 @@ export interface AliceSettings {
 
 const defaultSettings: AliceSettings = {
   VITE_OPENAI_API_KEY: '',
+  VITE_OPENROUTER_API_KEY: '',
   VITE_GROQ_API_KEY: '',
   sttProvider: 'openai',
+  aiProvider: 'openai',
 
   assistantModel: 'gpt-4.1-mini',
   assistantSystemPrompt: defaultSystemPromptFromMD,
   assistantTemperature: 0.7,
   assistantTopP: 1.0,
-  assistantTools: ['get_current_datetime', 'perform_web_search', 'save_memory', 'delete_memory', 'recall_memories'],
+  assistantTools: [
+    'get_current_datetime',
+    'perform_web_search',
+    'save_memory',
+    'delete_memory',
+    'recall_memories',
+  ],
   mcpServersConfig: '[]',
   MAX_HISTORY_MESSAGES_FOR_API: 10,
   SUMMARIZATION_MESSAGE_COUNT: 20,
@@ -83,8 +93,10 @@ const defaultSettings: AliceSettings = {
 
 const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_OPENAI_API_KEY: 'OpenAI API Key',
+  VITE_OPENROUTER_API_KEY: 'OpenRouter API Key',
   VITE_GROQ_API_KEY: 'Groq API Key (STT)',
   sttProvider: 'Speech-to-Text Provider',
+  aiProvider: 'AI Provider',
 
   assistantModel: 'Assistant Model',
   assistantSystemPrompt: 'Assistant System Prompt',
@@ -110,7 +122,10 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   onboardingCompleted: 'Onboarding Completed',
 }
 
-const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = ['VITE_OPENAI_API_KEY']
+const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
+  'VITE_OPENAI_API_KEY',
+  'VITE_OPENROUTER_API_KEY',
+]
 
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<AliceSettings>({ ...defaultSettings })
@@ -127,10 +142,16 @@ export const useSettingsStore = defineStore('settings', () => {
   const areEssentialSettingsProvided = computed(() => {
     if (!isProduction.value) return true
     const essentialKeys: (keyof AliceSettings)[] = [
-      'VITE_OPENAI_API_KEY',
       'assistantModel',
       'SUMMARIZATION_MODEL',
     ]
+
+    essentialKeys.push('VITE_OPENAI_API_KEY')
+
+    if (settings.value.aiProvider === 'openrouter') {
+      essentialKeys.push('VITE_OPENROUTER_API_KEY')
+    }
+
     if (settings.value.sttProvider === 'groq') {
       essentialKeys.push('VITE_GROQ_API_KEY')
     }
@@ -146,7 +167,16 @@ export const useSettingsStore = defineStore('settings', () => {
 
   const areCoreApiKeysSufficientForTesting = computed(() => {
     if (!isProduction.value) return true
-    return !!settings.value.VITE_OPENAI_API_KEY?.trim()
+
+    if (!settings.value.VITE_OPENAI_API_KEY?.trim()) {
+      return false
+    }
+
+    if (settings.value.aiProvider === 'openrouter') {
+      return !!settings.value.VITE_OPENROUTER_API_KEY?.trim()
+    }
+
+    return true
   })
 
   const config = computed<Readonly<AliceSettings>>(() => {
@@ -166,6 +196,7 @@ export const useSettingsStore = defineStore('settings', () => {
                   key === 'SUMMARIZATION_MODEL' ||
                   key === 'SUMMARIZATION_SYSTEM_PROMPT' ||
                   key === 'sttProvider' ||
+                  key === 'aiProvider' ||
                   key === 'onboardingCompleted'
               )
               .map(([key, value]) => {
@@ -327,10 +358,17 @@ export const useSettingsStore = defineStore('settings', () => {
     if (key === 'sttProvider') {
       settings.value[key] = value as 'openai' | 'groq'
     }
+    if (key === 'aiProvider') {
+      settings.value[key] = value as 'openai' | 'openrouter'
+    }
 
     successMessage.value = null
     error.value = null
-    if (key === 'VITE_OPENAI_API_KEY') {
+    if (
+      key === 'VITE_OPENAI_API_KEY' ||
+      key === 'VITE_OPENROUTER_API_KEY' ||
+      key === 'aiProvider'
+    ) {
       coreOpenAISettingsValid.value = false
     }
   }
@@ -349,15 +387,18 @@ export const useSettingsStore = defineStore('settings', () => {
     try {
       const plainSettings: AliceSettings = {
         VITE_OPENAI_API_KEY: settings.value.VITE_OPENAI_API_KEY,
+        VITE_OPENROUTER_API_KEY: settings.value.VITE_OPENROUTER_API_KEY,
         VITE_GROQ_API_KEY: settings.value.VITE_GROQ_API_KEY,
         sttProvider: settings.value.sttProvider,
+        aiProvider: settings.value.aiProvider,
         assistantModel: settings.value.assistantModel,
         assistantSystemPrompt: settings.value.assistantSystemPrompt,
         assistantTemperature: settings.value.assistantTemperature,
         assistantTopP: settings.value.assistantTopP,
         assistantTools: Array.from(settings.value.assistantTools || []),
         mcpServersConfig: settings.value.mcpServersConfig,
-        MAX_HISTORY_MESSAGES_FOR_API: settings.value.MAX_HISTORY_MESSAGES_FOR_API,
+        MAX_HISTORY_MESSAGES_FOR_API:
+          settings.value.MAX_HISTORY_MESSAGES_FOR_API,
         SUMMARIZATION_MESSAGE_COUNT: settings.value.SUMMARIZATION_MESSAGE_COUNT,
         SUMMARIZATION_MODEL: settings.value.SUMMARIZATION_MODEL,
         SUMMARIZATION_SYSTEM_PROMPT: settings.value.SUMMARIZATION_SYSTEM_PROMPT,
@@ -410,8 +451,19 @@ export const useSettingsStore = defineStore('settings', () => {
     const currentConfigForTest = config.value
 
     if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
-      error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing.`
-      generalStore.statusMessage = 'OpenAI API Key is required.'
+      error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing. Required for TTS/STT/embeddings.`
+      generalStore.statusMessage =
+        'OpenAI API Key is required for TTS/STT/embeddings.'
+      isSaving.value = false
+      return
+    }
+
+    if (
+      currentConfigForTest.aiProvider === 'openrouter' &&
+      !currentConfigForTest.VITE_OPENROUTER_API_KEY?.trim()
+    ) {
+      error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENROUTER_API_KEY}' is missing.`
+      generalStore.statusMessage = 'OpenRouter API Key is required.'
       isSaving.value = false
       return
     }
@@ -440,28 +492,32 @@ export const useSettingsStore = defineStore('settings', () => {
       openAIServiceTestSuccess = true
       coreOpenAISettingsValid.value = true
       console.log(
-        '[SettingsStore] OpenAI API connection test successful (fetchModels).'
+        `[SettingsStore] ${currentConfigForTest.aiProvider} API connection test successful (fetchModels).`
       )
     } catch (e: any) {
-      error.value = `OpenAI API connection test failed: ${e.message}. Check your OpenAI API Key.`
+      const providerName =
+        currentConfigForTest.aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'
+      error.value = `${providerName} API connection test failed: ${e.message}. Check your ${providerName} API Key.`
       coreOpenAISettingsValid.value = false
       openAIServiceTestSuccess = false
     }
 
     if (openAIServiceTestSuccess) {
       if (!currentConfigForTest.assistantModel?.trim()) {
-        error.value = `OpenAI API Key is valid. Please select an '${settingKeyToLabelMap.assistantModel}'.`
+        const providerName =
+          currentConfigForTest.aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'
+        error.value = `${providerName} API Key is valid. Please select an '${settingKeyToLabelMap.assistantModel}'.`
         generalStore.statusMessage = 'Assistant model not selected.'
-        successMessage.value =
-          'OpenAI API Key is valid. Models loaded. Please complete model selections.'
+        successMessage.value = `${providerName} API Key is valid. Models loaded. Please complete model selections.`
         isSaving.value = false
         return
       }
       if (!currentConfigForTest.SUMMARIZATION_MODEL?.trim()) {
-        error.value = `OpenAI API Key is valid. Please select a '${settingKeyToLabelMap.SUMMARIZATION_MODEL}'.`
+        const providerName =
+          currentConfigForTest.aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'
+        error.value = `${providerName} API Key is valid. Please select a '${settingKeyToLabelMap.SUMMARIZATION_MODEL}'.`
         generalStore.statusMessage = 'Summarization model not selected.'
-        successMessage.value =
-          'OpenAI API Key is valid. Models loaded. Please complete model selections.'
+        successMessage.value = `${providerName} API Key is valid. Models loaded. Please complete model selections.`
         isSaving.value = false
         return
       }
@@ -496,13 +552,18 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function completeOnboarding(onboardingData: {
     VITE_OPENAI_API_KEY: string
+    VITE_OPENROUTER_API_KEY: string
     sttProvider: 'openai' | 'groq'
+    aiProvider: 'openai' | 'openrouter'
     VITE_GROQ_API_KEY: string
   }) {
     console.log('[SettingsStore] Completing onboarding...')
 
     settings.value.VITE_OPENAI_API_KEY = onboardingData.VITE_OPENAI_API_KEY
+    settings.value.VITE_OPENROUTER_API_KEY =
+      onboardingData.VITE_OPENROUTER_API_KEY
     settings.value.sttProvider = onboardingData.sttProvider
+    settings.value.aiProvider = onboardingData.aiProvider
     settings.value.VITE_GROQ_API_KEY = onboardingData.VITE_GROQ_API_KEY
 
     settings.value.onboardingCompleted = true

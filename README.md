@@ -60,6 +60,7 @@ Alice can now interact with your local system with user-approved permissions:
 
 Fully customizable settings interface:
 
+* LLM provider selection between OpenAI and OpenRouter
 * Model choice & parameters (temperature, top\_p, history, etc)
 * Prompt and summarization tuning
 * Audio/mic toggles & hotkeys
@@ -81,7 +82,7 @@ Follow the [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs
 * **Frontend:** [Vue.js](https://vuejs.org/), [TailwindCSS](https://tailwindcss.com/)
 * **Desktop Shell:** [Electron](https://www.electronjs.org/)
 * **State Management:** [Pinia](https://pinia.vuejs.org/)
-* **AI APIs:** [OpenAI](https://platform.openai.com/), [Groq](https://console.groq.com/)
+* **AI APIs:** [OpenAI](https://platform.openai.com/), [OpenRouter](https://openrouter.ai/), [Groq](https://console.groq.com/)
 * **Embeddings:** [Hnswlib](https://github.com/nmslib/hnswlib)
 * **Voice:** [VAD (Web)](https://github.com/ricky0123/vad)
 * **Animation:** [Kling Pro](https://fal.ai/)

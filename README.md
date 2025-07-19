@@ -142,3 +142,7 @@ Install the output from the `release/` directory.
 ## 🤝 Contributing
 
 Ideas, bug reports, feature requests — all welcome! Open an issue or PR, or just drop by to share your thoughts. Your input helps shape Alice into something wonderful 💚
+
+## 🌟 Star History (Thank you!)
+
+[![Star History Chart](https://api.star-history.com/svg?repos=pmbstyle/Alice&type=Date)](https://www.star-history.com/#pmbstyle/Alice&Date)

@@ -11,6 +11,7 @@ import {
 import { loadSettings } from './settingsManager'
 import path from 'node:path'
 import os from 'node:os'
+import { WebSocketServer } from 'ws'
 
 import {
   createMainWindow,
@@ -34,6 +35,7 @@ const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_FULL_PATH = path.join(USER_DATA_PATH, 'generated_images')
 
 let isHandlingQuit = false
+let wss: WebSocketServer | null = null
 
 if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
@@ -50,6 +52,58 @@ function initializeManagers(): void {
   registerIPCHandlers()
   registerGoogleIPCHandlers()
   registerAuthIPCHandlers()
+}
+
+function startWebSocketServer() {
+  wss = new WebSocketServer({ port: 5421 })
+  
+  // Track pending requests to route responses correctly
+  const pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (error: any) => void }>()
+
+  wss.on('connection', ws => {
+    console.log('[WebSocket] Chrome Extension connected via WebSocket')
+
+    ws.on('message', message => {
+      try {
+        const data = JSON.parse(message.toString())
+        console.log('[WebSocket] From Chrome Extension:', data)
+        console.log('[WebSocket] Message type:', data.type)
+        console.log('[WebSocket] Message requestId:', data.requestId || 'none')
+
+        // Handle browser context responses from extension
+        if (data.type === 'browser_context_response') {
+          console.log('[WebSocket] Browser context response received:', data.requestId)
+          console.log('[WebSocket] Response data:', data.data)
+          
+          // Route response back to the original request handler
+          const mainWindow = getMainWindow()
+          if (mainWindow && mainWindow.webContents) {
+            console.log('[WebSocket] Sending response to main window')
+            mainWindow.webContents.send('websocket:response', data)
+          } else {
+            console.error('[WebSocket] Main window not available for response routing')
+          }
+        } else if (data.type === 'ping') {
+          console.log('[WebSocket] Ping received from extension')
+        } else {
+          console.log('[WebSocket] Unhandled message type:', data.type)
+        }
+      } catch (error) {
+        console.error('[WebSocket] Error processing message:', error)
+        console.error('[WebSocket] Raw message:', message.toString())
+      }
+    })
+
+    ws.on('close', () => {
+      console.log('[WebSocket] WebSocket disconnected')
+    })
+  })
+
+  console.log('[WebSocket] WebSocket server listening at ws://localhost:5421')
+}
+
+export function getWebSocketServer() {
+  return wss
 }
 
 app.on('ready', () => {
@@ -115,6 +169,7 @@ app.whenReady().then(async () => {
   await createMainWindow()
   await createOverlayWindow()
   checkForUpdates()
+  startWebSocketServer()
 })
 
 app.on('before-quit', async event => {
@@ -162,12 +217,7 @@ app.on('activate', () => {
 })
 
 app.on('certificate-error', (event, webContents, url, err, certificate, cb) => {
-  if (err)
-    console.error(
-      'Certificate error for URL:',
-      url,
-      err.message ? err.message : err
-    )
+  console.error('Certificate error for URL:', url, err)
 
   if (
     url.startsWith('https://192.168.') ||

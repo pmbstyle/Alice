@@ -282,7 +282,7 @@ async function open_path(args: OpenPathArgs): Promise<FunctionResult> {
     console.error('Error invoking electron:open-path:', error)
     return {
       success: false,
-      error: `Failed to execute open_path: ${error.message || 'Unknown error'}`,
+      error: `Failed to execute open_path: ${error instanceof Error ? error.message : 'Unknown error'}`,
     }
   }
 }
@@ -350,7 +350,7 @@ async function manage_clipboard(args: {
     console.error('Error during clipboard operation:', error)
     return {
       success: false,
-      error: `Failed to perform clipboard operation: ${error.message || 'Unknown error'}`,
+      error: `Failed to perform clipboard operation: ${error instanceof Error ? error.message : 'Unknown error'}`,
     }
   }
 }
@@ -637,7 +637,7 @@ async function get_unread_emails(
       if (listResult.data.length === 0) {
         return { success: true, data: 'No unread emails found.' }
       }
-      const emailDetailsPromises = listResult.data.map(msg =>
+      const emailDetailsPromises = listResult.data.map((msg: any) =>
         window.ipcRenderer.invoke('google-gmail:get-message', {
           id: msg.id,
           format: 'metadata',
@@ -685,7 +685,7 @@ async function search_emails(args: SearchEmailsArgs): Promise<FunctionResult> {
           data: `No emails found for query: "${args.query}"`,
         }
       }
-      const emailDetailsPromises = listResult.data.map(msg =>
+      const emailDetailsPromises = listResult.data.map((msg: any) =>
         window.ipcRenderer.invoke('google-gmail:get-message', {
           id: msg.id,
           format: 'metadata',
@@ -693,8 +693,8 @@ async function search_emails(args: SearchEmailsArgs): Promise<FunctionResult> {
       )
       const emailDetailsResults = await Promise.all(emailDetailsPromises)
       const processedEmails = emailDetailsResults
-        .filter(res => res.success && res.data)
-        .map(res => processEmailForAI(res.data, false))
+        .filter((res: any) => res.success && res.data)
+        .map((res: any) => processEmailForAI(res.data, false))
       return { success: true, data: processedEmails }
     }
     return {
@@ -1028,6 +1028,110 @@ async function add_torrent_to_qb(
   }
 }
 
+interface BrowserContextArgs {
+  includeUrl?: boolean
+  includeText?: boolean
+  includeLinks?: boolean
+  includeSelection?: boolean
+  includeContext?: boolean
+  maxContextLength?: number
+}
+
+interface BrowserContextData {
+  url?: string
+  title?: string
+  text?: string
+  links?: Array<{
+    text: string
+    href: string
+  }>
+  selection?: string
+  context?: string
+}
+
+async function browser_context(args: BrowserContextArgs = {}): Promise<FunctionResult> {
+  try {
+    // Default to including all data if no specific flags are provided
+    const includeAll = !Object.values(args).some(v => v === true)
+    
+    const requestData = {
+      type: 'browser_context',
+      requestId: `browser_context_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      data: {
+        includeUrl: includeAll || args.includeUrl !== false,
+        includeText: includeAll || args.includeText !== false,
+        includeLinks: includeAll || args.includeLinks !== false,
+        includeSelection: includeAll || args.includeSelection !== false,
+        includeContext: includeAll || args.includeContext !== false,
+        maxContextLength: args.maxContextLength || 2000
+      }
+    }
+
+    console.log('Requesting browser context via WebSocket:', requestData)
+
+    // Send request to main process via IPC
+    const result = await window.ipcRenderer.invoke('websocket:send-request', requestData)
+    
+    if (result.success && result.data) {
+      console.log('Browser context received:', result.data)
+      
+      // Format the response data
+      const contextData: BrowserContextData = result.data
+      
+      let formattedResponse = 'Browser Context Information:\n'
+      
+      if (contextData.url) {
+        formattedResponse += `\nURL: ${contextData.url}`
+      }
+      
+      if (contextData.title) {
+        formattedResponse += `\nTitle: ${contextData.title}`
+      }
+      
+      if (contextData.text) {
+        formattedResponse += `\n\nPage Text:\n${contextData.text.substring(0, 1000)}${contextData.text.length > 1000 ? '...' : ''}`
+      }
+      
+      if (contextData.links && contextData.links.length > 0) {
+        formattedResponse += `\n\nLinks Found (${contextData.links.length}):`
+        contextData.links.slice(0, 5).forEach((link, index) => {
+          formattedResponse += `\n${index + 1}. ${link.text} → ${link.href}`
+        })
+        if (contextData.links.length > 5) {
+          formattedResponse += `\n... and ${contextData.links.length - 5} more`
+        }
+      }
+      
+      if (contextData.selection) {
+        formattedResponse += `\n\nSelected Text:\n"${contextData.selection}"`
+      }
+      
+      if (contextData.context) {
+        formattedResponse += `\n\nContext:\n${contextData.context.substring(0, 500)}${contextData.context.length > 500 ? '...' : ''}`
+      }
+      
+      return {
+        success: true,
+        data: {
+          raw: contextData,
+          formatted: formattedResponse
+        }
+      }
+    } else {
+      return {
+        success: false,
+        error: result.error || 'Failed to retrieve browser context'
+      }
+    }
+  } catch (error: any) {
+    console.error('Error in browser_context:', error)
+    return {
+      success: false,
+      error: `Failed to get browser context: ${error.message}`
+    }
+  }
+}
+
 const functionRegistry: {
   [key: string]: (args: any) => Promise<FunctionResult>
 } = {
@@ -1050,6 +1154,7 @@ const functionRegistry: {
   execute_command,
   schedule_task,
   manage_scheduled_tasks,
+  browser_context,
 }
 
 const functionSchemas = {
@@ -1074,6 +1179,7 @@ const functionSchemas = {
   execute_command: { required: ['command'] },
   schedule_task: { required: ['name', 'schedule', 'action_type', 'details'] },
   manage_scheduled_tasks: { required: ['action'] },
+  browser_context: { required: [] },
 }
 
 /**

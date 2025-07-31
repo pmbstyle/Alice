@@ -2,6 +2,7 @@ import { ipcMain, desktopCapturer, shell, clipboard, app } from 'electron'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { loadSettings, saveSettings, AppSettings } from './settingsManager'
+import { getWebSocketServer } from './index'
 import {
   saveMemoryLocal,
   getRecentMemoriesLocal,
@@ -775,4 +776,91 @@ export function registerGoogleIPCHandlers(): void {
       }
     }
   )
+
+  // WebSocket communication for browser context
+  ipcMain.handle('websocket:send-request', async (event, requestData: any) => {
+    console.log('[IPC websocket:send-request] Starting request with data:', requestData)
+    
+    try {
+      const wss = getWebSocketServer()
+      console.log('[IPC websocket:send-request] WebSocket server status:', wss ? 'available' : 'null')
+      console.log('[IPC websocket:send-request] Connected clients:', wss ? wss.clients.size : 0)
+      
+      if (!wss || wss.clients.size === 0) {
+        console.error('[IPC websocket:send-request] No WebSocket clients connected')
+        return {
+          success: false,
+          error: 'No WebSocket clients connected. Ensure the Chrome extension is running.'
+        }
+      }
+
+      return new Promise((resolve) => {
+        let resolved = false
+        const timeout = setTimeout(() => {
+          if (!resolved) {
+            console.error('[IPC websocket:send-request] Request timed out after 10 seconds')
+            resolved = true
+            resolve({
+              success: false,
+              error: 'WebSocket request timed out. Chrome extension may not be responding.'
+            })
+          }
+        }, 10000) // 10 second timeout
+
+        console.log('[IPC websocket:send-request] Sending request to', wss.clients.size, 'client(s)')
+
+        // Send to all connected clients (should be the Chrome extension)
+        wss.clients.forEach((client: any) => {
+          if (client.readyState === 1) { // WebSocket.OPEN
+            console.log('[IPC websocket:send-request] Sending message to client:', requestData)
+            client.send(JSON.stringify(requestData))
+            
+            // Listen for response - filter for browser_context_response with matching requestId
+            const onMessage = (data: any) => {
+              if (!resolved) {
+                try {
+                  const response = JSON.parse(data.toString())
+                  console.log('[IPC websocket:send-request] Received message from client:', response)
+                  
+                  // Only process browser_context_response messages with matching requestId
+                  if (response.type === 'browser_context_response' && response.requestId === requestData.requestId) {
+                    console.log('[IPC websocket:send-request] Matching response received, resolving promise')
+                    resolved = true
+                    clearTimeout(timeout)
+                    resolve({ success: true, data: response })
+                    client.removeListener('message', onMessage)
+                  } else {
+                    console.log('[IPC websocket:send-request] Ignoring non-matching response:', response.type, 'expected requestId:', requestData.requestId, 'got:', response.requestId)
+                  }
+                } catch (error) {
+                  console.error('[IPC websocket:send-request] Error parsing message:', error)
+                  // Ignore invalid JSON or other message types
+                }
+              }
+            }
+            
+            client.on('message', onMessage)
+          } else {
+            console.log('[IPC websocket:send-request] Client not ready, state:', client.readyState)
+          }
+        })
+
+        // If no clients received the message
+        if (!resolved && wss.clients.size === 0) {
+          console.error('[IPC websocket:send-request] No clients to send message to')
+          clearTimeout(timeout)
+          resolve({
+            success: false,
+            error: 'No active WebSocket connections'
+          })
+        }
+      })
+    } catch (error: any) {
+      console.error('[IPC websocket:send-request] Error:', error)
+      return {
+        success: false,
+        error: `WebSocket communication error: ${error.message}`
+      }
+    }
+  })
 }

@@ -75,6 +75,11 @@ interface ManageScheduledTasksArgs {
   task_id?: string
 }
 
+interface BrowserContextArgs {
+  focus?: 'content' | 'selection' | 'links' | 'all'
+  maxLength?: number
+}
+
 async function save_memory(args: SaveMemoryArgs) {
   if (!args.content) {
     return { success: false, error: 'Content is required.' }
@@ -1028,106 +1033,97 @@ async function add_torrent_to_qb(
   }
 }
 
-interface BrowserContextArgs {
-  includeUrl?: boolean
-  includeText?: boolean
-  includeLinks?: boolean
-  includeSelection?: boolean
-  includeContext?: boolean
-  maxContextLength?: number
-}
-
-interface BrowserContextData {
-  url?: string
-  title?: string
-  text?: string
-  links?: Array<{
-    text: string
-    href: string
-  }>
-  selection?: string
-  context?: string
-}
-
-async function browser_context(args: BrowserContextArgs = {}): Promise<FunctionResult> {
+/**
+ * Retrieves the current browser context, including URL, title, content, and selected text.
+ */
+async function browser_context(
+  args: BrowserContextArgs = {}
+): Promise<FunctionResult> {
   try {
-    // Default to including all data if no specific flags are provided
-    const includeAll = !Object.values(args).some(v => v === true)
-    
     const requestData = {
-      type: 'browser_context',
+      type: 'get_context',
       requestId: `browser_context_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      data: {
-        includeUrl: includeAll || args.includeUrl !== false,
-        includeText: includeAll || args.includeText !== false,
-        includeLinks: includeAll || args.includeLinks !== false,
-        includeSelection: includeAll || args.includeSelection !== false,
-        includeContext: includeAll || args.includeContext !== false,
-        maxContextLength: args.maxContextLength || 2000
-      }
+      options: {
+        focus: args.focus || 'all',
+        maxLength: args.maxLength || 4000,
+        aggressiveMode: true,
+        enableSummarization: true,
+      },
     }
 
     console.log('Requesting browser context via WebSocket:', requestData)
 
-    // Send request to main process via IPC
-    const result = await window.ipcRenderer.invoke('websocket:send-request', requestData)
-    
+    const result = await window.ipcRenderer.invoke(
+      'websocket:send-request',
+      requestData
+    )
+
     if (result.success && result.data) {
       console.log('Browser context received:', result.data)
-      
-      // Format the response data
-      const contextData: BrowserContextData = result.data
-      
-      let formattedResponse = 'Browser Context Information:\n'
-      
-      if (contextData.url) {
-        formattedResponse += `\nURL: ${contextData.url}`
+
+      let formattedResponse = 'Browser Context:\n'
+
+      if (result.data.url) {
+        formattedResponse += `\nURL: ${result.data.url}`
       }
-      
-      if (contextData.title) {
-        formattedResponse += `\nTitle: ${contextData.title}`
+
+      if (result.data.title) {
+        formattedResponse += `\nTitle: ${result.data.title}`
       }
-      
-      if (contextData.text) {
-        formattedResponse += `\n\nPage Text:\n${contextData.text.substring(0, 1000)}${contextData.text.length > 1000 ? '...' : ''}`
+
+      if (
+        result.data.content &&
+        (args.focus === 'content' || args.focus === 'all')
+      ) {
+        formattedResponse += `\n\nContent:\n${result.data.content}`
       }
-      
-      if (contextData.links && contextData.links.length > 0) {
-        formattedResponse += `\n\nLinks Found (${contextData.links.length}):`
-        contextData.links.slice(0, 5).forEach((link, index) => {
+
+      if (
+        result.data.selection &&
+        (args.focus === 'selection' || args.focus === 'all')
+      ) {
+        formattedResponse += `\n\nSelected Text:\n"${result.data.selection}"`
+      }
+
+      if (
+        result.data.links &&
+        (args.focus === 'links' || args.focus === 'all') &&
+        result.data.links.length > 0
+      ) {
+        formattedResponse += `\n\nLinks (${result.data.links.length}):`
+        result.data.links.slice(0, 10).forEach((link: any, index: number) => {
           formattedResponse += `\n${index + 1}. ${link.text} → ${link.href}`
         })
-        if (contextData.links.length > 5) {
-          formattedResponse += `\n... and ${contextData.links.length - 5} more`
+        if (result.data.links.length > 10) {
+          formattedResponse += `\n... and ${result.data.links.length - 10} more`
         }
       }
-      
-      if (contextData.selection) {
-        formattedResponse += `\n\nSelected Text:\n"${contextData.selection}"`
+
+      if (result.data.metadata) {
+        const metadata = result.data.metadata
+        if (metadata.quality) {
+          formattedResponse += `\n\nContent Quality: ${metadata.quality.level} (${Math.round(metadata.quality.overall * 100)}%)`
+        }
       }
-      
-      if (contextData.context) {
-        formattedResponse += `\n\nContext:\n${contextData.context.substring(0, 500)}${contextData.context.length > 500 ? '...' : ''}`
-      }
-      
+
       return {
         success: true,
         data: {
-          raw: contextData,
-          formatted: formattedResponse
-        }
+          raw: result.data,
+          formatted: formattedResponse,
+        },
       }
     } else {
       return {
         success: false,
-        error: result.error || 'Failed to retrieve browser context'
+        error: result.error || 'Failed to retrieve browser context',
       }
     }
   } catch (error: any) {
     console.error('Error in browser_context:', error)
     return {
       success: false,
-      error: `Failed to get browser context: ${error.message}`
+      error: `Failed to get browser context: ${error.message}`,
     }
   }
 }
@@ -1154,7 +1150,7 @@ const functionRegistry: {
   execute_command,
   schedule_task,
   manage_scheduled_tasks,
-  browser_context,
+  browser_context: browser_context,
 }
 
 const functionSchemas = {

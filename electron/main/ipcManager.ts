@@ -2,7 +2,7 @@ import { ipcMain, desktopCapturer, shell, clipboard, app } from 'electron'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { loadSettings, saveSettings, AppSettings } from './settingsManager'
-import { getWebSocketServer } from './index'
+import { getWebSocketServer, restartWebSocketServer } from './index'
 import {
   saveMemoryLocal,
   getRecentMemoriesLocal,
@@ -396,6 +396,17 @@ export function registerIPCHandlers(): void {
             '[Main IPC settings:save] Take screenshot hotkey changed. Re-registering.'
           )
           registerTakeScreenshotHotkey(settingsToSave.takeScreenshotHotkey)
+        }
+
+        // Handle WebSocket port changes
+        if (
+          oldSettings?.websocketPort !== settingsToSave.websocketPort ||
+          (!oldSettings && settingsToSave.websocketPort)
+        ) {
+          console.log(
+            '[Main IPC settings:save] WebSocket port changed. Restarting WebSocket server.'
+          )
+          restartWebSocketServer()
         }
 
         return { success: true }

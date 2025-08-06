@@ -55,10 +55,29 @@ function initializeManagers(): void {
 }
 
 function startWebSocketServer() {
-  wss = new WebSocketServer({ port: 5421 })
-  
-  // Track pending requests to route responses correctly
-  const pendingRequests = new Map<string, { resolve: (value: any) => void; reject: (error: any) => void }>()
+  loadSettings()
+    .then(settings => {
+      const websocketPort = settings?.websocketPort || 5421
+      wss = new WebSocketServer({ port: websocketPort })
+      console.log(
+        `[WebSocket] WebSocket server listening at ws://localhost:${websocketPort}`
+      )
+    })
+    .catch(error => {
+      console.error(
+        '[WebSocket] Failed to load settings, using default port 5421:',
+        error
+      )
+      wss = new WebSocketServer({ port: 5421 })
+      console.log(
+        '[WebSocket] WebSocket server listening at ws://localhost:5421'
+      )
+    })
+
+  const pendingRequests = new Map<
+    string,
+    { resolve: (value: any) => void; reject: (error: any) => void }
+  >()
 
   wss.on('connection', ws => {
     console.log('[WebSocket] Chrome Extension connected via WebSocket')
@@ -70,18 +89,21 @@ function startWebSocketServer() {
         console.log('[WebSocket] Message type:', data.type)
         console.log('[WebSocket] Message requestId:', data.requestId || 'none')
 
-        // Handle browser context responses from extension
         if (data.type === 'browser_context_response') {
-          console.log('[WebSocket] Browser context response received:', data.requestId)
+          console.log(
+            '[WebSocket] Browser context response received:',
+            data.requestId
+          )
           console.log('[WebSocket] Response data:', data.data)
-          
-          // Route response back to the original request handler
+
           const mainWindow = getMainWindow()
           if (mainWindow && mainWindow.webContents) {
             console.log('[WebSocket] Sending response to main window')
             mainWindow.webContents.send('websocket:response', data)
           } else {
-            console.error('[WebSocket] Main window not available for response routing')
+            console.error(
+              '[WebSocket] Main window not available for response routing'
+            )
           }
         } else if (data.type === 'ping') {
           console.log('[WebSocket] Ping received from extension')
@@ -98,12 +120,25 @@ function startWebSocketServer() {
       console.log('[WebSocket] WebSocket disconnected')
     })
   })
-
-  console.log('[WebSocket] WebSocket server listening at ws://localhost:5421')
 }
 
 export function getWebSocketServer() {
   return wss
+}
+
+export function restartWebSocketServer() {
+  console.log(
+    '[WebSocket] Restarting WebSocket server with new port configuration'
+  )
+
+  if (wss) {
+    wss.close(() => {
+      console.log('[WebSocket] Existing WebSocket server closed')
+      startWebSocketServer()
+    })
+  } else {
+    startWebSocketServer()
+  }
 }
 
 app.on('ready', () => {
@@ -163,7 +198,10 @@ app.whenReady().then(async () => {
     await loadAndScheduleAllTasks()
     console.log('[Main App Ready] Task Scheduler initialization complete.')
   } catch (error) {
-    console.error('[Main App Ready] ERROR during Task Scheduler initialization:', error)
+    console.error(
+      '[Main App Ready] ERROR during Task Scheduler initialization:',
+      error
+    )
   }
 
   await createMainWindow()

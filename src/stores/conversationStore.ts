@@ -811,6 +811,7 @@ export const useConversationStore = defineStore('conversation', () => {
       get_unread_emails: '📧 Looking for unread emails...',
       search_emails: '📧 Searching emails...',
       get_email_content: '📧 Reading email content...',
+      browser_context: '🌐 Looking at your browser...',
       execute_command: (args: any) =>
         `💻 Executing: ${args?.command || 'command'}`,
       list_directory: (args: any) => `📁 Listing: ${args?.path || 'directory'}`,

@@ -54,72 +54,105 @@ function initializeManagers(): void {
   registerAuthIPCHandlers()
 }
 
+async function handleContextAction(actionData: any) {
+  try {
+    const { action, selectedText, url, title } = actionData
+
+    let prompt = ''
+    switch (action) {
+      case 'fact_check':
+        prompt = `Please fact-check the following information using web search. Determine if the information is accurate, misleading, or false. Provide a clear assessment and cite sources:\n\n"${selectedText}"\n\nFrom: ${title} (${url})`
+        break
+      case 'summarize':
+        prompt = `Please summarize the following content in a clear and concise manner:\n\n"${selectedText}"\n\nFrom: ${title} (${url})`
+        break
+      case 'tell_more':
+        prompt = `Please provide more detailed information about the following topic using web search. Give me additional context, background, and related information:\n\n"${selectedText}"\n\nFrom: ${title} (${url})`
+        break
+      default:
+        return
+    }
+
+    const mainWindow = getMainWindow()
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('context-action', {
+        prompt,
+        source: {
+          selectedText,
+          url,
+          title,
+          action,
+        },
+      })
+    }
+  } catch (error) {
+    console.error('[WebSocket] Error handling context action:', error)
+  }
+}
+
 function startWebSocketServer() {
+  const setupWebSocketHandlers = (server: WebSocketServer, port: number) => {
+    console.log(
+      `[WebSocket] WebSocket server listening at ws://localhost:${port}`
+    )
+
+    const pendingRequests = new Map<
+      string,
+      { resolve: (value: any) => void; reject: (error: any) => void }
+    >()
+
+    server.on('connection', ws => {
+      ws.on('message', async message => {
+        try {
+          const data = JSON.parse(message.toString())
+
+          if (data.type === 'browser_context_response') {
+            const mainWindow = getMainWindow()
+            if (mainWindow && mainWindow.webContents) {
+              mainWindow.webContents.send('websocket:response', data)
+            }
+          } else if (data.type === 'context_action') {
+            await handleContextAction(data.data)
+          }
+        } catch (error) {
+          console.error('[WebSocket] Error processing message:', error)
+        }
+      })
+    })
+  }
+
   loadSettings()
     .then(settings => {
       const websocketPort = settings?.websocketPort || 5421
-      wss = new WebSocketServer({ port: websocketPort })
-      console.log(
-        `[WebSocket] WebSocket server listening at ws://localhost:${websocketPort}`
-      )
+
+      try {
+        wss = new WebSocketServer({ port: websocketPort })
+        setupWebSocketHandlers(wss, websocketPort)
+      } catch (error) {
+        console.error(
+          `[WebSocket] Failed to create WebSocket server on port ${websocketPort}:`,
+          error
+        )
+        throw error
+      }
     })
     .catch(error => {
       console.error(
         '[WebSocket] Failed to load settings, using default port 5421:',
         error
       )
-      wss = new WebSocketServer({ port: 5421 })
-      console.log(
-        '[WebSocket] WebSocket server listening at ws://localhost:5421'
-      )
-    })
 
-  const pendingRequests = new Map<
-    string,
-    { resolve: (value: any) => void; reject: (error: any) => void }
-  >()
-
-  wss.on('connection', ws => {
-    console.log('[WebSocket] Chrome Extension connected via WebSocket')
-
-    ws.on('message', message => {
       try {
-        const data = JSON.parse(message.toString())
-        console.log('[WebSocket] From Chrome Extension:', data)
-        console.log('[WebSocket] Message type:', data.type)
-        console.log('[WebSocket] Message requestId:', data.requestId || 'none')
-
-        if (data.type === 'browser_context_response') {
-          console.log(
-            '[WebSocket] Browser context response received:',
-            data.requestId
-          )
-          console.log('[WebSocket] Response data:', data.data)
-
-          const mainWindow = getMainWindow()
-          if (mainWindow && mainWindow.webContents) {
-            console.log('[WebSocket] Sending response to main window')
-            mainWindow.webContents.send('websocket:response', data)
-          } else {
-            console.error(
-              '[WebSocket] Main window not available for response routing'
-            )
-          }
-        } else if (data.type === 'ping') {
-          console.log('[WebSocket] Ping received from extension')
-        } else {
-          console.log('[WebSocket] Unhandled message type:', data.type)
-        }
-      } catch (error) {
-        console.error('[WebSocket] Error processing message:', error)
-        console.error('[WebSocket] Raw message:', message.toString())
+        wss = new WebSocketServer({ port: 5421 })
+        setupWebSocketHandlers(wss, 5421)
+      } catch (serverError) {
+        console.error(
+          '[WebSocket] Failed to create WebSocket server on default port 5421:',
+          serverError
+        )
+        wss = null
       }
     })
-
-    ws.on('close', () => {
-      console.log('[WebSocket] WebSocket disconnected')
-    })
-  })
 }
 
 export function getWebSocketServer() {

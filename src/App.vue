@@ -50,11 +50,13 @@ import OnboardingWizard from './components/OnboardingWizard.vue'
 import CommandApprovalDialog from './components/CommandApprovalDialog.vue'
 import { useSettingsStore } from './stores/settingsStore'
 import { useGeneralStore } from './stores/generalStore'
+import { useConversationStore } from './stores/conversationStore'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const route = useRoute()
 const settingsStore = useSettingsStore()
 const generalStore = useGeneralStore()
+const conversationStore = useConversationStore()
 
 const showOverlay = computed(() => {
   return route.hash === '#overlay'
@@ -107,9 +109,19 @@ const requestCommandApproval = (command: string): Promise<any> => {
   })
 }
 
+const handleContextAction = async (data: any) => {
+  try {
+    const { prompt } = data
+
+    await conversationStore.initialize()
+    await conversationStore.chatWithContextAction(prompt)
+  } catch (error) {
+    console.error('Error handling context action:', error)
+  }
+}
+
 onMounted(async () => {
   await settingsStore.loadSettings()
-
   ;(window as any).requestCommandApproval = requestCommandApproval
 
   if (window.ipcRenderer) {
@@ -117,6 +129,11 @@ onMounted(async () => {
       console.log('Update downloaded in renderer:', info)
       updateInfo.value = info
       updateAvailable.value = true
+    })
+
+    window.ipcRenderer.on('context-action', (event, data) => {
+      console.log('Context action received in renderer:', data)
+      handleContextAction(data)
     })
   }
 })

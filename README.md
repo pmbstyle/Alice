@@ -1,8 +1,8 @@
 # Alice
 
-Say "Hi" to Alice 👋 — your open-source AI companion designed to live on your desktop.
+Say "Hi" to Alice 👋, your open-source AI companion designed to live on your desktop.
 
-Alice brings together voice interaction, intelligent context awareness, powerful tooling, and a friendly personality to assist you with everything from daily tasks to deeper creative work. She’s more than a chatbot — she’s built to feel present, responsive, emotionally engaging, and deeply useful.
+Alice brings together voice interaction, intelligent context awareness, powerful tooling, and a friendly personality to assist you with everything from daily tasks to deeper creative work. She’s more than a chatbot, she’s built to feel present, responsive, emotionally engaging, and deeply useful.
 
 <p align="center">
   <img src="https://github.com/pmbstyle/Alice/blob/main/animation.gif?raw=true" alt="Alice Animation">
@@ -54,8 +54,15 @@ Alice can now interact with your local system with user-approved permissions:
 * Task scheduler (reminders and command execution)
 * Open applications & URLs
 * Image generation
-* User browser context via dedicated [Chrome Extension](https://github.com/pmbstyle/alice-chrome-extension)
 * MCP server support
+
+### 💻 Dedicated Chrome [Extension](https://github.com/pmbstyle/alice-chrome-extension)
+
+* Ask Alice about your active Chrome tab
+* Context menu for selected text on a web page
+  - Fact check this
+  - Summarize this
+  - Tell me more about it
 
 ### 🎛️ Flexible Settings
 

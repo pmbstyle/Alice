@@ -811,6 +811,7 @@ export const useConversationStore = defineStore('conversation', () => {
       get_unread_emails: '📧 Looking for unread emails...',
       search_emails: '📧 Searching emails...',
       get_email_content: '📧 Reading email content...',
+      browser_context: '🌐 Looking at your browser...',
       execute_command: (args: any) =>
         `💻 Executing: ${args?.command || 'command'}`,
       list_directory: (args: any) => `📁 Listing: ${args?.path || 'directory'}`,
@@ -849,11 +850,84 @@ export const useConversationStore = defineStore('conversation', () => {
     )
   }
 
+  const chatWithContextAction = async (prompt: string) => {
+    if (!isInitialized.value) {
+      console.warn('Conversation store not initialized.')
+      return
+    }
+    currentConversationTurnId.value = `turn-${Date.now()}`
+    setAudioState('WAITING_FOR_RESPONSE')
+
+    const isNewChain = currentResponseId.value === null
+    const constructedApiInput = await buildApiInput(isNewChain)
+
+    const contextMessages: OpenAI.Responses.Request.InputItemLike[] = []
+
+    contextMessages.push({
+      role: 'user',
+      content: [{ type: 'input_text', text: prompt }],
+    })
+
+    const summaryResult = await window.ipcRenderer.invoke(
+      'summaries:get-latest-summary',
+      {}
+    )
+    if (summaryResult.success && summaryResult.data?.summary_text) {
+      const summaryContent = `[CONVERSATION_SUMMARY_START]\nContext from a previous part of our conversation:\n${summaryResult.data.summary_text}\n[CONVERSATION_SUMMARY_END]`
+      contextMessages.push({
+        role: 'user',
+        content: [{ type: 'input_text', text: summaryContent }],
+      })
+    }
+
+    if (ephemeralEmotionalContext.value) {
+      const emotionalContextContent = `[SYSTEM_NOTE: Based on our recent interaction, the user's emotional state seems to be: ${ephemeralEmotionalContext.value}]`
+      contextMessages.push({
+        role: 'user',
+        content: [{ type: 'input_text', text: emotionalContextContent }],
+      })
+      ephemeralEmotionalContext.value = null
+    }
+
+    const finalApiInput = [...contextMessages, ...constructedApiInput]
+    const finalInstructions = settingsStore.config.assistantSystemPrompt
+
+    const assistantMessagePlaceholder: ChatMessage = {
+      role: 'assistant',
+      content: [{ type: 'app_text', text: '' }],
+    }
+    const placeholderTempId = generalStore.addMessageToHistory(
+      assistantMessagePlaceholder
+    )
+
+    try {
+      llmAbortController.value = new AbortController()
+      const streamResult = await api.createOpenAIResponse(
+        finalApiInput,
+        currentResponseId.value,
+        true,
+        finalInstructions,
+        llmAbortController.value.signal
+      )
+      await _processStreamLogic(streamResult, placeholderTempId, false)
+    } catch (error: any) {
+      if (error.name !== 'AbortError') {
+        console.error('Error starting OpenAI response stream:', error)
+        generalStore.updateMessageContentByTempId(
+          placeholderTempId,
+          `Error: ${error.message}`
+        )
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      }
+    }
+  }
+
   return {
     isInitialized,
     availableModels,
     initialize,
     chat,
+    chatWithContextAction,
     transcribeAudioMessage,
     fetchModels,
     currentResponseId,

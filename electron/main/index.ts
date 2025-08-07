@@ -11,6 +11,7 @@ import {
 import { loadSettings } from './settingsManager'
 import path from 'node:path'
 import os from 'node:os'
+import { WebSocketServer } from 'ws'
 
 import {
   createMainWindow,
@@ -34,6 +35,7 @@ const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_FULL_PATH = path.join(USER_DATA_PATH, 'generated_images')
 
 let isHandlingQuit = false
+let wss: WebSocketServer | null = null
 
 if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
@@ -50,6 +52,126 @@ function initializeManagers(): void {
   registerIPCHandlers()
   registerGoogleIPCHandlers()
   registerAuthIPCHandlers()
+}
+
+async function handleContextAction(actionData: any) {
+  try {
+    const { action, selectedText, url, title } = actionData
+
+    let prompt = ''
+    switch (action) {
+      case 'fact_check':
+        prompt = `Please fact-check the following information using web search. Determine if the information is accurate, misleading, or false. Provide a clear assessment and cite sources:\n\n"${selectedText}"\n\nFrom: ${title} (${url})`
+        break
+      case 'summarize':
+        prompt = `Please summarize the following content in a clear and concise manner:\n\n"${selectedText}"\n\nFrom: ${title} (${url})`
+        break
+      case 'tell_more':
+        prompt = `Please provide more detailed information about the following topic using web search. Give me additional context, background, and related information:\n\n"${selectedText}"\n\nFrom: ${title} (${url})`
+        break
+      default:
+        return
+    }
+
+    const mainWindow = getMainWindow()
+    if (mainWindow && mainWindow.webContents) {
+      mainWindow.webContents.send('context-action', {
+        prompt,
+        source: {
+          selectedText,
+          url,
+          title,
+          action,
+        },
+      })
+    }
+  } catch (error) {
+    console.error('[WebSocket] Error handling context action:', error)
+  }
+}
+
+function startWebSocketServer() {
+  const setupWebSocketHandlers = (server: WebSocketServer, port: number) => {
+    console.log(
+      `[WebSocket] WebSocket server listening at ws://localhost:${port}`
+    )
+
+    const pendingRequests = new Map<
+      string,
+      { resolve: (value: any) => void; reject: (error: any) => void }
+    >()
+
+    server.on('connection', ws => {
+      ws.on('message', async message => {
+        try {
+          const data = JSON.parse(message.toString())
+
+          if (data.type === 'browser_context_response') {
+            const mainWindow = getMainWindow()
+            if (mainWindow && mainWindow.webContents) {
+              mainWindow.webContents.send('websocket:response', data)
+            }
+          } else if (data.type === 'context_action') {
+            await handleContextAction(data.data)
+          }
+        } catch (error) {
+          console.error('[WebSocket] Error processing message:', error)
+        }
+      })
+    })
+  }
+
+  loadSettings()
+    .then(settings => {
+      const websocketPort = settings?.websocketPort || 5421
+
+      try {
+        wss = new WebSocketServer({ port: websocketPort })
+        setupWebSocketHandlers(wss, websocketPort)
+      } catch (error) {
+        console.error(
+          `[WebSocket] Failed to create WebSocket server on port ${websocketPort}:`,
+          error
+        )
+        throw error
+      }
+    })
+    .catch(error => {
+      console.error(
+        '[WebSocket] Failed to load settings, using default port 5421:',
+        error
+      )
+
+      try {
+        wss = new WebSocketServer({ port: 5421 })
+        setupWebSocketHandlers(wss, 5421)
+      } catch (serverError) {
+        console.error(
+          '[WebSocket] Failed to create WebSocket server on default port 5421:',
+          serverError
+        )
+        wss = null
+      }
+    })
+}
+
+export function getWebSocketServer() {
+  return wss
+}
+
+export function restartWebSocketServer() {
+  console.log(
+    '[WebSocket] Restarting WebSocket server with new port configuration'
+  )
+
+  if (wss) {
+    wss.close(() => {
+      console.log('[WebSocket] Existing WebSocket server closed')
+      startWebSocketServer()
+    })
+  } else {
+    startWebSocketServer()
+  }
 }
 
 app.on('ready', () => {
@@ -109,12 +231,16 @@ app.whenReady().then(async () => {
     await loadAndScheduleAllTasks()
     console.log('[Main App Ready] Task Scheduler initialization complete.')
   } catch (error) {
-    console.error('[Main App Ready] ERROR during Task Scheduler initialization:', error)
+    console.error(
+      '[Main App Ready] ERROR during Task Scheduler initialization:',
+      error
+    )
   }
 
   await createMainWindow()
   await createOverlayWindow()
   checkForUpdates()
+  startWebSocketServer()
 })
 
 app.on('before-quit', async event => {
@@ -162,12 +288,7 @@ app.on('activate', () => {
 })
 
 app.on('certificate-error', (event, webContents, url, err, certificate, cb) => {
-  if (err)
-    console.error(
-      'Certificate error for URL:',
-      url,
-      err.message ? err.message : err
-    )
+  console.error('Certificate error for URL:', url, err)
 
   if (
     url.startsWith('https://192.168.') ||

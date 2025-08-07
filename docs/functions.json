@@ -439,5 +439,28 @@
       "required": ["magnet"],
       "additionalProperties": false
     }
+  },
+  {
+    "type": "function",
+    "name": "browser_context",
+    "description": "Use this function to get information about the current webpage in users browser. Use it when the user refers to their browser content.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "focus": {
+          "type": "string",
+          "enum": ["content", "selection", "links", "all"],
+          "description": "What to focus on: 'content' for page content, 'selection' for highlighted text, 'links' for page links, 'all' for everything. Default is 'all'.",
+          "default": "all"
+        },
+        "maxLength": {
+          "type": "integer",
+          "description": "Maximum character length for the response. Content will be prioritized and truncated to fit. Default is 4000.",
+          "default": 4000
+        }
+      },
+      "additionalProperties": false
+    }
   }
 ]

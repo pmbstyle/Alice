@@ -48,6 +48,8 @@ export interface AliceSettings {
   VITE_QB_USERNAME: string
   VITE_QB_PASSWORD: string
 
+  websocketPort: number
+
   approvedCommands: string[]
   onboardingCompleted: boolean
 }
@@ -87,6 +89,8 @@ const defaultSettings: AliceSettings = {
   VITE_QB_USERNAME: '',
   VITE_QB_PASSWORD: '',
 
+  websocketPort: 5421,
+
   approvedCommands: ['ls', 'dir'],
   onboardingCompleted: false,
 }
@@ -117,6 +121,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_QB_URL: 'qBittorrent URL',
   VITE_QB_USERNAME: 'qBittorrent Username',
   VITE_QB_PASSWORD: 'qBittorrent Password',
+  websocketPort: 'WebSocket Port',
   mcpServersConfig: 'MCP Servers JSON Configuration',
   approvedCommands: 'Approved Commands',
   onboardingCompleted: 'Onboarding Completed',
@@ -347,7 +352,8 @@ export const useSettingsStore = defineStore('settings', () => {
       key === 'assistantTemperature' ||
       key === 'assistantTopP' ||
       key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
-      key === 'SUMMARIZATION_MESSAGE_COUNT'
+      key === 'SUMMARIZATION_MESSAGE_COUNT' ||
+      key === 'websocketPort'
     ) {
       ;(settings.value as any)[key] = Number(value)
     } else if (key === 'assistantTools' && Array.isArray(value)) {
@@ -411,6 +417,7 @@ export const useSettingsStore = defineStore('settings', () => {
         VITE_QB_URL: settings.value.VITE_QB_URL,
         VITE_QB_USERNAME: settings.value.VITE_QB_USERNAME,
         VITE_QB_PASSWORD: settings.value.VITE_QB_PASSWORD,
+        websocketPort: settings.value.websocketPort,
         approvedCommands: Array.from(settings.value.approvedCommands || []),
         onboardingCompleted: settings.value.onboardingCompleted,
       }

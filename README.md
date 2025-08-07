@@ -54,6 +54,7 @@ Alice can now interact with your local system with user-approved permissions:
 * Task scheduler (reminders and command execution)
 * Open applications & URLs
 * Image generation
+* User browser context via dedicated [Chrome Extension](https://github.com/pmbstyle/alice-chrome-extension)
 * MCP server support
 
 ### 🎛️ Flexible Settings
@@ -142,7 +143,3 @@ Install the output from the `release/` directory.
 ## 🤝 Contributing
 
 Ideas, bug reports, feature requests — all welcome! Open an issue or PR, or just drop by to share your thoughts. Your input helps shape Alice into something wonderful 💚
-
-## 🌟 Star History (Thank you!)
-
-[![Star History Chart](https://api.star-history.com/svg?repos=pmbstyle/Alice&type=Date)](https://www.star-history.com/#pmbstyle/Alice&Date)

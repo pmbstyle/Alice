@@ -75,6 +75,11 @@ interface ManageScheduledTasksArgs {
   task_id?: string
 }
 
+interface BrowserContextArgs {
+  focus?: 'content' | 'selection' | 'links' | 'all'
+  maxLength?: number
+}
+
 async function save_memory(args: SaveMemoryArgs) {
   if (!args.content) {
     return { success: false, error: 'Content is required.' }
@@ -282,7 +287,7 @@ async function open_path(args: OpenPathArgs): Promise<FunctionResult> {
     console.error('Error invoking electron:open-path:', error)
     return {
       success: false,
-      error: `Failed to execute open_path: ${error.message || 'Unknown error'}`,
+      error: `Failed to execute open_path: ${error instanceof Error ? error.message : 'Unknown error'}`,
     }
   }
 }
@@ -350,7 +355,7 @@ async function manage_clipboard(args: {
     console.error('Error during clipboard operation:', error)
     return {
       success: false,
-      error: `Failed to perform clipboard operation: ${error.message || 'Unknown error'}`,
+      error: `Failed to perform clipboard operation: ${error instanceof Error ? error.message : 'Unknown error'}`,
     }
   }
 }
@@ -637,7 +642,7 @@ async function get_unread_emails(
       if (listResult.data.length === 0) {
         return { success: true, data: 'No unread emails found.' }
       }
-      const emailDetailsPromises = listResult.data.map(msg =>
+      const emailDetailsPromises = listResult.data.map((msg: any) =>
         window.ipcRenderer.invoke('google-gmail:get-message', {
           id: msg.id,
           format: 'metadata',
@@ -685,7 +690,7 @@ async function search_emails(args: SearchEmailsArgs): Promise<FunctionResult> {
           data: `No emails found for query: "${args.query}"`,
         }
       }
-      const emailDetailsPromises = listResult.data.map(msg =>
+      const emailDetailsPromises = listResult.data.map((msg: any) =>
         window.ipcRenderer.invoke('google-gmail:get-message', {
           id: msg.id,
           format: 'metadata',
@@ -693,8 +698,8 @@ async function search_emails(args: SearchEmailsArgs): Promise<FunctionResult> {
       )
       const emailDetailsResults = await Promise.all(emailDetailsPromises)
       const processedEmails = emailDetailsResults
-        .filter(res => res.success && res.data)
-        .map(res => processEmailForAI(res.data, false))
+        .filter((res: any) => res.success && res.data)
+        .map((res: any) => processEmailForAI(res.data, false))
       return { success: true, data: processedEmails }
     }
     return {
@@ -1028,6 +1033,101 @@ async function add_torrent_to_qb(
   }
 }
 
+/**
+ * Retrieves the current browser context, including URL, title, content, and selected text.
+ */
+async function browser_context(
+  args: BrowserContextArgs = {}
+): Promise<FunctionResult> {
+  try {
+    const requestData = {
+      type: 'get_context',
+      requestId: `browser_context_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      options: {
+        focus: args.focus || 'all',
+        maxLength: args.maxLength || 4000,
+        aggressiveMode: true,
+        enableSummarization: true,
+      },
+    }
+
+    console.log('Requesting browser context via WebSocket:', requestData)
+
+    const result = await window.ipcRenderer.invoke(
+      'websocket:send-request',
+      requestData
+    )
+
+    if (result.success && result.data) {
+      console.log('Browser context received:', result.data)
+
+      let formattedResponse = 'Browser Context:\n'
+
+      if (result.data.url) {
+        formattedResponse += `\nURL: ${result.data.url}`
+      }
+
+      if (result.data.title) {
+        formattedResponse += `\nTitle: ${result.data.title}`
+      }
+
+      if (
+        result.data.content &&
+        (args.focus === 'content' || args.focus === 'all')
+      ) {
+        formattedResponse += `\n\nContent:\n${result.data.content}`
+      }
+
+      if (
+        result.data.selection &&
+        (args.focus === 'selection' || args.focus === 'all')
+      ) {
+        formattedResponse += `\n\nSelected Text:\n"${result.data.selection}"`
+      }
+
+      if (
+        result.data.links &&
+        (args.focus === 'links' || args.focus === 'all') &&
+        result.data.links.length > 0
+      ) {
+        formattedResponse += `\n\nLinks (${result.data.links.length}):`
+        result.data.links.slice(0, 10).forEach((link: any, index: number) => {
+          formattedResponse += `\n${index + 1}. ${link.text} → ${link.href}`
+        })
+        if (result.data.links.length > 10) {
+          formattedResponse += `\n... and ${result.data.links.length - 10} more`
+        }
+      }
+
+      if (result.data.metadata) {
+        const metadata = result.data.metadata
+        if (metadata.quality) {
+          formattedResponse += `\n\nContent Quality: ${metadata.quality.level} (${Math.round(metadata.quality.overall * 100)}%)`
+        }
+      }
+
+      return {
+        success: true,
+        data: {
+          raw: result.data,
+          formatted: formattedResponse,
+        },
+      }
+    } else {
+      return {
+        success: false,
+        error: result.error || 'Failed to retrieve browser context',
+      }
+    }
+  } catch (error: any) {
+    console.error('Error in browser_context:', error)
+    return {
+      success: false,
+      error: `Failed to get browser context: ${error.message}`,
+    }
+  }
+}
+
 const functionRegistry: {
   [key: string]: (args: any) => Promise<FunctionResult>
 } = {
@@ -1050,6 +1150,7 @@ const functionRegistry: {
   execute_command,
   schedule_task,
   manage_scheduled_tasks,
+  browser_context: browser_context,
 }
 
 const functionSchemas = {
@@ -1074,6 +1175,7 @@ const functionSchemas = {
   execute_command: { required: ['command'] },
   schedule_task: { required: ['name', 'schedule', 'action_type', 'details'] },
   manage_scheduled_tasks: { required: ['action'] },
+  browser_context: { required: [] },
 }
 
 /**

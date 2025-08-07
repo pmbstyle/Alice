@@ -19,6 +19,7 @@ export interface AppSettings {
   microphoneToggleHotkey?: string
   mutePlaybackHotkey?: string
   takeScreenshotHotkey?: string
+  websocketPort?: number
 }
 
 export async function saveSettings(settings: AppSettings): Promise<void> {

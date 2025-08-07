@@ -496,6 +496,41 @@
               </div>
             </div>
           </fieldset>
+
+          <fieldset
+            v-if="isBrowserContextToolActive"
+            class="fieldset bg-gray-900/90 border-green-500/50 rounded-box w-full border p-4"
+          >
+            <legend class="fieldset-legend">WebSocket Configuration</legend>
+            <div class="space-y-4 p-2">
+              <div>
+                <label
+                  for="websocket-port"
+                  class="block mb-1 text-sm flex items-center"
+                >
+                  WebSocket Port
+                  <div
+                    class="tooltip tooltip-right"
+                    data-tip="The port number for the WebSocket server used by the browser_context tool. Ensure this port is available and not blocked by firewall."
+                  >
+                    <img :src="infoIcon" class="size-4 ml-1" />
+                  </div>
+                </label>
+                <input
+                  id="websocket-port"
+                  type="number"
+                  min="1"
+                  max="65535"
+                  step="1"
+                  v-model.number="currentSettings.websocketPort"
+                  class="input input-bordered w-full focus:input-primary"
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  Port number for WebSocket server (1-65535). Default: 5421
+                </p>
+              </div>
+            </div>
+          </fieldset>
         </div>
 
         <div v-if="activeTab === 'hotkeys'" class="space-y-6">
@@ -1037,6 +1072,10 @@ const availableToolsForSelect = computed(() => {
   }).filter(tool => tool.name)
 })
 
+const isBrowserContextToolActive = computed(() => {
+  return currentSettings.value.assistantTools.includes('browser_context')
+})
+
 const availableModelsForSelect = computed(() => {
   return availableModels.value
 })
@@ -1099,7 +1138,11 @@ function isToolConfigured(toolName: string): boolean {
     if (depKey === 'GOOGLE_AUTH') {
       return googleAuthStatus.isAuthenticated
     }
-    return !!currentLocalSettings[depKey as keyof AliceSettings]?.trim()
+    const value = currentLocalSettings[depKey as keyof AliceSettings]
+    if (typeof value === 'string') {
+      return !!value.trim()
+    }
+    return !!value
   })
 }
 
@@ -1266,8 +1309,8 @@ const handleHotkeyKeyDown = (event: KeyboardEvent) => {
 
     const newHotkey = acceleratorParts.join('+')
     if (isRecordingHotkeyFor.value) {
-      currentSettings.value[isRecordingHotkeyFor.value as keyof AliceSettings] =
-        newHotkey as any
+      (currentSettings.value[isRecordingHotkeyFor.value as keyof AliceSettings] as any) =
+        newHotkey
     }
     stopRecordingHotkey()
   }
@@ -1344,10 +1387,13 @@ watch(
         settingsStore.settings[key as keyof AliceSettings] !==
         newValues[key as keyof AliceSettings]
       ) {
-        settingsStore.updateSetting(
-          key as keyof AliceSettings,
-          newValues[key as keyof AliceSettings]
-        )
+        const value = newValues[key as keyof AliceSettings]
+        if (value !== undefined) {
+          settingsStore.updateSetting(
+            key as keyof AliceSettings,
+            value
+          )
+        }
       }
     }
   },

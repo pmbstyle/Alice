@@ -271,6 +271,7 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
 
         const isSupportedPrefix =
           id.startsWith('gpt-4') ||
+          id.startsWith('gpt-5') ||
           id.startsWith('o1') ||
           id.startsWith('o2') ||
           id.startsWith('o3') ||
@@ -504,7 +505,9 @@ export const createOpenAIResponse = async (
     const params: OpenAI.Chat.ChatCompletionCreateParams = {
       model: modelWithWebSearch,
       messages: messages,
-      temperature: settings.assistantTemperature,
+      ...(!settings.assistantModel.startsWith('gpt-5') ? {
+        temperature: settings.assistantTemperature,
+      } : {}),
       top_p: settings.assistantTopP,
       tools:
         finalToolsForApi.length > 0
@@ -539,7 +542,7 @@ export const createOpenAIResponse = async (
       model: settings.assistantModel || 'gpt-4.1-mini',
       input: input,
       instructions: customInstructions || settings.assistantSystemPrompt,
-      ...(isOModel
+      ...(isOModel || settings.assistantModel.startsWith('gpt-5')
         ? {}
         : {
             temperature: settings.assistantTemperature,

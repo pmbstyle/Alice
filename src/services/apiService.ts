@@ -507,8 +507,8 @@ export const createOpenAIResponse = async (
       messages: messages,
       ...(!settings.assistantModel.startsWith('gpt-5') ? {
         temperature: settings.assistantTemperature,
+        top_p: settings.assistantTopP,
       } : {}),
-      top_p: settings.assistantTopP,
       tools:
         finalToolsForApi.length > 0
           ? finalToolsForApi.map(tool => {
@@ -548,6 +548,16 @@ export const createOpenAIResponse = async (
             temperature: settings.assistantTemperature,
             top_p: settings.assistantTopP,
           }),
+      ...(settings.assistantModel.startsWith('gpt-5')
+        ? {
+            reasoning: {
+              effort: settings.assistantReasoningEffort || 'medium',
+            },
+            text: {
+              verbosity: settings.assistantVerbosity || 'medium',
+            },
+          }
+        : {}),
       tools: finalToolsForApi.length > 0 ? finalToolsForApi : undefined,
       previous_response_id: previousResponseId || undefined,
       stream: stream,

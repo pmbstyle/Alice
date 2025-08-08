@@ -30,6 +30,8 @@ export interface AliceSettings {
   assistantSystemPrompt: string
   assistantTemperature: number
   assistantTopP: number
+  assistantReasoningEffort: 'minimal' | 'low' | 'medium' | 'high'
+  assistantVerbosity: 'low' | 'medium' | 'high'
   assistantTools: string[]
   mcpServersConfig?: string
   MAX_HISTORY_MESSAGES_FOR_API: number
@@ -65,6 +67,8 @@ const defaultSettings: AliceSettings = {
   assistantSystemPrompt: defaultSystemPromptFromMD,
   assistantTemperature: 0.7,
   assistantTopP: 1.0,
+  assistantReasoningEffort: 'medium',
+  assistantVerbosity: 'medium',
   assistantTools: [
     'get_current_datetime',
     'perform_web_search',
@@ -106,6 +110,8 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   assistantSystemPrompt: 'Assistant System Prompt',
   assistantTemperature: 'Assistant Temperature',
   assistantTopP: 'Assistant Top P',
+  assistantReasoningEffort: 'Reasoning Effort',
+  assistantVerbosity: 'Response Verbosity',
   assistantTools: 'Enabled Assistant Tools',
   MAX_HISTORY_MESSAGES_FOR_API: 'Max History Messages for API',
   SUMMARIZATION_MESSAGE_COUNT: 'Summarization Message Count',
@@ -367,6 +373,12 @@ export const useSettingsStore = defineStore('settings', () => {
     if (key === 'aiProvider') {
       settings.value[key] = value as 'openai' | 'openrouter'
     }
+    if (key === 'assistantReasoningEffort') {
+      settings.value[key] = value as 'minimal' | 'low' | 'medium' | 'high'
+    }
+    if (key === 'assistantVerbosity') {
+      settings.value[key] = value as 'low' | 'medium' | 'high'
+    }
 
     successMessage.value = null
     error.value = null
@@ -401,6 +413,8 @@ export const useSettingsStore = defineStore('settings', () => {
         assistantSystemPrompt: settings.value.assistantSystemPrompt,
         assistantTemperature: settings.value.assistantTemperature,
         assistantTopP: settings.value.assistantTopP,
+        assistantReasoningEffort: settings.value.assistantReasoningEffort,
+        assistantVerbosity: settings.value.assistantVerbosity,
         assistantTools: Array.from(settings.value.assistantTools || []),
         mcpServersConfig: settings.value.mcpServersConfig,
         MAX_HISTORY_MESSAGES_FOR_API:

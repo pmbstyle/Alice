@@ -716,6 +716,16 @@ export const createSummarizationResponse = async (
         { role: 'user', content: [{ type: 'input_text', text: combinedText }] },
       ],
       instructions: systemPrompt,
+      ...(summarizationModel.startsWith('gpt-5')
+        ? {
+            reasoning: {
+              effort: 'minimal',
+            },
+            text: {
+              verbosity: 'low',
+            },
+          }
+        : {}),
       stream: false,
       store: false,
     } as any)
@@ -759,6 +769,16 @@ export const createContextAnalysisResponse = async (
         { role: 'user', content: [{ type: 'input_text', text: combinedText }] },
       ],
       instructions: analysisSystemPrompt,
+      ...(analysisModel.startsWith('gpt-5')
+        ? {
+            reasoning: {
+              effort: 'minimal',
+            },
+            text: {
+              verbosity: 'low',
+            },
+          }
+        : {}),
       stream: false,
       store: false,
     } as any)

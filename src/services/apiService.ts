@@ -271,6 +271,7 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
 
         const isSupportedPrefix =
           id.startsWith('gpt-4') ||
+          id.startsWith('gpt-5') ||
           id.startsWith('o1') ||
           id.startsWith('o2') ||
           id.startsWith('o3') ||
@@ -504,8 +505,10 @@ export const createOpenAIResponse = async (
     const params: OpenAI.Chat.ChatCompletionCreateParams = {
       model: modelWithWebSearch,
       messages: messages,
-      temperature: settings.assistantTemperature,
-      top_p: settings.assistantTopP,
+      ...(!settings.assistantModel.startsWith('gpt-5') ? {
+        temperature: settings.assistantTemperature,
+        top_p: settings.assistantTopP,
+      } : {}),
       tools:
         finalToolsForApi.length > 0
           ? finalToolsForApi.map(tool => {
@@ -539,12 +542,22 @@ export const createOpenAIResponse = async (
       model: settings.assistantModel || 'gpt-4.1-mini',
       input: input,
       instructions: customInstructions || settings.assistantSystemPrompt,
-      ...(isOModel
+      ...(isOModel || settings.assistantModel.startsWith('gpt-5')
         ? {}
         : {
             temperature: settings.assistantTemperature,
             top_p: settings.assistantTopP,
           }),
+      ...(settings.assistantModel.startsWith('gpt-5')
+        ? {
+            reasoning: {
+              effort: settings.assistantReasoningEffort || 'medium',
+            },
+            text: {
+              verbosity: settings.assistantVerbosity || 'medium',
+            },
+          }
+        : {}),
       tools: finalToolsForApi.length > 0 ? finalToolsForApi : undefined,
       previous_response_id: previousResponseId || undefined,
       stream: stream,
@@ -703,6 +716,16 @@ export const createSummarizationResponse = async (
         { role: 'user', content: [{ type: 'input_text', text: combinedText }] },
       ],
       instructions: systemPrompt,
+      ...(summarizationModel.startsWith('gpt-5')
+        ? {
+            reasoning: {
+              effort: 'minimal',
+            },
+            text: {
+              verbosity: 'low',
+            },
+          }
+        : {}),
       stream: false,
       store: false,
     } as any)
@@ -746,6 +769,16 @@ export const createContextAnalysisResponse = async (
         { role: 'user', content: [{ type: 'input_text', text: combinedText }] },
       ],
       instructions: analysisSystemPrompt,
+      ...(analysisModel.startsWith('gpt-5')
+        ? {
+            reasoning: {
+              effort: 'minimal',
+            },
+            text: {
+              verbosity: 'low',
+            },
+          }
+        : {}),
       stream: false,
       store: false,
     } as any)

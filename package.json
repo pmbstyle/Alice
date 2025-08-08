@@ -1,6 +1,6 @@
 {
   "name": "alice-ai-app",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "main": "dist-electron/main/index.js",
   "description": "Alice AI assistant app",
   "author": "pmbstyle",

@@ -251,7 +251,64 @@
                 </select>
               </div>
 
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <!-- GPT-5 Specific Settings -->
+              <div
+                v-if="currentSettings.assistantModel.startsWith('gpt-5')"
+                class="grid grid-cols-1 md:grid-cols-2 gap-4"
+              >
+                <div>
+                  <label
+                    for="reasoning-effort"
+                    class="block mb-1 text-sm flex items-center"
+                    >Reasoning Effort
+                    <div
+                      class="tooltip tooltip-right"
+                      data-tip="Controls how many reasoning tokens the model generates before producing a response. Higher effort provides more thorough reasoning but increases cost and latency."
+                    >
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
+                  ></label>
+                  <select
+                    id="reasoning-effort"
+                    v-model="currentSettings.assistantReasoningEffort"
+                    class="select select-bordered w-full focus:select-primary"
+                  >
+                    <option value="minimal">Minimal (Fastest)</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High (Most thorough)</option>
+                  </select>
+                </div>
+                <div>
+                  <label
+                    for="response-verbosity"
+                    class="block mb-1 text-sm flex items-center"
+                    >Response Verbosity
+                    <div
+                      class="tooltip tooltip-left"
+                      data-tip="Controls how detailed the model's responses are. Higher verbosity provides more thorough explanations but increases token usage."
+                    >
+                      <img :src="infoIcon" class="size-4 ml-1" /></div
+                  ></label>
+                  <select
+                    id="response-verbosity"
+                    v-model="currentSettings.assistantVerbosity"
+                    class="select select-bordered w-full focus:select-primary"
+                  >
+                    <option value="low">Low (Concise)</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High (Detailed)</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- Standard Model Settings (Temperature/Top-P) -->
+              <div
+                v-if="
+                  !currentSettings.assistantModel.startsWith('gpt-5') &&
+                  !currentSettings.assistantModel.startsWith('o')
+                "
+                class="grid grid-cols-1 md:grid-cols-2 gap-4"
+              >
                 <div>
                   <label
                     for="assistant-temperature"

@@ -37,6 +37,10 @@ const GENERATED_IMAGES_FULL_PATH = path.join(USER_DATA_PATH, 'generated_images')
 let isHandlingQuit = false
 let wss: WebSocketServer | null = null
 
+function isBrowserContextToolEnabled(settings: any): boolean {
+  return settings?.assistantTools?.includes('browser_context') || false
+}
+
 if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
@@ -159,6 +163,18 @@ export function getWebSocketServer() {
   return wss
 }
 
+export { startWebSocketServer }
+
+export function stopWebSocketServer() {
+  if (wss) {
+    console.log('[WebSocket] Stopping WebSocket server')
+    wss.close(() => {
+      console.log('[WebSocket] WebSocket server stopped')
+    })
+    wss = null
+  }
+}
+
 export function restartWebSocketServer() {
   console.log(
     '[WebSocket] Restarting WebSocket server with new port configuration'
@@ -240,7 +256,17 @@ app.whenReady().then(async () => {
   await createMainWindow()
   await createOverlayWindow()
   checkForUpdates()
-  startWebSocketServer()
+
+  if (initialSettings && isBrowserContextToolEnabled(initialSettings)) {
+    console.log(
+      '[Main App Ready] browser_context tool is enabled, starting WebSocket server'
+    )
+    startWebSocketServer()
+  } else {
+    console.log(
+      '[Main App Ready] browser_context tool is disabled, skipping WebSocket server startup'
+    )
+  }
 })
 
 app.on('before-quit', async event => {

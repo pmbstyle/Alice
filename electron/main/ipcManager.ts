@@ -2,7 +2,16 @@ import { ipcMain, desktopCapturer, shell, clipboard, app } from 'electron'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { loadSettings, saveSettings, AppSettings } from './settingsManager'
-import { getWebSocketServer, restartWebSocketServer } from './index'
+import {
+  getWebSocketServer,
+  restartWebSocketServer,
+  stopWebSocketServer,
+  startWebSocketServer,
+} from './index'
+
+function isBrowserContextToolEnabled(settings: any): boolean {
+  return settings?.assistantTools?.includes('browser_context') || false
+}
 import {
   saveMemoryLocal,
   getRecentMemoriesLocal,
@@ -407,6 +416,26 @@ export function registerIPCHandlers(): void {
             '[Main IPC settings:save] WebSocket port changed. Restarting WebSocket server.'
           )
           restartWebSocketServer()
+        }
+
+        // Handle browser_context tool changes
+        const oldBrowserContextEnabled =
+          isBrowserContextToolEnabled(oldSettings)
+        const newBrowserContextEnabled =
+          isBrowserContextToolEnabled(settingsToSave)
+
+        if (oldBrowserContextEnabled !== newBrowserContextEnabled) {
+          if (newBrowserContextEnabled) {
+            console.log(
+              '[Main IPC settings:save] browser_context tool enabled. Starting WebSocket server.'
+            )
+            startWebSocketServer()
+          } else {
+            console.log(
+              '[Main IPC settings:save] browser_context tool disabled. Stopping WebSocket server.'
+            )
+            stopWebSocketServer()
+          }
         }
 
         return { success: true }

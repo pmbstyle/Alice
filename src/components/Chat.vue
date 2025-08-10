@@ -28,10 +28,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGeneralStore } from '../stores/generalStore'
-import type {
-  ChatMessage,
-  AppChatMessageContentPart,
-} from '../stores/conversationStore'
+import type { ChatMessage } from '../stores/conversationStore'
+import type { AppChatMessageContentPart } from '../types/chat'
 import { messageMarkdown } from '../utils/markdown'
 import { storeToRefs } from 'pinia'
 
@@ -64,7 +62,8 @@ const chatHistoryDisplay = computed(() => {
             (part.type === 'app_text' &&
               part.text &&
               part.text.trim() !== '') ||
-            part.type === 'app_generated_image_path'
+            part.type === 'app_generated_image_path' ||
+            (part.type === 'app_error' && part.text && part.text.trim() !== '')
         )
         if (!hasDisplayableContent) {
           return false
@@ -172,6 +171,30 @@ const getDisplayableMessageContent = (message: ChatMessage): string => {
             title="User provided image"
           />
           <br/>`
+      } else if (part.type === 'app_error' && part.text) {
+        const errorTypeDisplay = part.errorType ? ` (${part.errorType})` : ''
+        const errorCodeDisplay = part.errorCode ? ` [${part.errorCode}]` : ''
+        const errorParamDisplay = part.errorParam
+          ? ` - Parameter: ${part.errorParam}`
+          : ''
+
+        combinedHtml += `
+          <div class="error-message-container my-3 p-4 bg-gradient-to-r from-red-500/20 to-red-600/20 border-l-4 border-red-500 rounded-r-lg">
+            <div class="flex items-start gap-3">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-red-400 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <div class="flex-1">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-sm font-semibold text-red-300">Error${errorTypeDisplay}</span>
+                  ${errorCodeDisplay ? `<span class="text-xs text-gray-400">${errorCodeDisplay}</span>` : ''}
+                </div>
+                <div class="text-white text-sm leading-relaxed">${part.text}</div>
+                ${errorParamDisplay ? `<div class="text-xs text-gray-400 mt-2 italic">${errorParamDisplay}</div>` : ''}
+              </div>
+            </div>
+          </div>
+        `
       }
     }
 

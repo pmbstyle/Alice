@@ -7,21 +7,8 @@ import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
 import eventBus from '../utils/eventBus'
 
-export interface AppChatMessageContentPart {
-  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path' | 'app_file'
-  text?: string
-  uri?: string
-  path?: string
-  absolutePathForOpening?: string
-  imageGenerationId?: string
-  isPartial?: boolean
-  partialIndex?: number
-  fileId?: string
-  fileName?: string
-  isScheduledReminder?: boolean
-  taskName?: string
-  timestamp?: string
-}
+import type { AppChatMessageContentPart } from '../types/chat'
+export type { AppChatMessageContentPart }
 
 export interface ChatMessage {
   local_id_temp?: string
@@ -38,6 +25,32 @@ interface RawMessageForSummarization {
   role: string
   text_content: string
   created_at: string
+}
+
+function parseErrorMessage(error: any): AppChatMessageContentPart {
+  let errorMessage = error.message || 'Unknown error occurred'
+  let errorType = 'unknown_error'
+  let errorCode = null
+  let errorParam = null
+
+  if (error.error) {
+    const apiError = error.error
+    errorMessage = apiError.message || errorMessage
+    errorType = apiError.type || errorType
+    errorCode = apiError.code
+    errorParam = apiError.param
+  }
+
+  errorMessage = errorMessage.replace(/^Error:\s*/i, '')
+
+  return {
+    type: 'app_error',
+    text: errorMessage,
+    errorType,
+    errorCode,
+    errorParam,
+    originalError: error,
+  }
 }
 
 export const useConversationStore = defineStore('conversation', () => {
@@ -645,10 +658,10 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error in continued stream after tool call:', error)
-        generalStore.updateMessageContentByTempId(
-          afterToolPlaceholderTempId,
-          `Error: ${error.message}`
-        )
+        const errorContent = parseErrorMessage(error)
+        generalStore.updateMessageContentByTempId(afterToolPlaceholderTempId, [
+          errorContent,
+        ])
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       }
     }
@@ -750,10 +763,10 @@ export const useConversationStore = defineStore('conversation', () => {
             'I apologize, there was an issue with the previous function call. Let me help you with a fresh start.'
           )
         } else {
-          generalStore.updateMessageContentByTempId(
-            placeholderTempId,
-            `Error: ${error.message}`
-          )
+          const errorContent = parseErrorMessage(error)
+          generalStore.updateMessageContentByTempId(placeholderTempId, [
+            errorContent,
+          ])
         }
 
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
@@ -913,10 +926,10 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error starting OpenAI response stream:', error)
-        generalStore.updateMessageContentByTempId(
-          placeholderTempId,
-          `Error: ${error.message}`
-        )
+        const errorContent = parseErrorMessage(error)
+        generalStore.updateMessageContentByTempId(placeholderTempId, [
+          errorContent,
+        ])
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       }
     }

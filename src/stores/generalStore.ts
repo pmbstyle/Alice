@@ -2,6 +2,7 @@ import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { setVideo } from '../utils/videoProcess'
 import eventBus from '../utils/eventBus'
+import type { AppChatMessageContentPart } from '../types/chat'
 
 export type AudioState =
   | 'IDLE'
@@ -184,6 +185,27 @@ export const useGeneralStore = defineStore('general', () => {
         message.content.unshift(firstTextPart)
       }
       firstTextPart.text = (firstTextPart.text || '') + delta
+
+      const fullText = firstTextPart.text
+      if (
+        fullText.match(/^Error:\s*\d+\s+/) ||
+        fullText.match(/^Error:\s*[A-Za-z]/)
+      ) {
+        const errorText = fullText.replace(/^Error:\s*/i, '')
+        const errorContent = {
+          type: 'app_error' as const,
+          text: errorText,
+          errorType: 'api_error',
+          errorCode: null,
+          errorParam: null,
+          originalError: { message: errorText },
+        }
+
+        const textIndex = message.content.findIndex(p => p.type === 'app_text')
+        if (textIndex !== -1) {
+          message.content[textIndex] = errorContent
+        }
+      }
     } else {
       console.warn(
         `[GeneralStore appendMessageDelta] Message with tempId ${tempId} not found for delta: "${delta.substring(0, 30)}..."`
@@ -273,13 +295,17 @@ export const useGeneralStore = defineStore('general', () => {
 
   const updateMessageContentByTempId = (
     tempId: string,
-    newContentText: string
+    newContent: string | any[]
   ) => {
     const index = findMessageIndexByTempId(tempId)
     if (index !== -1) {
-      chatHistory.value[index].content = [
-        { type: 'app_text', text: newContentText },
-      ]
+      if (typeof newContent === 'string') {
+        chatHistory.value[index].content = [
+          { type: 'app_text', text: newContent },
+        ]
+      } else {
+        chatHistory.value[index].content = newContent
+      }
     } else {
       console.warn(
         `updateMessageContentByTempId: Message with tempId ${tempId} not found.`

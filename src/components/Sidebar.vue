@@ -6,6 +6,7 @@
     <div
       class="sidebar-content w-full flex-1 overflow-y-auto flex flex-col relative"
       ref="sidebarContentElement"
+      @scroll="handleScroll"
     >
       <Chat
         @processRequest="$emit('processRequest')"
@@ -138,6 +139,10 @@ const conversationStore = useConversationStore()
 const sidebarContentElement = ref<null | HTMLElement>(null)
 const emit = defineEmits(['processRequest'])
 
+// Smart scrolling state
+const shouldAutoScroll = ref(true)
+const scrollThreshold = 100 // pixels from bottom to consider "at bottom"
+
 const { openSidebar, chatInput, sideBarView, attachedFile } =
   storeToRefs(generalStore)
 const { chatHistory } = storeToRefs(generalStore)
@@ -169,6 +174,7 @@ const clearAttachedFile = () => {
 const changeSidebarView = async (newView: 'chat' | 'settings') => {
   sideBarView.value = newView
   if (newView === 'chat') {
+    shouldAutoScroll.value = true // Ensure we scroll when switching to chat
     await nextTick(() => scrollChatToBottom())
   }
 }
@@ -186,6 +192,7 @@ const chatInputHandle = async () => {
     debounceTimeout.value = window.setTimeout(async () => {
       const textToSend = chatInput.value.trim()
       chatInput.value = ''
+      shouldAutoScroll.value = true // Ensure we scroll after sending a message
       emit('processRequest', textToSend)
       clearAttachedFile()
     }, debounceDelay)
@@ -198,11 +205,22 @@ watch(
   chatHistory,
   () => {
     if (sideBarView.value === 'chat') {
-      scrollChatToBottom()
+      smartScrollToBottom()
     }
   },
   { deep: true }
 )
+
+const isAtBottom = () => {
+  if (!sidebarContentElement.value) return false
+  const element = sidebarContentElement.value
+  const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+  return distanceFromBottom <= scrollThreshold
+}
+
+const handleScroll = () => {
+  shouldAutoScroll.value = isAtBottom()
+}
 
 const scrollChatToBottom = () => {
   requestAnimationFrame(() => {
@@ -211,7 +229,14 @@ const scrollChatToBottom = () => {
       top: sidebarContentElement.value.scrollHeight,
       behavior: 'smooth',
     })
+    shouldAutoScroll.value = true
   })
+}
+
+const smartScrollToBottom = () => {
+  if (shouldAutoScroll.value) {
+    scrollChatToBottom()
+  }
 }
 
 const retryInitialization = async () => {

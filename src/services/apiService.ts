@@ -349,9 +349,15 @@ export const createOpenAIResponse = async (
   const isOModel = modelName.startsWith('o')
 
   if (settings.aiProvider === 'openai') {
+    const isGpt5WithMinimalReasoning =
+      settings.assistantModel.startsWith('gpt-5') &&
+      settings.assistantReasoningEffort === 'minimal'
+
     if (!isOModel) {
-      finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
-      finalToolsForApi.push({ type: 'web_search_preview' })
+      if (!isGpt5WithMinimalReasoning) {
+        finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
+        finalToolsForApi.push({ type: 'web_search_preview' })
+      }
     } else {
       if (modelName.includes('o3-pro') && modelName === 'o3') {
         finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })

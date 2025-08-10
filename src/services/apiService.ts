@@ -505,10 +505,12 @@ export const createOpenAIResponse = async (
     const params: OpenAI.Chat.ChatCompletionCreateParams = {
       model: modelWithWebSearch,
       messages: messages,
-      ...(!settings.assistantModel.startsWith('gpt-5') ? {
-        temperature: settings.assistantTemperature,
-        top_p: settings.assistantTopP,
-      } : {}),
+      ...(!settings.assistantModel.startsWith('gpt-5')
+        ? {
+            temperature: settings.assistantTemperature,
+            top_p: settings.assistantTopP,
+          }
+        : {}),
       tools:
         finalToolsForApi.length > 0
           ? finalToolsForApi.map(tool => {
@@ -569,17 +571,29 @@ export const createOpenAIResponse = async (
   }
 }
 
+function removeLinksFromText(text: string): string {
+  return text
+    .replace(/https?:\/\/[^\s\)]+/g, '')
+    .replace(/www\.[^\s\)]+/g, '')
+    .replace(/\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 export const ttsStream = async (
   text: string,
   signal: AbortSignal
 ): Promise<Response> => {
   const openai = getOpenAIClient()
   const settings = useSettingsStore().config
+
+  const cleanedText = removeLinksFromText(text)
+
   return openai.audio.speech.create(
     {
       model: 'tts-1',
       voice: settings.ttsVoice || 'nova',
-      input: text,
+      input: cleanedText,
       response_format: 'mp3',
     },
     { signal }

@@ -73,6 +73,8 @@
                 >
                   <option value="openai">OpenAI</option>
                   <option value="openrouter">OpenRouter</option>
+                  <option value="ollama">Ollama (Local)</option>
+                  <option value="lm-studio">LM Studio (Local)</option>
                 </select>
               </div>
               <div>
@@ -118,6 +120,36 @@
                 />
                 <p class="text-xs text-gray-400 mt-1">
                   Required for chat models when using OpenRouter.
+                </p>
+              </div>
+              <div v-if="currentSettings.aiProvider === 'ollama'">
+                <label for="ollama-url" class="block mb-1 text-sm"
+                  >Ollama Base URL *</label
+                >
+                <input
+                  id="ollama-url"
+                  type="text"
+                  v-model="currentSettings.ollamaBaseUrl"
+                  class="input focus:outline-none w-full"
+                  placeholder="http://localhost:11434"
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  URL where your Ollama server is running.
+                </p>
+              </div>
+              <div v-if="currentSettings.aiProvider === 'lm-studio'">
+                <label for="lmstudio-url" class="block mb-1 text-sm"
+                  >LM Studio Base URL *</label
+                >
+                <input
+                  id="lmstudio-url"
+                  type="text"
+                  v-model="currentSettings.lmStudioBaseUrl"
+                  class="input focus:outline-none w-full"
+                  placeholder="http://localhost:1234"
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  URL where your LM Studio server is running.
                 </p>
               </div>
               <div v-if="currentSettings.sttProvider === 'groq'">
@@ -184,23 +216,34 @@
                     {{ model.id }}
                   </option>
                 </select>
+                <button
+                  type="button"
+                  @click="refreshModels"
+                  :disabled="isRefreshingModels"
+                  class="btn btn-sm btn-outline btn-primary mt-2"
+                >
+                  <span v-if="isRefreshingModels" class="loading loading-spinner loading-xs mr-2"></span>
+                  {{ isRefreshingModels ? 'Loading...' : 'Refresh Models' }}
+                </button>
                 <p
                   v-if="
                     !settingsStore.coreOpenAISettingsValid &&
                     ((currentSettings.aiProvider === 'openai' &&
                       currentSettings.VITE_OPENAI_API_KEY) ||
                       (currentSettings.aiProvider === 'openrouter' &&
-                        currentSettings.VITE_OPENROUTER_API_KEY)) &&
+                        currentSettings.VITE_OPENROUTER_API_KEY) ||
+                      (currentSettings.aiProvider === 'ollama' &&
+                        currentSettings.ollamaBaseUrl) ||
+                      (currentSettings.aiProvider === 'lm-studio' &&
+                        currentSettings.lmStudioBaseUrl)) &&
                     conversationStore.availableModels.length === 0
                   "
                   class="text-xs text-warning mt-1"
                 >
                   {{
-                    currentSettings.aiProvider === 'openai'
-                      ? 'OpenAI'
-                      : 'OpenRouter'
+                    getProviderDisplayName(currentSettings.aiProvider)
                   }}
-                  API key needs to be validated (Save & Test) to load models.
+                  API key/configuration needs to be validated (Save & Test) to load models.
                 </p>
               </div>
 
@@ -912,6 +955,29 @@
                   autocomplete="new-password"
                 />
               </div>
+              <div
+                v-if="currentSettings.assistantTools.includes('perform_web_search')"
+              >
+                <label for="tavily-key" class="block mb-1 text-sm"
+                  >Tavily API Key (Web Search)</label
+                >
+                <input
+                  id="tavily-key"
+                  type="password"
+                  v-model="currentSettings.VITE_TAVILY_API_KEY"
+                  class="input focus:outline-none w-full"
+                  autocomplete="new-password"
+                  placeholder="tvly-..."
+                />
+                <p class="text-xs text-gray-400 mt-1">
+                  Required for web search functionality. Get your API key from 
+                  <a 
+                    href="https://tavily.com" 
+                    target="_blank" 
+                    class="link link-primary"
+                  >Tavily</a>.
+                </p>
+              </div>
             </div>
           </fieldset>
         </div>
@@ -1107,6 +1173,7 @@ const activeTab = ref<
 
 const isRecordingHotkeyFor = ref<keyof AliceSettings | null>(null)
 const activeRecordingKeys = ref<Set<string>>(new Set())
+const isRefreshingModels = ref(false)
 
 const { availableModels } = storeToRefs(conversationStore)
 
@@ -1140,6 +1207,7 @@ const availableModelsForSelect = computed(() => {
 const toolDependencies: Record<string, string[]> = {
   search_torrents: ['VITE_JACKETT_API_KEY', 'VITE_JACKETT_URL'],
   add_torrent_to_qb: ['VITE_QB_URL', 'VITE_QB_USERNAME', 'VITE_QB_PASSWORD'],
+  perform_web_search: ['VITE_TAVILY_API_KEY'],
   get_calendar_events: ['GOOGLE_AUTH'],
   create_calendar_event: ['GOOGLE_AUTH'],
   update_calendar_event: ['GOOGLE_AUTH'],
@@ -1148,6 +1216,29 @@ const toolDependencies: Record<string, string[]> = {
   search_emails: ['GOOGLE_AUTH'],
   get_email_content: ['GOOGLE_AUTH'],
 }
+const refreshModels = async () => {
+  if (isRefreshingModels.value) return
+  
+  isRefreshingModels.value = true
+  try {
+    await conversationStore.fetchModels()
+  } catch (error) {
+    console.error('Failed to refresh models:', error)
+  } finally {
+    isRefreshingModels.value = false
+  }
+}
+
+const getProviderDisplayName = (provider: string): string => {
+  const providerNames: Record<string, string> = {
+    'openai': 'OpenAI',
+    'openrouter': 'OpenRouter',
+    'ollama': 'Ollama',
+    'lm-studio': 'LM Studio'
+  }
+  return providerNames[provider] || provider
+}
+
 function betterToolName(name: string): string {
   const nameMap: Record<string, string> = {
     get_current_datetime: 'Current Date & Time',
@@ -1165,6 +1256,7 @@ function betterToolName(name: string): string {
     get_email_content: 'Get Email Content',
     search_torrents: 'Torrent Search',
     add_torrent_to_qb: 'Add Torrent to QB',
+    perform_web_search: 'Web Search (local models)',
   }
   return (
     nameMap[name] ||

@@ -14,10 +14,7 @@ import {
   delete_calendar_event,
 } from './functions/calendar'
 import { search_torrents, add_torrent_to_qb } from './functions/torrent'
-
-interface Crawl4AiArgs {
-  url: string
-}
+import axios from 'axios'
 
 interface FunctionResult {
   success: boolean
@@ -55,6 +52,10 @@ interface GetEmailContentArgs {
 interface BrowserContextArgs {
   focus?: 'content' | 'selection' | 'links' | 'all'
   maxLength?: number
+}
+
+interface WebSearchArgs {
+  query: string
 }
 
 async function save_memory(args: SaveMemoryArgs) {
@@ -503,6 +504,57 @@ async function browser_context(
   }
 }
 
+/**
+ * Performs a web search using the Tavily API.
+ */
+async function perform_web_search(
+  args: WebSearchArgs
+): Promise<FunctionResult> {
+  const settings = useSettingsStore().config
+  const TAVILY_API_KEY = settings.VITE_TAVILY_API_KEY
+  if (!TAVILY_API_KEY) {
+    return { success: false, error: 'Tavily API key is not configured.' }
+  }
+  if (!args.query) {
+    return { success: false, error: 'Search query is missing.' }
+  }
+
+  console.log(`Performing web search for: ${args.query}`)
+  try {
+    const response = await axios.post(
+      'https://api.tavily.com/search',
+      {
+        api_key: TAVILY_API_KEY,
+        query: args.query,
+        search_depth: 'basic',
+        include_answer: true,
+        max_results: 5,
+      },
+      { timeout: 10000 }
+    )
+
+    const answer = response.data.answer
+    const results = response.data.results?.map((res: any) => ({
+      title: res.title,
+      url: res.url,
+      snippet: res.content,
+    }))
+
+    const responseData = answer
+      ? { answer: answer, sources: results }
+      : { results: results || 'No results found.' }
+
+    console.log('Web search successful.')
+    return { success: true, data: responseData }
+  } catch (error: any) {
+    console.error('Tavily API error:', error.response?.data || error.message)
+    return {
+      success: false,
+      error: `Failed to perform web search: ${error.response?.data?.error || error.message}`,
+    }
+  }
+}
+
 const functionRegistry: {
   [key: string]: (args: any) => Promise<FunctionResult>
 } = {
@@ -526,6 +578,7 @@ const functionRegistry: {
   schedule_task,
   manage_scheduled_tasks,
   browser_context: browser_context,
+  perform_web_search: perform_web_search,
 }
 
 const functionSchemas = {
@@ -551,6 +604,7 @@ const functionSchemas = {
   schedule_task: { required: ['name', 'schedule', 'action_type', 'details'] },
   manage_scheduled_tasks: { required: ['action'] },
   browser_context: { required: [] },
+  perform_web_search: { required: ['query'] },
 }
 
 /**

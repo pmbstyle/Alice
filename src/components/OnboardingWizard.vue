@@ -67,6 +67,12 @@
             <option value="openrouter">
               OpenRouter (400+ models, no image gen)
             </option>
+            <option value="ollama">
+              Ollama (Local LLMs)
+            </option>
+            <option value="lm-studio">
+              LM Studio (Local LLMs)
+            </option>
           </select>
         </div>
 
@@ -275,6 +281,247 @@
           </div>
         </div>
 
+        <div v-if="formData.aiProvider === 'ollama'">
+          <p class="text-sm text-base-content/70 mb-4">
+            Ollama runs models locally on your machine. You'll need to have Ollama
+            installed and running. Still requires OpenAI API key for TTS/embeddings.
+          </p>
+
+          <div class="form-control mb-4">
+            <label class="label">
+              <span class="label-text">Ollama Base URL</span>
+            </label>
+            <input
+              type="text"
+              v-model="formData.ollamaBaseUrl"
+              placeholder="http://localhost:11434"
+              class="input focus:outline-none w-full"
+              :class="{
+                'input-error':
+                  testResult.ollama.error && !testResult.ollama.success,
+              }"
+            />
+          </div>
+
+          <div class="form-control mb-4">
+            <label class="label">
+              <span class="label-text">OpenAI API Key (for TTS/STT/embeddings)</span>
+            </label>
+            <p class="text-sm text-base-content/70 mb-2">
+              Required for voice features and embeddings. Get one from
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                class="link link-primary"
+                >OpenAI Platform</a
+              >.
+            </p>
+            <input
+              type="password"
+              v-model="formData.VITE_OPENAI_API_KEY"
+              placeholder="sk-..."
+              class="input focus:outline-none w-full"
+              :class="{
+                'input-error':
+                  testResult.openai.error && !testResult.openai.success,
+              }"
+            />
+          </div>
+
+          <button
+            @click="testOllamaConnection"
+            class="btn btn-secondary btn-active w-full mb-2"
+            :disabled="isTesting.ollama || !formData.ollamaBaseUrl.trim()"
+          >
+            <span
+              v-if="isTesting.ollama"
+              class="loading loading-spinner loading-xs mr-2"
+            ></span>
+            Test Ollama Connection
+          </button>
+
+          <button
+            @click="testOpenAIKey"
+            class="btn btn-secondary btn-active w-full mb-4"
+            :disabled="isTesting.openai || !formData.VITE_OPENAI_API_KEY.trim()"
+          >
+            <span
+              v-if="isTesting.openai"
+              class="loading loading-spinner loading-xs mr-2"
+            ></span>
+            Test OpenAI Key
+          </button>
+
+          <div v-if="testResult.ollama.error" class="alert alert-error mb-4">
+            <span class="text-xs">{{ testResult.ollama.error }}</span>
+          </div>
+
+          <div
+            v-if="testResult.ollama.success"
+            class="alert alert-success mb-4"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 shrink-0 stroke-current"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>Success! Ollama connection is working.</span>
+          </div>
+
+          <div v-if="testResult.openai.error" class="alert alert-error mb-4">
+            <span class="text-xs">{{ testResult.openai.error }}</span>
+          </div>
+
+          <div
+            v-if="testResult.openai.success"
+            class="alert alert-success mb-4"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 shrink-0 stroke-current"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>Success! Your OpenAI API key is working.</span>
+          </div>
+        </div>
+
+        <div v-if="formData.aiProvider === 'lm-studio'">
+          <p class="text-sm text-base-content/70 mb-4">
+            LM Studio runs models locally through its desktop app. You'll need to
+            have LM Studio installed with a local server running. Still requires
+            OpenAI API key for TTS/embeddings.
+          </p>
+
+          <div class="form-control mb-4">
+            <label class="label">
+              <span class="label-text">LM Studio Base URL</span>
+            </label>
+            <input
+              type="text"
+              v-model="formData.lmStudioBaseUrl"
+              placeholder="http://localhost:1234"
+              class="input focus:outline-none w-full"
+              :class="{
+                'input-error':
+                  testResult.lmStudio.error && !testResult.lmStudio.success,
+              }"
+            />
+          </div>
+
+          <div class="form-control mb-4">
+            <label class="label">
+              <span class="label-text">OpenAI API Key (for TTS/STT/embeddings)</span>
+            </label>
+            <p class="text-sm text-base-content/70 mb-2">
+              Required for voice features and embeddings. Get one from
+              <a
+                href="https://platform.openai.com/api-keys"
+                target="_blank"
+                class="link link-primary"
+                >OpenAI Platform</a
+              >.
+            </p>
+            <input
+              type="password"
+              v-model="formData.VITE_OPENAI_API_KEY"
+              placeholder="sk-..."
+              class="input focus:outline-none w-full"
+              :class="{
+                'input-error':
+                  testResult.openai.error && !testResult.openai.success,
+              }"
+            />
+          </div>
+
+          <button
+            @click="testLMStudioConnection"
+            class="btn btn-secondary btn-active w-full mb-2"
+            :disabled="isTesting.lmStudio || !formData.lmStudioBaseUrl.trim()"
+          >
+            <span
+              v-if="isTesting.lmStudio"
+              class="loading loading-spinner loading-xs mr-2"
+            ></span>
+            Test LM Studio Connection
+          </button>
+
+          <button
+            @click="testOpenAIKey"
+            class="btn btn-secondary btn-active w-full mb-4"
+            :disabled="isTesting.openai || !formData.VITE_OPENAI_API_KEY.trim()"
+          >
+            <span
+              v-if="isTesting.openai"
+              class="loading loading-spinner loading-xs mr-2"
+            ></span>
+            Test OpenAI Key
+          </button>
+
+          <div v-if="testResult.lmStudio.error" class="alert alert-error mb-4">
+            <span class="text-xs">{{ testResult.lmStudio.error }}</span>
+          </div>
+
+          <div
+            v-if="testResult.lmStudio.success"
+            class="alert alert-success mb-4"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 shrink-0 stroke-current"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>Success! LM Studio connection is working.</span>
+          </div>
+
+          <div v-if="testResult.openai.error" class="alert alert-error mb-4">
+            <span class="text-xs">{{ testResult.openai.error }}</span>
+          </div>
+
+          <div
+            v-if="testResult.openai.success"
+            class="alert alert-success mb-4"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              class="h-6 w-6 shrink-0 stroke-current"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span>Success! Your OpenAI API key is working.</span>
+          </div>
+        </div>
+
         <div class="flex justify-between mt-6">
           <button @click="step = 1" class="btn btn-ghost">Back</button>
           <button
@@ -362,18 +609,24 @@ const settingsStore = useSettingsStore()
 const formData = reactive({
   VITE_OPENAI_API_KEY: '',
   VITE_OPENROUTER_API_KEY: '',
-  aiProvider: 'openai' as 'openai' | 'openrouter',
+  aiProvider: 'openai' as 'openai' | 'openrouter' | 'ollama' | 'lm-studio',
   sttProvider: 'openai' as 'openai' | 'groq',
   VITE_GROQ_API_KEY: '',
+  ollamaBaseUrl: 'http://localhost:11434',
+  lmStudioBaseUrl: 'http://localhost:1234',
 })
 
 const isTesting = reactive({
   openai: false,
   openrouter: false,
+  ollama: false,
+  lmStudio: false,
 })
 const testResult = reactive({
   openai: { success: false, error: '' },
   openrouter: { success: false, error: '' },
+  ollama: { success: false, error: '' },
+  lmStudio: { success: false, error: '' },
 })
 
 const isFinishing = ref(false)
@@ -442,11 +695,83 @@ const testOpenRouterKey = async () => {
   }
 }
 
+const testOllamaConnection = async () => {
+  if (!formData.ollamaBaseUrl.trim()) {
+    testResult.ollama.error = 'Ollama Base URL cannot be empty.'
+    testResult.ollama.success = false
+    return
+  }
+
+  isTesting.ollama = true
+  testResult.ollama.error = ''
+  testResult.ollama.success = false
+
+  try {
+    const tempClient = new OpenAI({
+      apiKey: 'ollama',
+      baseURL: `${formData.ollamaBaseUrl}/v1`,
+      dangerouslyAllowBrowser: true,
+      timeout: 10 * 1000,
+      maxRetries: 1,
+    })
+
+    await tempClient.models.list({ limit: 1 })
+    testResult.ollama.success = true
+  } catch (e: any) {
+    testResult.ollama.error = 'Connection failed - check if Ollama is running and accessible.'
+    if (e.message?.includes('NetworkError') || e.message?.includes('fetch')) {
+      testResult.ollama.error = 'Cannot reach Ollama server - is it running on this URL?'
+    } else if (e.message?.includes('timeout')) {
+      testResult.ollama.error = 'Connection timeout - Ollama may be starting up.'
+    }
+  } finally {
+    isTesting.ollama = false
+  }
+}
+
+const testLMStudioConnection = async () => {
+  if (!formData.lmStudioBaseUrl.trim()) {
+    testResult.lmStudio.error = 'LM Studio Base URL cannot be empty.'
+    testResult.lmStudio.success = false
+    return
+  }
+
+  isTesting.lmStudio = true
+  testResult.lmStudio.error = ''
+  testResult.lmStudio.success = false
+
+  try {
+    const tempClient = new OpenAI({
+      apiKey: 'lm-studio',
+      baseURL: `${formData.lmStudioBaseUrl}/v1`,
+      dangerouslyAllowBrowser: true,
+      timeout: 10 * 1000,
+      maxRetries: 1,
+    })
+
+    await tempClient.models.list({ limit: 1 })
+    testResult.lmStudio.success = true
+  } catch (e: any) {
+    testResult.lmStudio.error = 'Connection failed - check if LM Studio server is running and accessible.'
+    if (e.message?.includes('NetworkError') || e.message?.includes('fetch')) {
+      testResult.lmStudio.error = 'Cannot reach LM Studio server - is it running on this URL?'
+    } else if (e.message?.includes('timeout')) {
+      testResult.lmStudio.error = 'Connection timeout - LM Studio may be starting up.'
+    }
+  } finally {
+    isTesting.lmStudio = false
+  }
+}
+
 const resetTestResults = () => {
   testResult.openai.success = false
   testResult.openai.error = ''
   testResult.openrouter.success = false
   testResult.openrouter.error = ''
+  testResult.ollama.success = false
+  testResult.ollama.error = ''
+  testResult.lmStudio.success = false
+  testResult.lmStudio.error = ''
 }
 
 const isCurrentProviderTested = () => {
@@ -454,6 +779,10 @@ const isCurrentProviderTested = () => {
     return testResult.openai.success
   } else if (formData.aiProvider === 'openrouter') {
     return testResult.openai.success && testResult.openrouter.success
+  } else if (formData.aiProvider === 'ollama') {
+    return testResult.ollama.success && testResult.openai.success
+  } else if (formData.aiProvider === 'lm-studio') {
+    return testResult.lmStudio.success && testResult.openai.success
   }
   return false
 }

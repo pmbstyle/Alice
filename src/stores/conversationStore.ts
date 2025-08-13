@@ -794,15 +794,34 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function fetchModels() {
-    if (!settingsStore.config.VITE_OPENAI_API_KEY) {
+    const provider = settingsStore.config.aiProvider
+
+    if (provider === 'openai' && !settingsStore.config.VITE_OPENAI_API_KEY) {
       console.warn('Cannot fetch models: OpenAI API Key is missing.')
       return
+    } else if (provider === 'openrouter' && !settingsStore.config.VITE_OPENROUTER_API_KEY) {
+      console.warn('Cannot fetch models: OpenRouter API Key is missing.')
+      return
+    } else if (provider === 'ollama' && !settingsStore.config.ollamaBaseUrl) {
+      console.warn('Cannot fetch models: Ollama Base URL is missing.')
+      return
+    } else if (provider === 'lm-studio' && !settingsStore.config.lmStudioBaseUrl) {
+      console.warn('Cannot fetch models: LM Studio Base URL is missing.')
+      return
     }
+
     try {
       availableModels.value = await api.fetchOpenAIModels()
     } catch (error: any) {
       console.error('Failed to fetch models:', error.message)
-      generalStore.statusMessage = `Error: Could not fetch AI models.`
+      const providerNameMap = {
+        'openai': 'OpenAI',
+        'openrouter': 'OpenRouter', 
+        'ollama': 'Ollama',
+        'lm-studio': 'LM Studio'
+      }
+      const providerName = providerNameMap[provider] || provider
+      generalStore.statusMessage = `Error: Could not fetch ${providerName} models.`
       availableModels.value = []
     }
   }

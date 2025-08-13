@@ -5,6 +5,8 @@ import {
   getOpenAIClient,
   getOpenRouterClient,
   getGroqClient,
+  getOllamaClient,
+  getLMStudioClient,
 } from './apiClients'
 import type { AppChatMessageContentPart } from '../stores/conversationStore'
 import {
@@ -18,10 +20,225 @@ API Function Exports
 
 function getAIClient(): OpenAI {
   const settings = useSettingsStore().config
-  if (settings.aiProvider === 'openrouter') {
-    return getOpenRouterClient()
+  switch (settings.aiProvider) {
+    case 'openrouter':
+      return getOpenRouterClient()
+    case 'ollama':
+      return getOllamaClient()
+    case 'lm-studio':
+      return getLMStudioClient()
+    default:
+      return getOpenAIClient()
   }
-  return getOpenAIClient()
+}
+
+async function* convertLocalLLMStreamToResponsesFormat(stream: any, provider: 'ollama' | 'lm-studio') {
+  let responseId = `${provider}-${Date.now()}`
+  let messageItemId = `message-${Date.now()}`
+  let toolCallsBuffer = new Map()
+
+  yield {
+    type: 'response.created',
+    response: {
+      id: responseId,
+      object: 'realtime.response',
+      status: 'in_progress',
+      output: [],
+    },
+  }
+
+  yield {
+    type: 'response.output_item.added',
+    response_id: responseId,
+    item_id: messageItemId,
+    item: {
+      id: messageItemId,
+      type: 'message',
+      role: 'assistant',
+      content: [],
+    },
+  }
+
+  try {
+    for await (const chunk of stream) {
+      if (chunk.choices && chunk.choices[0]) {
+        const choice = chunk.choices[0]
+
+        if (choice.delta && choice.delta.content) {
+          yield {
+            type: 'response.output_text.delta',
+            response_id: responseId,
+            item_id: messageItemId,
+            output_index: 0,
+            content_index: 0,
+            delta: choice.delta.content,
+          }
+        }
+
+        if (choice.delta && choice.delta.tool_calls) {
+          for (const toolCall of choice.delta.tool_calls) {
+            if (toolCall.function || toolCall.id) {
+              const toolCallIndex = toolCall.index || 0
+              const toolCallId = `tool-${toolCallIndex}`
+
+              console.log(`[${provider}] Processing tool call chunk:`, {
+                originalId: toolCall.id,
+                mappedId: toolCallId,
+                name: toolCall.function?.name,
+                arguments: toolCall.function?.arguments,
+                index: toolCall.index,
+              })
+
+              if (!toolCallsBuffer.has(toolCallId)) {
+                console.log(
+                  `[${provider}] Initializing new tool call buffer for ${toolCallId}`
+                )
+                toolCallsBuffer.set(toolCallId, {
+                  id: toolCall.id || toolCallId,
+                  name: toolCall.function?.name || '',
+                  arguments: '',
+                })
+              }
+
+              const bufferedCall = toolCallsBuffer.get(toolCallId)
+              if (bufferedCall) {
+                if (toolCall.id && !bufferedCall.id.startsWith('tool-')) {
+                  bufferedCall.id = toolCall.id
+                }
+
+                if (toolCall.function?.name && !bufferedCall.name) {
+                  bufferedCall.name = toolCall.function.name
+                  console.log(
+                    `[${provider}] Updated name for ${toolCallId}:`,
+                    bufferedCall.name
+                  )
+
+                  yield {
+                    type: 'response.output_item.added',
+                    response_id: responseId,
+                    item_id: toolCallId,
+                    item: {
+                      id: toolCallId,
+                      type: 'function_call',
+                      name: toolCall.function.name,
+                      arguments: '',
+                    },
+                  }
+                }
+
+                if (toolCall.function?.arguments) {
+                  bufferedCall.arguments += toolCall.function.arguments
+                  console.log(
+                    `[${provider}] Accumulated arguments for ${toolCallId}:`,
+                    bufferedCall.arguments
+                  )
+
+                  yield {
+                    type: 'response.function_call_arguments.delta',
+                    response_id: responseId,
+                    item_id: toolCallId,
+                    delta: toolCall.function.arguments,
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (
+          choice.finish_reason === 'stop' ||
+          choice.finish_reason === 'tool_calls'
+        ) {
+          console.log(
+            `[${provider}] Finishing stream, toolCallsBuffer size:`,
+            toolCallsBuffer.size
+          )
+
+          for (const [toolCallId, toolData] of toolCallsBuffer) {
+            if (!toolData.name) {
+              console.log(
+                `[${provider}] Skipping tool call ${toolCallId} - no function name`
+              )
+              continue
+            }
+
+            console.log(
+              `[${provider}] Completing tool call ${toolCallId}:`,
+              toolData
+            )
+
+            let parsedArguments = toolData.arguments
+            if (
+              typeof toolData.arguments === 'string' &&
+              toolData.arguments.trim()
+            ) {
+              try {
+                parsedArguments = JSON.parse(toolData.arguments)
+                console.log(`[${provider}] Parsed arguments:`, parsedArguments)
+              } catch (e) {
+                console.error(
+                  `[${provider}] Failed to parse tool arguments:`,
+                  toolData.arguments,
+                  e
+                )
+                parsedArguments = {}
+              }
+            } else if (!toolData.arguments || toolData.arguments === '') {
+              console.error(
+                `[${provider}] Empty arguments for tool call ${toolCallId}`
+              )
+              parsedArguments = {}
+            }
+
+            yield {
+              type: 'response.output_item.done',
+              response_id: responseId,
+              item_id: toolCallId,
+              item: {
+                id: toolCallId,
+                call_id: toolData.id,
+                type: 'function_call',
+                name: toolData.name,
+                arguments: parsedArguments,
+              },
+            }
+          }
+
+          yield {
+            type: 'response.output_item.done',
+            response_id: responseId,
+            item_id: messageItemId,
+            item: {
+              id: messageItemId,
+              type: 'message',
+              role: 'assistant',
+              content: [],
+            },
+          }
+
+          yield {
+            type: 'response.done',
+            response: {
+              id: responseId,
+              object: 'realtime.response',
+              status: 'completed',
+              output: [],
+            },
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error(`Error in ${provider} stream conversion:`, error)
+
+    yield {
+      type: 'error',
+      error: {
+        type: 'server_error',
+        message: error.message || 'Unknown error',
+      },
+    }
+  }
 }
 
 async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
@@ -264,6 +481,9 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
         return !isExcluded
       })
       .sort((a, b) => a.id.localeCompare(b.id))
+  } else if (settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
+    // For local LLMs, return all available models (they should be curated by user)
+    return modelsPage.data.sort((a, b) => a.id.localeCompare(b.id))
   } else {
     return modelsPage.data
       .filter(model => {
@@ -389,6 +609,18 @@ export const createOpenAIResponse = async (
         }
         return tool
       })
+    finalToolsForApi.length = 0
+    finalToolsForApi.push(...allowedTools)
+  } else if (settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
+    const allowedTools = finalToolsForApi.filter(tool => {
+      if (
+        tool.type === 'image_generation' ||
+        tool.type === 'web_search_preview'
+      ) {
+        return false
+      }
+      return true
+    })
     finalToolsForApi.length = 0
     finalToolsForApi.push(...allowedTools)
   }
@@ -542,6 +774,145 @@ export const createOpenAIResponse = async (
         { signal }
       )
       return convertOpenRouterStreamToResponsesFormat(openrouterStream)
+    } else {
+      return client.chat.completions.create(params as any, { signal })
+    }
+  } else if (settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
+    const messages = input
+      .map((item: any) => {
+        if (item.role === 'user') {
+          if (Array.isArray(item.content)) {
+            const textParts = item.content
+              .filter(
+                (part: any) => part.type === 'input_text' && part.text?.trim()
+              )
+              .map((part: any) => part.text)
+              .join(' ')
+
+            return {
+              role: 'user',
+              content: textParts || 'Hello',
+            }
+          } else if (typeof item.content === 'string' && item.content.trim()) {
+            return {
+              role: 'user',
+              content: item.content,
+            }
+          } else {
+            return {
+              role: 'user',
+              content: 'Hello',
+            }
+          }
+        } else if (item.role === 'assistant') {
+          const textContent = Array.isArray(item.content)
+            ? item.content
+                .filter(
+                  (part: any) =>
+                    part.type === 'output_text' && part.text?.trim()
+                )
+                .map((part: any) => part.text)
+                .join(' ')
+            : typeof item.content === 'string' && item.content.trim()
+              ? item.content
+              : null
+
+          const toolCalls = item.tool_calls || null
+
+          const localLLMToolCalls = toolCalls
+            ? toolCalls.map((toolCall: any) => ({
+                id: toolCall.call_id || toolCall.id,
+                type: 'function',
+                function: {
+                  name: toolCall.name,
+                  arguments:
+                    typeof toolCall.arguments === 'string'
+                      ? toolCall.arguments
+                      : JSON.stringify(toolCall.arguments || {}),
+                },
+              }))
+            : null
+
+          return {
+            role: 'assistant',
+            content: textContent,
+            tool_calls: localLLMToolCalls,
+          }
+        } else if (item.role === 'system') {
+          const content =
+            typeof item.content === 'string'
+              ? item.content
+              : Array.isArray(item.content)
+                ? item.content.map(p => p.text || '').join(' ')
+                : 'You are a helpful assistant.'
+
+          return {
+            role: 'system',
+            content: content.trim() || 'You are a helpful assistant.',
+          }
+        } else if (item.type === 'function_call_output') {
+          return {
+            role: 'tool',
+            tool_call_id: item.call_id,
+            content:
+              typeof item.output === 'string'
+                ? item.output
+                : JSON.stringify(item.output),
+          }
+        }
+
+        return {
+          ...item,
+          content:
+            typeof item.content === 'string' && item.content.trim()
+              ? item.content
+              : 'Message received.',
+        }
+      })
+      .filter(msg => msg.content?.trim && msg.content.trim())
+
+    if (customInstructions && !messages.some(msg => msg.role === 'system')) {
+      messages.unshift({
+        role: 'system',
+        content: customInstructions,
+      })
+    }
+
+    console.log(
+      `[${settings.aiProvider}] Final messages:`,
+      JSON.stringify(messages, null, 2)
+    )
+
+    const params: OpenAI.Chat.ChatCompletionCreateParams = {
+      model: settings.assistantModel || 'llama3.2',
+      messages: messages,
+      temperature: settings.assistantTemperature,
+      top_p: settings.assistantTopP,
+      tools:
+        finalToolsForApi.length > 0
+          ? finalToolsForApi.map(tool => {
+              if (tool.type === 'function') {
+                return {
+                  type: 'function',
+                  function: {
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: tool.parameters,
+                  },
+                }
+              }
+              return tool
+            })
+          : undefined,
+      stream: stream,
+    }
+
+    if (stream) {
+      const localStream = await client.chat.completions.create(
+        params as any,
+        { signal }
+      )
+      return convertLocalLLMStreamToResponsesFormat(localStream, settings.aiProvider as 'ollama' | 'lm-studio')
     } else {
       return client.chat.completions.create(params as any, { signal })
     }
@@ -718,7 +1089,7 @@ export const createSummarizationResponse = async (
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
 
-  if (settings.aiProvider === 'openrouter') {
+  if (settings.aiProvider === 'openrouter' || settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
     const response = await client.chat.completions.create({
       model: summarizationModel,
       messages: [
@@ -769,7 +1140,7 @@ export const createContextAnalysisResponse = async (
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
 
-  if (settings.aiProvider === 'openrouter') {
+  if (settings.aiProvider === 'openrouter' || settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
     const response = await client.chat.completions.create({
       model: analysisModel,
       messages: [

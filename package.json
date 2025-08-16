@@ -49,6 +49,7 @@
     "vue-tsc": "^2.0.6"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.7.1",
     "@ricky0123/vad-web": "^0.0.24",
     "@tailwindcss/vite": "^4.1.4",
     "@types/node-cron": "^3.0.11",

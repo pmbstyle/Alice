@@ -37,6 +37,15 @@ export default defineConfig(({ mode, command }) => {
             src: 'node_modules/onnxruntime-web/dist/*.wasm',
             dest: './',
           },
+          // Transformers.js WASM files for local STT
+          {
+            src: 'node_modules/@huggingface/transformers/dist/*.wasm',
+            dest: './',
+          },
+          {
+            src: 'node_modules/@huggingface/transformers/dist/*.mjs',
+            dest: './',
+          },
         ],
       }),
       electron({

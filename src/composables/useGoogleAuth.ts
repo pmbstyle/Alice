@@ -61,7 +61,9 @@ export function useGoogleAuth() {
     googleAuthStatus.error = null
     googleAuthStatus.message = 'Disconnecting...'
     try {
-      const result = await window.ipcRenderer.invoke('google-calendar:disconnect')
+      const result = await window.ipcRenderer.invoke(
+        'google-calendar:disconnect'
+      )
       if (result.success) {
         googleAuthStatus.isAuthenticated = false
         googleAuthStatus.authInProgress = false
@@ -110,7 +112,10 @@ export function useGoogleAuth() {
         'google-auth-loopback-success',
         handleGoogleAuthSuccess
       )
-      window.ipcRenderer.off('google-auth-loopback-error', handleGoogleAuthError)
+      window.ipcRenderer.off(
+        'google-auth-loopback-error',
+        handleGoogleAuthError
+      )
     }
   })
 

@@ -150,7 +150,7 @@
       "additionalProperties": false
     }
   },
-  
+
   {
     "type": "function",
     "name": "schedule_task",
@@ -476,9 +476,7 @@
           "description": "The specific search query or question to look up on the web."
         }
       },
-      "required": [
-        "query"
-      ],
+      "required": ["query"],
       "additionalProperties": false
     }
   }

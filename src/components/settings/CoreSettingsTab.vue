@@ -31,9 +31,13 @@
             id="stt-provider"
             v-model="currentSettings.sttProvider"
             class="select select-bordered w-full focus:select-primary"
+            @change="
+              e => $emit('update:setting', 'sttProvider', e.target.value)
+            "
           >
             <option value="openai">OpenAI (gpt-4o-transcribe)</option>
             <option value="groq">Groq (whisper-large-v3)</option>
+            <option value="transformers">Local (Transformers.js)</option>
           </select>
         </div>
         <div>
@@ -116,13 +120,35 @@
         </div>
       </div>
     </fieldset>
+
+    <!-- Transformers STT Model Download Section -->
+    <fieldset
+      v-if="currentSettings.sttProvider === 'transformers'"
+      class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+    >
+      <legend class="fieldset-legend">Local STT Model Configuration</legend>
+      <div class="p-2">
+        <TransformersModelDownload
+          :current-settings="currentSettings"
+          @update:setting="(key, value) => $emit('update:setting', key, value)"
+        />
+      </div>
+    </fieldset>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { AliceSettings } from '../../stores/settingsStore'
+import TransformersModelDownload from '../TransformersModelDownload.vue'
 
 defineProps<{
   currentSettings: AliceSettings
+}>()
+
+defineEmits<{
+  'update:setting': [
+    key: keyof AliceSettings,
+    value: string | boolean | number | string[],
+  ]
 }>()
 </script>

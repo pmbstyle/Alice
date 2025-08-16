@@ -30,8 +30,7 @@
         </div>
         <div
           v-if="
-            googleAuthStatus.authInProgress &&
-            !googleAuthStatus.isAuthenticated
+            googleAuthStatus.authInProgress && !googleAuthStatus.isAuthenticated
           "
         >
           <p class="text-sm mb-2">
@@ -101,8 +100,8 @@
             :placeholder="mcpPlaceholder"
           ></textarea>
           <p class="text-xs text-gray-400 mt-1">
-            Enter a JSON array of MCP server configurations. Each object
-            should follow the
+            Enter a JSON array of MCP server configurations. Each object should
+            follow the
             <a
               href="https://cookbook.openai.com/examples/mcp/mcp_tool_guide"
               target="_blank"
@@ -155,9 +154,7 @@
           />
         </div>
         <div>
-          <label for="qb-url" class="block mb-1 text-sm"
-            >qBittorrent URL</label
-          >
+          <label for="qb-url" class="block mb-1 text-sm">qBittorrent URL</label>
           <input
             id="qb-url"
             type="text"
@@ -203,12 +200,13 @@
             placeholder="tvly-..."
           />
           <p class="text-xs text-gray-400 mt-1">
-            Required for web search functionality. Get your API key from 
-            <a 
-              href="https://tavily.com" 
-              target="_blank" 
+            Required for web search functionality. Get your API key from
+            <a
+              href="https://tavily.com"
+              target="_blank"
               class="link link-primary"
-            >Tavily</a>.
+              >Tavily</a
+            >.
           </p>
         </div>
       </div>

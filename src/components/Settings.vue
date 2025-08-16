@@ -53,12 +53,13 @@
       </div>
 
       <div>
-        <CoreSettingsTab 
+        <CoreSettingsTab
           v-if="activeTab === 'core'"
           :current-settings="currentSettings"
+          @update:setting="(key, value) => (currentSettings[key] = value)"
         />
 
-        <AssistantSettingsTab 
+        <AssistantSettingsTab
           v-if="activeTab === 'assistant'"
           :current-settings="currentSettings"
           :available-models="availableModelsForSelect"
@@ -69,7 +70,7 @@
           @reset-system-prompt="resetSystemPrompt"
         />
 
-        <HotkeysTab 
+        <HotkeysTab
           v-if="activeTab === 'hotkeys'"
           :current-settings="currentSettings"
           :is-recording-hotkey-for="isRecordingHotkeyFor"
@@ -77,7 +78,7 @@
           @clear-hotkey="clearHotkey"
         />
 
-        <IntegrationsTab 
+        <IntegrationsTab
           v-if="activeTab === 'integrations'"
           :current-settings="currentSettings"
           :google-auth-status="googleAuthStatus"
@@ -85,7 +86,7 @@
           @disconnect-google-services="disconnectGoogleServices"
         />
 
-        <SecurityTab 
+        <SecurityTab
           v-if="activeTab === 'security'"
           :approved-commands="settingsStore.settings.approvedCommands"
           :session-approved-commands="settingsStore.sessionApprovedCommands"
@@ -220,11 +221,8 @@ const {
   clearHotkey: clearHotkeyComposable,
 } = useHotkeyRecording()
 
-const {
-  googleAuthStatus,
-  connectGoogleServices,
-  disconnectGoogleServices,
-} = useGoogleAuth()
+const { googleAuthStatus, connectGoogleServices, disconnectGoogleServices } =
+  useGoogleAuth()
 
 const availableToolsForSelect = computed(() => {
   return PREDEFINED_OPENAI_TOOLS.map(tool => {
@@ -259,7 +257,7 @@ const toolDependencies: Record<string, string[]> = {
 }
 const refreshModels = async () => {
   if (isRefreshingModels.value) return
-  
+
   isRefreshingModels.value = true
   try {
     await conversationStore.fetchModels()
@@ -324,7 +322,6 @@ function isToolConfigured(toolName: string): boolean {
   })
 }
 
-
 onMounted(async () => {
   if (!settingsStore.initialLoadAttempted) {
     await settingsStore.loadSettings()
@@ -357,10 +354,7 @@ watch(
       ) {
         const value = newValues[key as keyof AliceSettings]
         if (value !== undefined) {
-          settingsStore.updateSetting(
-            key as keyof AliceSettings,
-            value
-          )
+          settingsStore.updateSetting(key as keyof AliceSettings, value)
         }
       }
     }

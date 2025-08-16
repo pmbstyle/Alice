@@ -32,7 +32,10 @@ function getAIClient(): OpenAI {
   }
 }
 
-async function* convertLocalLLMStreamToResponsesFormat(stream: any, provider: 'ollama' | 'lm-studio') {
+async function* convertLocalLLMStreamToResponsesFormat(
+  stream: any,
+  provider: 'ollama' | 'lm-studio'
+) {
   let responseId = `${provider}-${Date.now()}`
   let messageItemId = `message-${Date.now()}`
   let toolCallsBuffer = new Map()
@@ -481,7 +484,10 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
         return !isExcluded
       })
       .sort((a, b) => a.id.localeCompare(b.id))
-  } else if (settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
+  } else if (
+    settings.aiProvider === 'ollama' ||
+    settings.aiProvider === 'lm-studio'
+  ) {
     // For local LLMs, return all available models (they should be curated by user)
     return modelsPage.data.sort((a, b) => a.id.localeCompare(b.id))
   } else {
@@ -611,7 +617,10 @@ export const createOpenAIResponse = async (
       })
     finalToolsForApi.length = 0
     finalToolsForApi.push(...allowedTools)
-  } else if (settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
+  } else if (
+    settings.aiProvider === 'ollama' ||
+    settings.aiProvider === 'lm-studio'
+  ) {
     const allowedTools = finalToolsForApi.filter(tool => {
       if (
         tool.type === 'image_generation' ||
@@ -777,7 +786,10 @@ export const createOpenAIResponse = async (
     } else {
       return client.chat.completions.create(params as any, { signal })
     }
-  } else if (settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
+  } else if (
+    settings.aiProvider === 'ollama' ||
+    settings.aiProvider === 'lm-studio'
+  ) {
     const messages = input
       .map((item: any) => {
         if (item.role === 'user') {
@@ -908,11 +920,13 @@ export const createOpenAIResponse = async (
     }
 
     if (stream) {
-      const localStream = await client.chat.completions.create(
-        params as any,
-        { signal }
+      const localStream = await client.chat.completions.create(params as any, {
+        signal,
+      })
+      return convertLocalLLMStreamToResponsesFormat(
+        localStream,
+        settings.aiProvider as 'ollama' | 'lm-studio'
       )
-      return convertLocalLLMStreamToResponsesFormat(localStream, settings.aiProvider as 'ollama' | 'lm-studio')
     } else {
       return client.chat.completions.create(params as any, { signal })
     }
@@ -990,6 +1004,42 @@ export const transcribeWithGroq = async (
     response_format: 'json',
   })
   return transcription?.text || ''
+}
+
+export const transcribeWithTransformers = async (
+  audioBuffer: ArrayBuffer,
+  fallbackToOpenAI: boolean = false
+): Promise<string> => {
+  try {
+    const { transformersSTTService } = await import('./transformersSTT')
+
+    if (!transformersSTTService.isReady()) {
+      throw new Error(
+        'Transformers STT model not initialized. Please download a model in settings.'
+      )
+    }
+
+    return await transformersSTTService.transcribe(audioBuffer)
+  } catch (error: any) {
+    console.error('[TransformersSTT] Local transcription failed:', error)
+
+    if (fallbackToOpenAI) {
+      console.log('[TransformersSTT] Falling back to OpenAI STT...')
+      try {
+        return await transcribeWithOpenAI(audioBuffer)
+      } catch (fallbackError: any) {
+        console.error(
+          '[TransformersSTT] Fallback to OpenAI also failed:',
+          fallbackError
+        )
+        throw new Error(
+          `Local STT failed: ${error.message}. Fallback to OpenAI also failed: ${fallbackError.message}`
+        )
+      }
+    }
+
+    throw error
+  }
 }
 
 export const transcribeWithOpenAI = async (
@@ -1089,7 +1139,11 @@ export const createSummarizationResponse = async (
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
 
-  if (settings.aiProvider === 'openrouter' || settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
+  if (
+    settings.aiProvider === 'openrouter' ||
+    settings.aiProvider === 'ollama' ||
+    settings.aiProvider === 'lm-studio'
+  ) {
     const response = await client.chat.completions.create({
       model: summarizationModel,
       messages: [
@@ -1140,7 +1194,11 @@ export const createContextAnalysisResponse = async (
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
 
-  if (settings.aiProvider === 'openrouter' || settings.aiProvider === 'ollama' || settings.aiProvider === 'lm-studio') {
+  if (
+    settings.aiProvider === 'openrouter' ||
+    settings.aiProvider === 'ollama' ||
+    settings.aiProvider === 'lm-studio'
+  ) {
     const response = await client.chat.completions.create({
       model: analysisModel,
       messages: [

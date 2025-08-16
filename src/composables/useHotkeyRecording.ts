@@ -82,13 +82,15 @@ export function useHotkeyRecording() {
         const bIsModifier = order.includes(b)
         if (aIsModifier && !bIsModifier) return -1
         if (!aIsModifier && bIsModifier) return 1
-        if (aIsModifier && bIsModifier) return order.indexOf(a) - order.indexOf(b)
+        if (aIsModifier && bIsModifier)
+          return order.indexOf(a) - order.indexOf(b)
         return a.localeCompare(b)
       })
 
       const newHotkey = acceleratorParts.join('+')
       if (isRecordingHotkeyFor.value) {
-        currentSettings[isRecordingHotkeyFor.value as keyof AliceSettings] = newHotkey
+        currentSettings[isRecordingHotkeyFor.value as keyof AliceSettings] =
+          newHotkey
       }
       stopRecordingHotkey()
     }
@@ -96,15 +98,19 @@ export function useHotkeyRecording() {
 
   let currentKeyHandler: ((event: KeyboardEvent) => void) | null = null
 
-  const startRecordingHotkey = (settingKey: keyof AliceSettings, currentSettings: any) => {
+  const startRecordingHotkey = (
+    settingKey: keyof AliceSettings,
+    currentSettings: any
+  ) => {
     isRecordingHotkeyFor.value = settingKey
     activeRecordingKeys.value.clear()
-    
+
     if (currentKeyHandler) {
       window.removeEventListener('keydown', currentKeyHandler, true)
     }
-    
-    currentKeyHandler = (event: KeyboardEvent) => handleHotkeyKeyDown(event, currentSettings)
+
+    currentKeyHandler = (event: KeyboardEvent) =>
+      handleHotkeyKeyDown(event, currentSettings)
     window.addEventListener('keydown', currentKeyHandler, true)
   }
 
@@ -117,7 +123,10 @@ export function useHotkeyRecording() {
     activeRecordingKeys.value.clear()
   }
 
-  const clearHotkey = (settingKey: keyof AliceSettings, currentSettings: any) => {
+  const clearHotkey = (
+    settingKey: keyof AliceSettings,
+    currentSettings: any
+  ) => {
     if (isRecordingHotkeyFor.value === settingKey) {
       stopRecordingHotkey()
     }

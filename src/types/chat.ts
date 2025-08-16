@@ -1,5 +1,10 @@
 export interface AppChatMessageContentPart {
-  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path' | 'app_file' | 'app_error'
+  type:
+    | 'app_text'
+    | 'app_image_uri'
+    | 'app_generated_image_path'
+    | 'app_file'
+    | 'app_error'
   text?: string
   uri?: string
   path?: string

@@ -49,7 +49,10 @@
             :disabled="isRefreshingModels"
             class="btn btn-sm btn-outline btn-primary mt-2"
           >
-            <span v-if="isRefreshingModels" class="loading loading-spinner loading-xs mr-2"></span>
+            <span
+              v-if="isRefreshingModels"
+              class="loading loading-spinner loading-xs mr-2"
+            ></span>
             {{ isRefreshingModels ? 'Loading...' : 'Refresh Models' }}
           </button>
           <p
@@ -67,10 +70,9 @@
             "
             class="text-xs text-warning mt-1"
           >
-            {{
-              getProviderDisplayName(currentSettings.aiProvider)
-            }}
-            API key/configuration needs to be validated (Save & Test) to load models.
+            {{ getProviderDisplayName(currentSettings.aiProvider) }}
+            API key/configuration needs to be validated (Save & Test) to load
+            models.
           </p>
         </div>
 
@@ -97,9 +99,7 @@
         </div>
 
         <div>
-          <label
-            for="tts-voice"
-            class="block mb-1 text-sm flex items-center"
+          <label for="tts-voice" class="block mb-1 text-sm flex items-center"
             >Text-to-Speech Voice
             <div
               class="tooltip tooltip-right"
@@ -206,9 +206,7 @@
               for="assistant-top-p"
               class="block mb-1 text-sm flex items-center"
             >
-              Assistant Top P ({{
-                currentSettings.assistantTopP.toFixed(1)
-              }})
+              Assistant Top P ({{ currentSettings.assistantTopP.toFixed(1) }})
               <div
                 class="tooltip tooltip-left"
                 data-tip="An alternative to temperature sampling, where the model considers the results of the tokens with top-p probability mass. So 0.1 means only the tokens comprising the top 10% probability mass are considered."
@@ -252,9 +250,7 @@
               min="1"
               max="50"
               step="1"
-              v-model.number="
-                currentSettings.MAX_HISTORY_MESSAGES_FOR_API
-              "
+              v-model.number="currentSettings.MAX_HISTORY_MESSAGES_FOR_API"
               class="input input-bordered w-full focus:input-primary"
             />
           </div>
@@ -296,9 +292,7 @@
             v-model="currentSettings.SUMMARIZATION_MODEL"
             class="select select-bordered w-full focus:select-primary"
           >
-            <option disabled value="">
-              Select a summarization model
-            </option>
+            <option disabled value="">Select a summarization model</option>
             <option
               v-if="
                 availableModels.length === 0 &&
@@ -328,9 +322,7 @@
             class="text-xs text-warning mt-1"
           >
             {{
-              currentSettings.aiProvider === 'openai'
-                ? 'OpenAI'
-                : 'OpenRouter'
+              currentSettings.aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'
             }}
             API key needs to be validated (Save & Test) to load models.
           </p>
@@ -341,9 +333,7 @@
         </div>
 
         <div>
-          <label
-            for="summarization-system-prompt"
-            class="block mb-1 text-sm"
+          <label for="summarization-system-prompt" class="block mb-1 text-sm"
             >Summarization System Prompt</label
           >
           <textarea
@@ -386,9 +376,7 @@
               <label
                 class="label cursor-pointer py-1 justify-start gap-3"
                 :class="{
-                  'opacity-50 cursor-not-allowed': !isToolConfigured(
-                    tool.name
-                  ),
+                  'opacity-50 cursor-not-allowed': !isToolConfigured(tool.name),
                 }"
               >
                 <input
@@ -492,10 +480,10 @@ const isBrowserContextToolActive = computed(() => {
 
 const getProviderDisplayName = (provider: string): string => {
   const providerNames: Record<string, string> = {
-    'openai': 'OpenAI',
-    'openrouter': 'OpenRouter',
-    'ollama': 'Ollama',
-    'lm-studio': 'LM Studio'
+    openai: 'OpenAI',
+    openrouter: 'OpenRouter',
+    ollama: 'Ollama',
+    'lm-studio': 'LM Studio',
   }
   return providerNames[provider] || provider
 }

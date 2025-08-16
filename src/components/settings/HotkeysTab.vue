@@ -1,8 +1,6 @@
 <template>
   <div class="space-y-6">
-    <h3 class="text-xl font-semibold mb-4 text-yellow-400">
-      Global Hotkeys
-    </h3>
+    <h3 class="text-xl font-semibold mb-4 text-yellow-400">Global Hotkeys</h3>
     <fieldset
       class="fieldset bg-gray-900/90 border-yellow-500/50 rounded-box w-full border p-4"
     >
@@ -19,11 +17,11 @@
             <div class="flex items-center gap-2">
               <button
                 type="button"
-                @click="$emit('start-recording-hotkey', 'microphoneToggleHotkey')"
-                class="btn btn-secondary btn-active btn-sm"
-                :disabled="
-                  isRecordingHotkeyFor === 'microphoneToggleHotkey'
+                @click="
+                  $emit('start-recording-hotkey', 'microphoneToggleHotkey')
                 "
+                class="btn btn-secondary btn-active btn-sm"
+                :disabled="isRecordingHotkeyFor === 'microphoneToggleHotkey'"
               >
                 {{
                   isRecordingHotkeyFor === 'microphoneToggleHotkey'
@@ -101,9 +99,7 @@
                 type="button"
                 @click="$emit('start-recording-hotkey', 'takeScreenshotHotkey')"
                 class="btn btn-secondary btn-active btn-sm"
-                :disabled="
-                  isRecordingHotkeyFor === 'takeScreenshotHotkey'
-                "
+                :disabled="isRecordingHotkeyFor === 'takeScreenshotHotkey'"
               >
                 {{
                   isRecordingHotkeyFor === 'takeScreenshotHotkey'

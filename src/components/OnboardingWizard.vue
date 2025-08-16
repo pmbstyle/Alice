@@ -67,12 +67,8 @@
             <option value="openrouter">
               OpenRouter (400+ models, no image gen)
             </option>
-            <option value="ollama">
-              Ollama (Local LLMs)
-            </option>
-            <option value="lm-studio">
-              LM Studio (Local LLMs)
-            </option>
+            <option value="ollama">Ollama (Local LLMs)</option>
+            <option value="lm-studio">LM Studio (Local LLMs)</option>
           </select>
         </div>
 
@@ -283,8 +279,9 @@
 
         <div v-if="formData.aiProvider === 'ollama'">
           <p class="text-sm text-base-content/70 mb-4">
-            Ollama runs models locally on your machine. You'll need to have Ollama
-            installed and running. Still requires OpenAI API key for TTS/embeddings.
+            Ollama runs models locally on your machine. You'll need to have
+            Ollama installed and running. Still requires OpenAI API key for
+            TTS/embeddings.
           </p>
 
           <div class="form-control mb-4">
@@ -305,7 +302,9 @@
 
           <div class="form-control mb-4">
             <label class="label">
-              <span class="label-text">OpenAI API Key (for TTS/STT/embeddings)</span>
+              <span class="label-text"
+                >OpenAI API Key (for TTS/STT/embeddings)</span
+              >
             </label>
             <p class="text-sm text-base-content/70 mb-2">
               Required for voice features and embeddings. Get one from
@@ -403,9 +402,9 @@
 
         <div v-if="formData.aiProvider === 'lm-studio'">
           <p class="text-sm text-base-content/70 mb-4">
-            LM Studio runs models locally through its desktop app. You'll need to
-            have LM Studio installed with a local server running. Still requires
-            OpenAI API key for TTS/embeddings.
+            LM Studio runs models locally through its desktop app. You'll need
+            to have LM Studio installed with a local server running. Still
+            requires OpenAI API key for TTS/embeddings.
           </p>
 
           <div class="form-control mb-4">
@@ -426,7 +425,9 @@
 
           <div class="form-control mb-4">
             <label class="label">
-              <span class="label-text">OpenAI API Key (for TTS/STT/embeddings)</span>
+              <span class="label-text"
+                >OpenAI API Key (for TTS/STT/embeddings)</span
+              >
             </label>
             <p class="text-sm text-base-content/70 mb-2">
               Required for voice features and embeddings. Get one from
@@ -718,11 +719,14 @@ const testOllamaConnection = async () => {
     await tempClient.models.list({ limit: 1 })
     testResult.ollama.success = true
   } catch (e: any) {
-    testResult.ollama.error = 'Connection failed - check if Ollama is running and accessible.'
+    testResult.ollama.error =
+      'Connection failed - check if Ollama is running and accessible.'
     if (e.message?.includes('NetworkError') || e.message?.includes('fetch')) {
-      testResult.ollama.error = 'Cannot reach Ollama server - is it running on this URL?'
+      testResult.ollama.error =
+        'Cannot reach Ollama server - is it running on this URL?'
     } else if (e.message?.includes('timeout')) {
-      testResult.ollama.error = 'Connection timeout - Ollama may be starting up.'
+      testResult.ollama.error =
+        'Connection timeout - Ollama may be starting up.'
     }
   } finally {
     isTesting.ollama = false
@@ -752,11 +756,14 @@ const testLMStudioConnection = async () => {
     await tempClient.models.list({ limit: 1 })
     testResult.lmStudio.success = true
   } catch (e: any) {
-    testResult.lmStudio.error = 'Connection failed - check if LM Studio server is running and accessible.'
+    testResult.lmStudio.error =
+      'Connection failed - check if LM Studio server is running and accessible.'
     if (e.message?.includes('NetworkError') || e.message?.includes('fetch')) {
-      testResult.lmStudio.error = 'Cannot reach LM Studio server - is it running on this URL?'
+      testResult.lmStudio.error =
+        'Cannot reach LM Studio server - is it running on this URL?'
     } else if (e.message?.includes('timeout')) {
-      testResult.lmStudio.error = 'Connection timeout - LM Studio may be starting up.'
+      testResult.lmStudio.error =
+        'Connection timeout - LM Studio may be starting up.'
     }
   } finally {
     isTesting.lmStudio = false

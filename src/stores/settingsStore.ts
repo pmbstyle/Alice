@@ -32,6 +32,8 @@ export interface AliceSettings {
   transformersDevice: 'webgpu' | 'wasm'
   transformersQuantization: 'fp32' | 'fp16' | 'q8' | 'q4'
   transformersEnableFallback: boolean
+  transformersWakeWordEnabled: boolean
+  transformersWakeWord: string
 
   ollamaBaseUrl: string
   lmStudioBaseUrl: string
@@ -79,6 +81,8 @@ const defaultSettings: AliceSettings = {
   transformersDevice: 'wasm',
   transformersQuantization: 'q8',
   transformersEnableFallback: true,
+  transformersWakeWordEnabled: false,
+  transformersWakeWord: 'Alice',
 
   ollamaBaseUrl: 'http://localhost:11434',
   lmStudioBaseUrl: 'http://localhost:1234',
@@ -133,6 +137,8 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   transformersDevice: 'Processing Device',
   transformersQuantization: 'Model Quantization',
   transformersEnableFallback: 'Enable OpenAI Fallback',
+  transformersWakeWordEnabled: 'Enable Wake Word',
+  transformersWakeWord: 'Wake Word',
 
   ollamaBaseUrl: 'Ollama Base URL',
   lmStudioBaseUrl: 'LM Studio Base URL',
@@ -500,6 +506,12 @@ export const useSettingsStore = defineStore('settings', () => {
     if (key === 'transformersQuantization') {
       settings.value[key] = value as 'fp32' | 'fp16' | 'q8' | 'q4'
     }
+    if (key === 'transformersWakeWordEnabled') {
+      settings.value[key] = value as boolean
+    }
+    if (key === 'transformersWakeWord') {
+      settings.value[key] = value as string
+    }
 
     successMessage.value = null
     error.value = null
@@ -538,6 +550,8 @@ export const useSettingsStore = defineStore('settings', () => {
         transformersDevice: settings.value.transformersDevice,
         transformersQuantization: settings.value.transformersQuantization,
         transformersEnableFallback: settings.value.transformersEnableFallback,
+        transformersWakeWordEnabled: settings.value.transformersWakeWordEnabled,
+        transformersWakeWord: settings.value.transformersWakeWord,
 
         ollamaBaseUrl: settings.value.ollamaBaseUrl,
         lmStudioBaseUrl: settings.value.lmStudioBaseUrl,

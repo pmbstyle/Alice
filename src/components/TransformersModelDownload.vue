@@ -90,6 +90,49 @@
           />
         </label>
       </div>
+
+      <div class="form-control">
+        <label class="label cursor-pointer">
+          <span class="label-text">
+            Enable Wake Word
+            <span class="text-xs text-gray-400 block">
+              Only process audio when wake word is detected (e.g., "Alice", "Hey Alice")
+            </span>
+          </span>
+          <input
+            type="checkbox"
+            class="checkbox checkbox-primary"
+            :checked="currentSettings.transformersWakeWordEnabled"
+            @change="
+              e =>
+                emit(
+                  'update:setting',
+                  'transformersWakeWordEnabled',
+                  e.target.checked
+                )
+            "
+          />
+        </label>
+      </div>
+
+      <div v-if="currentSettings.transformersWakeWordEnabled" class="form-control">
+        <label for="wake-word" class="block mb-1 text-sm">
+          Wake Word
+        </label>
+        <input
+          id="wake-word"
+          type="text"
+          v-model="currentSettings.transformersWakeWord"
+          class="input input-bordered w-full focus:input-primary"
+          placeholder="Alice"
+          @input="
+            e => emit('update:setting', 'transformersWakeWord', e.target.value)
+          "
+        />
+        <p class="text-xs text-gray-400 mt-1">
+          Say this word (or "Hey [word]", "OK [word]") to activate voice commands
+        </p>
+      </div>
     </div>
 
     <div v-if="selectedModel && !isDownloading && !modelReady" class="mt-4">

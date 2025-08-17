@@ -48,9 +48,14 @@ import {
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_DIR_NAME = 'generated_images'
+const TRANSFORMERS_MODELS_DIR_NAME = 'transformers_models'
 const GENERATED_IMAGES_FULL_PATH = path.join(
   USER_DATA_PATH,
   GENERATED_IMAGES_DIR_NAME
+)
+const TRANSFORMERS_MODELS_FULL_PATH = path.join(
+  USER_DATA_PATH,
+  TRANSFORMERS_MODELS_DIR_NAME
 )
 
 let screenshotDataURL: string | null = null
@@ -359,6 +364,17 @@ export function registerIPCHandlers(): void {
 
   ipcMain.handle('focus-main-window', () => {
     return focusMainWindow()
+  })
+
+  // Transformers model cache management
+  ipcMain.handle('transformers:get-cache-path', async () => {
+    try {
+      await mkdir(TRANSFORMERS_MODELS_FULL_PATH, { recursive: true })
+      return TRANSFORMERS_MODELS_FULL_PATH
+    } catch (error) {
+      console.error('[IPC] Failed to create transformers cache directory:', error)
+      throw error
+    }
   })
 
   // Settings management

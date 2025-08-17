@@ -9,6 +9,22 @@ if (typeof window !== 'undefined') {
   env.backends.onnx.wasm.numThreads = 1
 }
 
+let cacheInitialized = false
+async function initializeCache(): Promise<void> {
+  if (cacheInitialized || typeof window === 'undefined') return
+  
+  try {
+    const cachePath = await window.transformersAPI.getCachePath()
+    env.useBrowserCache = true
+    env.localModelPath = cachePath
+    cacheInitialized = true
+    console.log('[TransformersSTT] Cache directory available at:', cachePath)
+  } catch (error) {
+    console.warn('[TransformersSTT] Failed to get cache directory, using default browser cache:', error)
+    env.useBrowserCache = true
+  }
+}
+
 export interface TransformersModel {
   id: string
   name: string
@@ -61,8 +77,16 @@ export type ProgressCallback = (progress: ModelDownloadProgress) => void
 class TransformersSTTService {
   private transcriber: Pipeline | null = null
   private currentModel: string | null = null
+  private currentDevice: 'webgpu' | 'wasm' = 'wasm'
+  private currentQuantization: 'fp32' | 'fp16' | 'q8' | 'q4' = 'q8'
   private isInitializing = false
   private hasBeenUsed = false
+  private isTranscribing = false
+  private transcriptionQueue: Array<{
+    audioBuffer: ArrayBuffer
+    resolve: (result: string) => void
+    reject: (error: Error) => void
+  }> = []
 
   async initializeModel(
     modelId: string,
@@ -77,6 +101,7 @@ class TransformersSTTService {
     this.isInitializing = true
 
     try {
+      await initializeCache()
       const model = AVAILABLE_TRANSFORMERS_MODELS.find(m => m.id === modelId)
       if (!model) {
         throw new Error(`Model ${modelId} not found`)
@@ -123,6 +148,7 @@ class TransformersSTTService {
         total: 0,
         message: `Downloading and compiling ${model.name}... This may take a moment.`,
       })
+
       this.transcriber = await pipeline(
         'automatic-speech-recognition',
         model.huggingfaceId,
@@ -151,6 +177,14 @@ class TransformersSTTService {
                 total: 0,
                 message: 'Compiling model for first use...',
               })
+            } else if (progress.status === 'initiate') {
+              onProgress?.({
+                status: 'downloading',
+                progress: 30,
+                loaded: 0,
+                total: 0,
+                message: 'Initiating model download...',
+              })
             }
           },
         }
@@ -168,24 +202,26 @@ class TransformersSTTService {
 
       try {
         const testAudio = new Float32Array(8000).fill(0)
-        await new Promise<void>((resolve, reject) => {
-          setTimeout(async () => {
+        await Promise.race([
+          new Promise<void>(async (resolve, reject) => {
             try {
               await this.transcriber!(testAudio)
               resolve()
             } catch (testError) {
               resolve()
             }
-          }, 10)
-        })
+          }),
+          new Promise<void>((resolve) => {
+            setTimeout(() => resolve(), 5000)
+          })
+        ])
       } catch (testError) {
-        console.warn(
-          '[TransformersSTT] Model test failed, but continuing:',
-          testError
-        )
+        console.warn('[TransformersSTT] Model test failed, but continuing:', testError)
       }
 
       this.currentModel = modelId
+      this.currentDevice = finalDevice
+      this.currentQuantization = quantization
       this.hasBeenUsed = false
 
       onProgress?.({
@@ -216,12 +252,56 @@ class TransformersSTTService {
 
   async transcribe(audioBuffer: ArrayBuffer): Promise<string> {
     if (!this.transcriber) {
-      throw new Error(
-        'Transcriber not initialized. Please download a model first.'
-      )
+      throw new Error('Transcriber not initialized. Please download a model first.')
     }
 
+    return new Promise((resolve, reject) => {
+      this.transcriptionQueue.push({ audioBuffer, resolve, reject })
+      this.processQueue()
+    })
+  }
+
+  private async processQueue(): Promise<void> {
+    if (this.isTranscribing || this.transcriptionQueue.length === 0) {
+      return
+    }
+
+    this.isTranscribing = true
+
+    while (this.transcriptionQueue.length > 0) {
+      const request = this.transcriptionQueue.shift()!
+      
+      try {
+        await new Promise(resolve => setTimeout(resolve, 200))
+        const result = await this.performTranscription(request.audioBuffer)
+        request.resolve(result)
+        await new Promise(resolve => setTimeout(resolve, 100))
+      } catch (error: any) {
+        if (error.message.includes('Session') || error.message.includes('timeout')) {
+          console.error('[TransformersSTT] Persistent session errors detected. Disabling local model.')
+          this.dispose()
+          
+          const helpfulError = new Error(
+            'Local Transformers model has persistent session conflicts. ' +
+            'Please switch to OpenAI STT in settings for reliable transcription, ' +
+            'or try downloading a different model (whisper-tiny.en is most stable).'
+          )
+          request.reject(helpfulError)
+        } else {
+          request.reject(error)
+        }
+      }
+    }
+
+    this.isTranscribing = false
+  }
+
+  private async performTranscription(audioBuffer: ArrayBuffer): Promise<string> {
     try {
+      if (!this.transcriber) {
+        throw new Error('Transcriber not available')
+      }
+
       let audioData = this.parseWAVToFloat32(audioBuffer)
       const isFirstUse = !this.hasBeenUsed
 
@@ -233,21 +313,38 @@ class TransformersSTTService {
         audioData = audioData.slice(0, 480000)
       }
 
-      await new Promise(resolve => setTimeout(resolve, isFirstUse ? 50 : 10))
+      await new Promise(resolve => setTimeout(resolve, isFirstUse ? 100 : 20))
 
-      const result = await this.transcriber(audioData, {
-        chunk_length_s: 30,
-        stride_length_s: 5,
-        return_timestamps: false,
-      })
+      const result = await Promise.race([
+        this.transcriber(audioData, {
+          chunk_length_s: 10,
+          stride_length_s: 2,
+          return_timestamps: false,
+        }),
+        new Promise<any>((_, reject) => {
+          setTimeout(() => {
+            reject(new Error('Transcription timeout after 15 seconds'))
+          }, 15000)
+        })
+      ])
 
       this.hasBeenUsed = true
-      await new Promise(resolve => setTimeout(resolve, 5))
+      await new Promise(resolve => setTimeout(resolve, 10))
 
       const transcription = result.text?.trim() || ''
 
-      if (transcription.length > 100 && /^(.)\1{50,}/.test(transcription)) {
-        return ''
+      if (
+        transcription.length > 100 && 
+        (
+          /^(.)\1{50,}/.test(transcription) ||
+          /(.{10,50})\1{3,}/.test(transcription) ||
+          transcription.split(' ').filter(word => word.length > 15).length > 3 ||
+          /[^a-zA-Z0-9\s\.\,\!\?\-\'\"]/.test(transcription)
+        )
+      ) {
+        console.warn('[TransformersSTT] Detected garbage output, clearing corrupted cache')
+        await this.clearCache()
+        throw new Error('Model produced corrupted output, cache cleared. Please re-download the model.')
       }
 
       return transcription
@@ -379,6 +476,63 @@ class TransformersSTTService {
     }
   }
 
+  async restoreModelFromCache(
+    modelId: string,
+    device: 'webgpu' | 'wasm' = 'wasm',
+    quantization: 'fp32' | 'fp16' | 'q8' | 'q4' = 'q8'
+  ): Promise<boolean> {
+    if (this.isInitializing || this.transcriber) {
+      return this.transcriber !== null
+    }
+
+    try {
+      await initializeCache()
+
+      const model = AVAILABLE_TRANSFORMERS_MODELS.find(m => m.id === modelId)
+      if (!model) {
+        console.warn('[TransformersSTT] Model not found for restoration:', modelId)
+        return false
+      }
+
+
+      let finalDevice = device
+      if (device === 'webgpu') {
+        try {
+          if (!navigator.gpu) {
+            finalDevice = 'wasm'
+          } else {
+            const adapter = await navigator.gpu.requestAdapter()
+            if (!adapter) {
+              finalDevice = 'wasm'
+            }
+          }
+        } catch (e) {
+          finalDevice = 'wasm'
+        }
+      }
+
+      this.transcriber = await pipeline(
+        'automatic-speech-recognition',
+        model.huggingfaceId,
+        {
+          device: finalDevice,
+          dtype: quantization,
+        }
+      )
+
+      this.currentModel = modelId
+      this.currentDevice = finalDevice
+      this.currentQuantization = quantization
+      this.hasBeenUsed = false
+
+      console.log('[TransformersSTT] Model restored from cache successfully:', modelId)
+      return true
+    } catch (error: any) {
+      console.log('[TransformersSTT] Failed to restore model from cache:', error.message)
+      return false
+    }
+  }
+
   getCurrentModel(): string | null {
     return this.currentModel
   }
@@ -391,11 +545,65 @@ class TransformersSTTService {
     return this.isReady() && !this.hasBeenUsed
   }
 
+  private async recreateTranscriber(): Promise<void> {
+    if (!this.currentModel) {
+      throw new Error('No model to recreate')
+    }
+
+    const model = AVAILABLE_TRANSFORMERS_MODELS.find(m => m.id === this.currentModel)
+    if (!model) {
+      throw new Error('Model not found')
+    }
+
+    this.transcriber = null
+    await new Promise(resolve => setTimeout(resolve, 2000))
+
+    try {
+      if (typeof window !== 'undefined' && (window as any).gc) {
+        (window as any).gc()
+      }
+    } catch (e) {}
+
+    this.transcriber = await pipeline(
+      'automatic-speech-recognition',
+      model.huggingfaceId,
+      {
+        device: this.currentDevice,
+        dtype: this.currentQuantization,
+      }
+    )
+  }
+
+  async clearCache(): Promise<void> {
+    this.dispose()
+    
+    if (typeof window !== 'undefined' && 'indexedDB' in window) {
+      try {
+        const databases = ['transformers-cache', 'huggingface-js-cache']
+        for (const dbName of databases) {
+          const deleteReq = indexedDB.deleteDatabase(dbName)
+          await new Promise<void>((resolve, reject) => {
+            deleteReq.onsuccess = () => resolve()
+            deleteReq.onerror = () => resolve()
+          })
+        }
+      } catch (error) {
+        console.warn('[TransformersSTT] Failed to clear cache:', error)
+      }
+    }
+  }
+
   dispose(): void {
+    this.transcriptionQueue.forEach(request => {
+      request.reject(new Error('Service disposed'))
+    })
+    this.transcriptionQueue = []
+    
     this.transcriber = null
     this.currentModel = null
     this.isInitializing = false
     this.hasBeenUsed = false
+    this.isTranscribing = false
   }
 }
 

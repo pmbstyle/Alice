@@ -29,4 +29,7 @@ interface Window {
   electronPaths: {
     getRendererDistPath: () => Promise<string>
   }
+  transformersAPI: {
+    getCachePath: () => Promise<string>
+  }
 }

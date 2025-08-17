@@ -4,7 +4,7 @@ import { useConversationStore } from './conversationStore'
 import { useGeneralStore } from './generalStore'
 import { reinitializeClients } from '../services/apiClients'
 import defaultSystemPromptFromMD from '../../docs/systemPrompt.md?raw'
-import { AVAILABLE_TRANSFORMERS_MODELS } from '../services/transformersSTT'
+import { AVAILABLE_TRANSFORMERS_MODELS, transformersSTTService } from '../services/transformersSTT'
 
 export const DEFAULT_ASSISTANT_SYSTEM_PROMPT = defaultSystemPromptFromMD
 
@@ -414,6 +414,25 @@ export const useSettingsStore = defineStore('settings', () => {
           if (window.settingsAPI?.saveSettings) {
             await saveSettingsToFile()
           }
+        }
+      }
+
+      // Try to restore Transformers model from cache if it's the selected STT provider
+      if (settings.value.sttProvider === 'transformers' && settings.value.transformersModel) {
+        try {
+          console.log('[SettingsStore] Attempting to restore Transformers model from cache:', settings.value.transformersModel)
+          const restored = await transformersSTTService.restoreModelFromCache(
+            settings.value.transformersModel,
+            settings.value.transformersDevice,
+            settings.value.transformersQuantization
+          )
+          if (restored) {
+            console.log('[SettingsStore] Transformers model restored successfully')
+          } else {
+            console.log('[SettingsStore] Transformers model not found in cache, will need to download')
+          }
+        } catch (error: any) {
+          console.warn('[SettingsStore] Failed to restore Transformers model:', error.message)
         }
       }
 

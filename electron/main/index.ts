@@ -41,10 +41,17 @@ function isBrowserContextToolEnabled(settings: any): boolean {
   return settings?.assistantTools?.includes('browser_context') || false
 }
 
-// Disable hardware acceleration for Windows 7 and to prevent SharedImageManager errors
 if (os.release().startsWith('6.1') || process.platform === 'win32') {
   app.disableHardwareAcceleration()
 }
+
+app.commandLine.appendSwitch('--disable-gpu')
+app.commandLine.appendSwitch('--disable-gpu-sandbox')
+app.commandLine.appendSwitch('--disable-software-rasterizer')
+
+process.env.ONNX_WEB_WEBGPU_DISABLED = 'true'
+process.env.ONNX_WEB_INIT_TIMEOUT = '30000'
+process.env.ONNX_WEB_WASM_ENABLE_SIMD = 'true'
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 if (!app.requestSingleInstanceLock()) {

@@ -1084,7 +1084,7 @@ export const transcribeWithOpenAI = async (
 }
 
 export const createEmbedding = async (textInput: any): Promise<number[]> => {
-  const openai = getOpenAIClient()
+  const settings = useSettingsStore().settings
   let textToEmbed = ''
 
   if (typeof textInput === 'string') {
@@ -1101,6 +1101,35 @@ export const createEmbedding = async (textInput: any): Promise<number[]> => {
 
   if (!textToEmbed.trim()) return []
 
+  if (settings.embeddingProvider === 'local') {
+    try {
+      const readyResult = await window.ipcRenderer.invoke('localEmbedding:isReady')
+      if (!readyResult.success || !readyResult.data) {
+        const initResult = await window.ipcRenderer.invoke('localEmbedding:initialize')
+        if (!initResult.success) {
+          return fallbackToOpenAIEmbedding(textToEmbed)
+        }
+      }
+
+      const result = await window.ipcRenderer.invoke('localEmbedding:generateEmbedding', {
+        text: textToEmbed
+      })
+      
+      if (result.success && result.data) {
+        return result.data
+      } else {
+        return fallbackToOpenAIEmbedding(textToEmbed)
+      }
+    } catch (error) {
+      return fallbackToOpenAIEmbedding(textToEmbed)
+    }
+  } else {
+    return fallbackToOpenAIEmbedding(textToEmbed)
+  }
+}
+
+const fallbackToOpenAIEmbedding = async (textToEmbed: string): Promise<number[]> => {
+  const openai = getOpenAIClient()
   const response = await openai.embeddings.create({
     model: 'text-embedding-ada-002',
     input: textToEmbed,

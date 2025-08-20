@@ -53,6 +53,7 @@ export interface AliceSettings {
   ttsProvider: 'openai' | 'local'
   ttsVoice: 'alloy' | 'echo' | 'fable' | 'nova' | 'onyx' | 'shimmer'
   localTtsVoice: string
+  embeddingProvider: 'openai' | 'local'
 
   microphoneToggleHotkey: string
   mutePlaybackHotkey: string
@@ -110,6 +111,7 @@ const defaultSettings: AliceSettings = {
   ttsProvider: 'openai',
   ttsVoice: 'nova',
   localTtsVoice: 'af_bella',
+  embeddingProvider: 'openai',
 
   microphoneToggleHotkey: 'Alt+M',
   mutePlaybackHotkey: 'Alt+S',
@@ -161,6 +163,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   ttsProvider: 'Text-to-Speech Provider',
   ttsVoice: 'OpenAI TTS Voice',
   localTtsVoice: 'Local TTS Voice',
+  embeddingProvider: 'Embedding Provider',
   microphoneToggleHotkey: 'Microphone Toggle Hotkey',
   mutePlaybackHotkey: 'Mute Playback Hotkey',
   takeScreenshotHotkey: 'Take Screenshot Hotkey',
@@ -524,6 +527,9 @@ export const useSettingsStore = defineStore('settings', () => {
     if (key === 'localTtsVoice') {
       settings.value[key] = value as string
     }
+    if (key === 'embeddingProvider') {
+      settings.value[key] = value as 'openai' | 'local'
+    }
 
     successMessage.value = null
     error.value = null
@@ -583,6 +589,7 @@ export const useSettingsStore = defineStore('settings', () => {
         ttsProvider: settings.value.ttsProvider,
         ttsVoice: settings.value.ttsVoice,
         localTtsVoice: settings.value.localTtsVoice,
+        embeddingProvider: settings.value.embeddingProvider,
         microphoneToggleHotkey: settings.value.microphoneToggleHotkey,
         mutePlaybackHotkey: settings.value.mutePlaybackHotkey,
         takeScreenshotHotkey: settings.value.takeScreenshotHotkey,

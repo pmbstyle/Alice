@@ -143,6 +143,16 @@ onMounted(async () => {
         generalStore.statusMessage = 'TTS generation failed'
       }
     })
+
+    // Handle local embedding progress updates
+    window.ipcRenderer.on('local-embedding-progress', (event, data) => {
+      const { message, progress } = data
+      if (progress >= 0) {
+        generalStore.statusMessage = `Embedding: ${message}`
+      } else {
+        generalStore.statusMessage = 'Embedding generation failed'
+      }
+    })
   }
 })
 
@@ -151,6 +161,7 @@ onUnmounted(() => {
     window.ipcRenderer.removeAllListeners('update-downloaded')
     window.ipcRenderer.removeAllListeners('context-action')
     window.ipcRenderer.removeAllListeners('kokoro-tts-progress')
+    window.ipcRenderer.removeAllListeners('local-embedding-progress')
   }
 })
 </script>

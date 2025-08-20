@@ -195,6 +195,31 @@
       </div>
     </fieldset>
 
+    <!-- Embedding Configuration Section -->
+    <fieldset
+      class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+    >
+      <legend class="fieldset-legend">Embedding Configuration</legend>
+      <div class="grid grid-cols-1 gap-4 p-2">
+        <div>
+          <label for="embedding-provider" class="block mb-1 text-sm"
+            >Embedding Provider *</label
+          >
+          <select
+            id="embedding-provider"
+            v-model="currentSettings.embeddingProvider"
+            class="select select-bordered w-full focus:select-primary"
+          >
+            <option value="openai">OpenAI (Cloud)</option>
+            <option value="local">Local (all-MiniLM-L6-v2)</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">
+            Choose between cloud-based OpenAI embeddings or local embeddings for complete privacy.
+          </p>
+        </div>
+      </div>
+    </fieldset>
+
     <!-- Transformers STT Model Download Section -->
     <fieldset
       v-if="currentSettings.sttProvider === 'transformers'"

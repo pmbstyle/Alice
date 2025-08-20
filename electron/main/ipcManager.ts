@@ -31,6 +31,7 @@ import * as googleAuthManager from './googleAuthManager'
 import * as googleCalendarManager from './googleCalendarManager'
 import * as googleGmailManager from './googleGmailManager'
 import * as schedulerManager from './schedulerManager'
+import { localEmbeddingManager } from './localEmbeddingManager'
 import {
   getMainWindow,
   resizeMainWindow,
@@ -1053,6 +1054,87 @@ export function registerGoogleIPCHandlers(): void {
       return { success: true }
     } catch (error: any) {
       console.error('[IPC kokoroTTS:dispose] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('localEmbedding:initialize', async () => {
+    try {
+      const success = await localEmbeddingManager.initialize()
+      return { success }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('localEmbedding:generateEmbedding', async (event, { text }) => {
+    try {
+      const embedding = await localEmbeddingManager.generateEmbedding(text)
+      return { success: true, data: embedding }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('localEmbedding:generateEmbeddings', async (event, { texts }) => {
+    try {
+      const embeddings = await localEmbeddingManager.generateEmbeddings(texts)
+      return { success: true, data: embeddings }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('localEmbedding:isReady', async () => {
+    try {
+      const ready = localEmbeddingManager.isReady()
+      return { success: true, data: ready }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('localEmbedding:isInitializing', async () => {
+    try {
+      const initializing = localEmbeddingManager.isInitializingModel()
+      return { success: true, data: initializing }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('localEmbedding:getCacheInfo', async () => {
+    try {
+      const cacheInfo = localEmbeddingManager.getCacheInfo()
+      return { success: true, data: cacheInfo }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('localEmbedding:clearCache', async () => {
+    try {
+      const success = localEmbeddingManager.clearCache()
+      return { success }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('localEmbedding:dispose', async () => {
+    try {
+      localEmbeddingManager.dispose()
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('localEmbedding:test', async () => {
+    try {
+      const testResult = await localEmbeddingManager.testEmbedding()
+      return { success: true, data: testResult }
+    } catch (error: any) {
       return { success: false, error: error.message }
     }
   })

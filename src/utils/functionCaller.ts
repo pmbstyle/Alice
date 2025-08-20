@@ -632,7 +632,6 @@ export async function executeFunction(
     } else {
       args = {}
     }
-    console.log(`Executing function "${name}" with args:`, args)
 
     if (schema?.required) {
       for (const requiredParam of schema.required) {
@@ -658,7 +657,6 @@ export async function executeFunction(
 
     const result: FunctionResult = await func(args)
 
-    console.log(`Function "${name}" executed. Result:`, result)
 
     if (
       name === 'manage_clipboard' &&

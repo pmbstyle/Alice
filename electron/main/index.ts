@@ -41,7 +41,10 @@ function isBrowserContextToolEnabled(settings: any): boolean {
   return settings?.assistantTools?.includes('browser_context') || false
 }
 
-if (os.release().startsWith('6.1')) app.disableHardwareAcceleration()
+// Disable hardware acceleration for Windows 7 and to prevent SharedImageManager errors
+if (os.release().startsWith('6.1') || process.platform === 'win32') {
+  app.disableHardwareAcceleration()
+}
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 if (!app.requestSingleInstanceLock()) {

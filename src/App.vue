@@ -116,7 +116,7 @@ const handleContextAction = async (data: any) => {
     await conversationStore.initialize()
     await conversationStore.chatWithContextAction(prompt)
   } catch (error) {
-    console.error('Error handling context action:', error)
+    // Handle context action error silently
   }
 }
 
@@ -126,14 +126,22 @@ onMounted(async () => {
 
   if (window.ipcRenderer) {
     window.ipcRenderer.on('update-downloaded', (event, info) => {
-      console.log('Update downloaded in renderer:', info)
       updateInfo.value = info
       updateAvailable.value = true
     })
 
     window.ipcRenderer.on('context-action', (event, data) => {
-      console.log('Context action received in renderer:', data)
       handleContextAction(data)
+    })
+
+    // Handle TTS progress updates to show the app is responsive
+    window.ipcRenderer.on('kokoro-tts-progress', (event, data) => {
+      const { message, progress } = data
+      if (progress >= 0) {
+        generalStore.statusMessage = `TTS: ${message}`
+      } else {
+        generalStore.statusMessage = 'TTS generation failed'
+      }
     })
   }
 })
@@ -141,6 +149,8 @@ onMounted(async () => {
 onUnmounted(() => {
   if (window.ipcRenderer) {
     window.ipcRenderer.removeAllListeners('update-downloaded')
+    window.ipcRenderer.removeAllListeners('context-action')
+    window.ipcRenderer.removeAllListeners('kokoro-tts-progress')
   }
 })
 </script>

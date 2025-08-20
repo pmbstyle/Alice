@@ -45,6 +45,7 @@ import {
   registerMutePlaybackHotkey,
   registerTakeScreenshotHotkey,
 } from './hotkeyManager'
+import { kokoroTTSManager } from './kokoroTTSManager'
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_DIR_NAME = 'generated_images'
@@ -957,6 +958,102 @@ export function registerGoogleIPCHandlers(): void {
         success: false,
         error: `WebSocket communication error: ${error.message}`,
       }
+    }
+  })
+
+  // Kokoro TTS operations
+  ipcMain.handle(
+    'kokoroTTS:initialize',
+    async (
+      event,
+      {
+        voice,
+        quantization,
+      }: {
+        voice?: string
+        quantization?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'
+      }
+    ) => {
+      try {
+        const success = await kokoroTTSManager.initialize(voice, quantization)
+        return { success }
+      } catch (error: any) {
+        console.error('[IPC kokoroTTS:initialize] Error:', error)
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'kokoroTTS:generateSpeech',
+    async (
+      event,
+      {
+        text,
+        voice,
+      }: {
+        text: string
+        voice?: string
+      }
+    ) => {
+      try {
+        const audioBuffer = await kokoroTTSManager.generateSpeech(text, voice)
+        if (audioBuffer) {
+          return { success: true, data: audioBuffer }
+        } else {
+          return { success: false, error: 'Failed to generate speech' }
+        }
+      } catch (error: any) {
+        console.error('[IPC kokoroTTS:generateSpeech] Error:', error)
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  ipcMain.handle('kokoroTTS:isReady', async () => {
+    try {
+      return { success: true, ready: kokoroTTSManager.isReady() }
+    } catch (error: any) {
+      console.error('[IPC kokoroTTS:isReady] Error:', error)
+      return { success: false, error: error.message, ready: false }
+    }
+  })
+
+  ipcMain.handle('kokoroTTS:getAvailableVoices', async () => {
+    try {
+      return { success: true, voices: kokoroTTSManager.getAvailableVoices() }
+    } catch (error: any) {
+      console.error('[IPC kokoroTTS:getAvailableVoices] Error:', error)
+      return { success: false, error: error.message, voices: [] }
+    }
+  })
+
+  ipcMain.handle('kokoroTTS:getCacheInfo', async () => {
+    try {
+      return { success: true, cacheInfo: kokoroTTSManager.getCacheInfo() }
+    } catch (error: any) {
+      console.error('[IPC kokoroTTS:getCacheInfo] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('kokoroTTS:clearCache', async () => {
+    try {
+      const success = kokoroTTSManager.clearCache()
+      return { success }
+    } catch (error: any) {
+      console.error('[IPC kokoroTTS:clearCache] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('kokoroTTS:dispose', async () => {
+    try {
+      kokoroTTSManager.dispose()
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC kokoroTTS:dispose] Error:', error)
+      return { success: false, error: error.message }
     }
   })
 }

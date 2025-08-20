@@ -50,7 +50,9 @@ export interface AliceSettings {
   SUMMARIZATION_MESSAGE_COUNT: number
   SUMMARIZATION_MODEL: string
   SUMMARIZATION_SYSTEM_PROMPT: string
+  ttsProvider: 'openai' | 'local'
   ttsVoice: 'alloy' | 'echo' | 'fable' | 'nova' | 'onyx' | 'shimmer'
+  localTtsVoice: string
 
   microphoneToggleHotkey: string
   mutePlaybackHotkey: string
@@ -105,7 +107,9 @@ const defaultSettings: AliceSettings = {
   SUMMARIZATION_MESSAGE_COUNT: 20,
   SUMMARIZATION_MODEL: 'gpt-4.1-nano',
   SUMMARIZATION_SYSTEM_PROMPT: DEFAULT_SUMMARIZATION_SYSTEM_PROMPT,
+  ttsProvider: 'openai',
   ttsVoice: 'nova',
+  localTtsVoice: 'af_bella',
 
   microphoneToggleHotkey: 'Alt+M',
   mutePlaybackHotkey: 'Alt+S',
@@ -154,7 +158,9 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   SUMMARIZATION_MESSAGE_COUNT: 'Summarization Message Count',
   SUMMARIZATION_MODEL: 'Summarization Model',
   SUMMARIZATION_SYSTEM_PROMPT: 'Summarization System Prompt',
-  ttsVoice: 'Text-to-Speech Voice',
+  ttsProvider: 'Text-to-Speech Provider',
+  ttsVoice: 'OpenAI TTS Voice',
+  localTtsVoice: 'Local TTS Voice',
   microphoneToggleHotkey: 'Microphone Toggle Hotkey',
   mutePlaybackHotkey: 'Mute Playback Hotkey',
   takeScreenshotHotkey: 'Take Screenshot Hotkey',
@@ -512,6 +518,12 @@ export const useSettingsStore = defineStore('settings', () => {
     if (key === 'transformersWakeWord') {
       settings.value[key] = value as string
     }
+    if (key === 'ttsProvider') {
+      settings.value[key] = value as 'openai' | 'local'
+    }
+    if (key === 'localTtsVoice') {
+      settings.value[key] = value as string
+    }
 
     successMessage.value = null
     error.value = null
@@ -568,7 +580,9 @@ export const useSettingsStore = defineStore('settings', () => {
         SUMMARIZATION_MESSAGE_COUNT: settings.value.SUMMARIZATION_MESSAGE_COUNT,
         SUMMARIZATION_MODEL: settings.value.SUMMARIZATION_MODEL,
         SUMMARIZATION_SYSTEM_PROMPT: settings.value.SUMMARIZATION_SYSTEM_PROMPT,
+        ttsProvider: settings.value.ttsProvider,
         ttsVoice: settings.value.ttsVoice,
+        localTtsVoice: settings.value.localTtsVoice,
         microphoneToggleHotkey: settings.value.microphoneToggleHotkey,
         mutePlaybackHotkey: settings.value.mutePlaybackHotkey,
         takeScreenshotHotkey: settings.value.takeScreenshotHotkey,

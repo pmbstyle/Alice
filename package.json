@@ -60,6 +60,7 @@
     "googleapis": "^149.0.0",
     "groq-sdk": "^0.29.0",
     "hnswlib-node": "^3.0.0",
+    "kokoro-js": "^1.2.1",
     "node-cron": "^4.2.1",
     "path": "^0.12.7",
     "prettier": "^3.6.2",

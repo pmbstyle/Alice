@@ -13,6 +13,7 @@ import {
   PREDEFINED_OPENAI_TOOLS,
   type ApiRequestBodyFunctionTool,
 } from '../utils/assistantTools'
+// Kokoro TTS is now in main process - use IPC
 
 /* 
 API Function Exports
@@ -84,18 +85,8 @@ async function* convertLocalLLMStreamToResponsesFormat(
               const toolCallIndex = toolCall.index || 0
               const toolCallId = `tool-${toolCallIndex}`
 
-              console.log(`[${provider}] Processing tool call chunk:`, {
-                originalId: toolCall.id,
-                mappedId: toolCallId,
-                name: toolCall.function?.name,
-                arguments: toolCall.function?.arguments,
-                index: toolCall.index,
-              })
 
               if (!toolCallsBuffer.has(toolCallId)) {
-                console.log(
-                  `[${provider}] Initializing new tool call buffer for ${toolCallId}`
-                )
                 toolCallsBuffer.set(toolCallId, {
                   id: toolCall.id || toolCallId,
                   name: toolCall.function?.name || '',
@@ -177,7 +168,6 @@ async function* convertLocalLLMStreamToResponsesFormat(
             ) {
               try {
                 parsedArguments = JSON.parse(toolData.arguments)
-                console.log(`[${provider}] Parsed arguments:`, parsedArguments)
               } catch (e) {
                 console.error(
                   `[${provider}] Failed to parse tool arguments:`,
@@ -293,18 +283,8 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
               const toolCallIndex = toolCall.index || 0
               const toolCallId = `tool-${toolCallIndex}`
 
-              console.log(`[OpenRouter] Processing tool call chunk:`, {
-                originalId: toolCall.id,
-                mappedId: toolCallId,
-                name: toolCall.function?.name,
-                arguments: toolCall.function?.arguments,
-                index: toolCall.index,
-              })
 
               if (!toolCallsBuffer.has(toolCallId)) {
-                console.log(
-                  `[OpenRouter] Initializing new tool call buffer for ${toolCallId}`
-                )
                 toolCallsBuffer.set(toolCallId, {
                   id: toolCall.id || toolCallId,
                   name: toolCall.function?.name || '',
@@ -394,7 +374,6 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
             ) {
               try {
                 parsedArguments = JSON.parse(toolData.arguments)
-                console.log(`[OpenRouter] Parsed arguments:`, parsedArguments)
               } catch (e) {
                 console.error(
                   `[OpenRouter] Failed to parse tool arguments:`,
@@ -975,16 +954,63 @@ export const ttsStream = async (
   text: string,
   signal: AbortSignal
 ): Promise<Response> => {
+  const settings = useSettingsStore().config
+  const cleanedText = removeLinksFromText(text)
+
+  if (settings.ttsProvider === 'local') {
+    try {
+      const readyResult = await window.ipcRenderer.invoke('kokoroTTS:isReady')
+      
+      if (!readyResult.success || !readyResult.ready) {
+        const initResult = await window.ipcRenderer.invoke('kokoroTTS:initialize', {
+          voice: settings.localTtsVoice || 'af_bella',
+          quantization: 'q8'
+        })
+        
+        if (!initResult.success) {
+          return fallbackToOpenAITTS(cleanedText, signal)
+        }
+      }
+
+      const speechResult = await window.ipcRenderer.invoke('kokoroTTS:generateSpeech', {
+        text: cleanedText,
+        voice: settings.localTtsVoice
+      })
+
+      if (!speechResult.success || !speechResult.data) {
+        return fallbackToOpenAITTS(cleanedText, signal)
+      }
+
+      const audioBlob = new Blob([speechResult.data], { type: 'audio/wav' })
+      return new Response(audioBlob, {
+        status: 200,
+        statusText: 'OK',
+        headers: {
+          'Content-Type': 'audio/wav',
+          'Content-Length': speechResult.data.byteLength.toString()
+        }
+      })
+    } catch (error: any) {
+      return fallbackToOpenAITTS(cleanedText, signal)
+    }
+  } else {
+    return fallbackToOpenAITTS(cleanedText, signal)
+  }
+}
+
+// Helper function for OpenAI TTS (extracted from original function)
+const fallbackToOpenAITTS = async (
+  text: string,
+  signal: AbortSignal
+): Promise<Response> => {
   const openai = getOpenAIClient()
   const settings = useSettingsStore().config
-
-  const cleanedText = removeLinksFromText(text)
 
   return openai.audio.speech.create(
     {
       model: 'tts-1',
       voice: settings.ttsVoice || 'nova',
-      input: cleanedText,
+      input: text,
       response_format: 'mp3',
     },
     { signal }

@@ -190,7 +190,7 @@
         </div>
         <div v-if="currentSettings.ttsProvider === 'openai'">
           <label for="tts-voice" class="block mb-1 text-sm"
-            >OpenAI TTS Voice *</label
+            >OpenAI TTS Voice</label
           >
           <select
             id="tts-voice"
@@ -204,13 +204,10 @@
             <option value="onyx">Onyx</option>
             <option value="shimmer">Shimmer</option>
           </select>
-          <p class="text-xs text-gray-400 mt-1">
-            The OpenAI voice to use for text-to-speech synthesis.
-          </p>
         </div>
         <div v-if="currentSettings.ttsProvider === 'local'">
           <label for="local-tts-voice" class="block mb-1 text-sm"
-            >Local TTS Voice *</label
+            >Local TTS Voice</label
           >
           <select
             id="local-tts-voice"
@@ -233,9 +230,6 @@
             <option value="bf_isabella">bf_isabella</option>
             <option value="bf_lily">bf_lily</option>
           </select>
-          <p class="text-xs text-gray-400 mt-1">
-            The Kokoro voice to use for local text-to-speech synthesis.
-          </p>
         </div>
       </div>
     </fieldset>
@@ -256,11 +250,10 @@
             class="select select-bordered w-full focus:select-primary"
           >
             <option value="openai">OpenAI (Cloud)</option>
-            <!-- Local embeddings temporarily disabled to preserve existing data -->
-            <!-- <option value="local">Local (all-MiniLM-L6-v2)</option> -->
+            <option value="local">Local (Qwen3)</option>
           </select>
           <p class="text-xs text-gray-400 mt-1">
-            OpenAI embeddings required to maintain compatibility with existing memories and conversation history.
+            Choose between cloud-based OpenAI embeddings or local Qwen3 embeddings. Your existing data is preserved when switching.
           </p>
         </div>
       </div>

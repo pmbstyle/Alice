@@ -32,3 +32,9 @@ yarn.lock
 app-config.json
 dev-app-update.yml
 CLAUDE.md
+/python/build
+/python/services/__pycache__
+/python/api/__pycache__
+/python/utils/__pycache__
+/resources/python/_internal
+resources/python/alice-ai-backend.exe

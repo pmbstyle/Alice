@@ -5,7 +5,7 @@ pydantic>=2.5.0
 
 # AI Libraries
 faster-whisper>=0.10.0
-sentence-transformers>=2.2.2
+sentence-transformers>=2.7.0
 kokoro>=0.9.4
 
 # Audio processing
@@ -15,7 +15,7 @@ librosa>=0.10.1
 # Core ML dependencies
 torch>=2.1.0
 numpy>=1.24.3
-transformers>=4.23.0
+transformers>=4.51.0
 # onnxruntime>=1.16.0  # Disabled due to Windows DLL issues
 
 # Utilities

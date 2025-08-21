@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     tts_quantization: str = Field(default="fp16", env="ALICE_TTS_QUANTIZATION")  # fp32, fp16, q8, q4
     
     # Embeddings settings (sentence-transformers)
-    embeddings_model: str = Field(default="all-MiniLM-L6-v2", env="ALICE_EMBEDDINGS_MODEL")
+    embeddings_model: str = Field(default="Qwen/Qwen3-Embedding-0.6B", env="ALICE_EMBEDDINGS_MODEL")
     embeddings_device: str = Field(default="auto", env="ALICE_EMBEDDINGS_DEVICE")  # auto, cpu, cuda
     
     # Cache settings

@@ -104,7 +104,9 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
-        await addThoughtVector(conversationId, role, textContent, embedding)
+        const provider: 'openai' | 'local' = embedding.length === 1024 ? 'local' : 'openai'
+        
+        await addThoughtVector(conversationId, role, textContent, embedding, provider)
         return { success: true }
       } catch (error) {
         console.error('IPC thoughtVector:add error:', error)
@@ -126,9 +128,14 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
+        const provider: 'openai' | 'local' | 'both' = 
+          queryEmbedding.length === 1024 ? 'local' :
+          queryEmbedding.length === 1536 ? 'openai' : 'both'
+        
         const thoughtsMetadatas = await searchSimilarThoughts(
           queryEmbedding,
-          topK
+          topK,
+          provider
         )
         const thoughtTexts = thoughtsMetadatas.map(t => t.textContent)
         return { success: true, data: thoughtTexts }

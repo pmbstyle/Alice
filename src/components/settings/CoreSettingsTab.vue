@@ -37,7 +37,7 @@
           >
             <option value="openai">OpenAI (gpt-4o-transcribe)</option>
             <option value="groq">Groq (whisper-large-v3)</option>
-            <option value="transformers">Local (Transformers.js)</option>
+            <option value="transformers">Local (Python STT)</option>
           </select>
         </div>
         <div>
@@ -116,6 +116,51 @@
           />
           <p class="text-xs text-gray-400 mt-1">
             Required only if Groq STT is selected above.
+          </p>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- STT Configuration Section -->
+    <fieldset
+      v-if="currentSettings.sttProvider === 'transformers'"
+      class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+    >
+      <legend class="fieldset-legend">Speech-to-Text Configuration</legend>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
+        <div>
+          <label for="stt-language" class="block mb-1 text-sm"
+            >Language *</label
+          >
+          <select
+            id="stt-language"
+            v-model="currentSettings.transformersLanguage"
+            class="select select-bordered w-full focus:select-primary"
+            @change="e => $emit('update:setting', 'transformersLanguage', e.target.value)"
+          >
+            <option value="auto">Auto-detect</option>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="it">Italian</option>
+            <option value="pt">Portuguese</option>
+            <option value="ru">Russian</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh">Chinese</option>
+            <option value="ar">Arabic</option>
+            <option value="hi">Hindi</option>
+            <option value="tr">Turkish</option>
+            <option value="pl">Polish</option>
+            <option value="nl">Dutch</option>
+            <option value="sv">Swedish</option>
+            <option value="da">Danish</option>
+            <option value="no">Norwegian</option>
+            <option value="fi">Finnish</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">
+            Auto-detect works for most languages. Select a specific language for better accuracy.
           </p>
         </div>
       </div>
@@ -211,34 +256,21 @@
             class="select select-bordered w-full focus:select-primary"
           >
             <option value="openai">OpenAI (Cloud)</option>
-            <option value="local">Local (all-MiniLM-L6-v2)</option>
+            <!-- Local embeddings temporarily disabled to preserve existing data -->
+            <!-- <option value="local">Local (all-MiniLM-L6-v2)</option> -->
           </select>
           <p class="text-xs text-gray-400 mt-1">
-            Choose between cloud-based OpenAI embeddings or local embeddings for complete privacy.
+            OpenAI embeddings required to maintain compatibility with existing memories and conversation history.
           </p>
         </div>
       </div>
     </fieldset>
 
-    <!-- Transformers STT Model Download Section -->
-    <fieldset
-      v-if="currentSettings.sttProvider === 'transformers'"
-      class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
-    >
-      <legend class="fieldset-legend">Local STT Model Configuration</legend>
-      <div class="p-2">
-        <TransformersModelDownload
-          :current-settings="currentSettings"
-          @update:setting="(key, value) => $emit('update:setting', key, value)"
-        />
-      </div>
-    </fieldset>
   </div>
 </template>
 
 <script setup lang="ts">
 import type { AliceSettings } from '../../stores/settingsStore'
-import TransformersModelDownload from '../TransformersModelDownload.vue'
 
 defineProps<{
   currentSettings: AliceSettings

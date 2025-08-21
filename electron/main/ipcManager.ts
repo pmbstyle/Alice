@@ -31,7 +31,6 @@ import * as googleAuthManager from './googleAuthManager'
 import * as googleCalendarManager from './googleCalendarManager'
 import * as googleGmailManager from './googleGmailManager'
 import * as schedulerManager from './schedulerManager'
-import { localEmbeddingManager } from './localEmbeddingManager'
 import {
   getMainWindow,
   resizeMainWindow,
@@ -46,23 +45,26 @@ import {
   registerMutePlaybackHotkey,
   registerTakeScreenshotHotkey,
 } from './hotkeyManager'
-import { kokoroTTSManager } from './kokoroTTSManager'
+import { pythonManager } from './pythonManager'
+import { pythonApi } from '../../src/services/pythonApi'
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_DIR_NAME = 'generated_images'
-const TRANSFORMERS_MODELS_DIR_NAME = 'transformers_models'
 const GENERATED_IMAGES_FULL_PATH = path.join(
   USER_DATA_PATH,
   GENERATED_IMAGES_DIR_NAME
 )
-const TRANSFORMERS_MODELS_FULL_PATH = path.join(
-  USER_DATA_PATH,
-  TRANSFORMERS_MODELS_DIR_NAME
-)
 
 let screenshotDataURL: string | null = null
 
+let ipcHandlersRegistered = false
+
 export function registerIPCHandlers(): void {
+  if (ipcHandlersRegistered) {
+    return
+  }
+  ipcHandlersRegistered = true
+
   // Window management
   ipcMain.on('resize', (event, arg) => {
     if (
@@ -368,16 +370,6 @@ export function registerIPCHandlers(): void {
     return focusMainWindow()
   })
 
-  // Transformers model cache management
-  ipcMain.handle('transformers:get-cache-path', async () => {
-    try {
-      await mkdir(TRANSFORMERS_MODELS_FULL_PATH, { recursive: true })
-      return TRANSFORMERS_MODELS_FULL_PATH
-    } catch (error) {
-      console.error('[IPC] Failed to create transformers cache directory:', error)
-      throw error
-    }
-  })
 
   // Settings management
   ipcMain.handle('settings:load', async () => {
@@ -683,9 +675,229 @@ export function registerIPCHandlers(): void {
       }
     }
   )
+
+  // Python Backend Management
+  ipcMain.handle('python:start', async () => {
+    try {
+      const success = await pythonManager.start()
+      return { success }
+    } catch (error: any) {
+      console.error('[IPC python:start] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:stop', async () => {
+    try {
+      await pythonManager.stop()
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC python:stop] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:restart', async () => {
+    try {
+      const success = await pythonManager.restart()
+      return { success }
+    } catch (error: any) {
+      console.error('[IPC python:restart] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:health', async () => {
+    try {
+      const isHealthy = await pythonManager.isHealthy()
+      return { success: true, healthy: isHealthy }
+    } catch (error: any) {
+      console.error('[IPC python:health] Error:', error)
+      return { success: false, error: error.message, healthy: false }
+    }
+  })
+
+  ipcMain.handle('python:service-status', async () => {
+    try {
+      const serviceStatus = await pythonManager.getServiceStatus()
+      return { success: true, data: serviceStatus }
+    } catch (error: any) {
+      console.error('[IPC python:service-status] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Python STT (Speech-to-Text)
+  ipcMain.handle('python:stt:transcribe-audio', async (event, { audioData, sampleRate, language }: { audioData: number[], sampleRate?: number, language?: string }) => {
+    try {
+      const result = await pythonApi.transcribeAudio(new Float32Array(audioData), sampleRate, language)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:stt:transcribe-audio] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:stt:transcribe-file', async (event, { file, language }: { file: Blob, language?: string }) => {
+    try {
+      const result = await pythonApi.transcribeFile(file, language)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:stt:transcribe-file] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:stt:ready', async () => {
+    try {
+      const ready = await pythonApi.isSTTReady()
+      return { success: true, ready }
+    } catch (error: any) {
+      console.error('[IPC python:stt:ready] Error:', error)
+      return { success: false, error: error.message, ready: false }
+    }
+  })
+
+  ipcMain.handle('python:stt:info', async () => {
+    try {
+      const info = await pythonApi.getSTTInfo()
+      return { success: true, data: info }
+    } catch (error: any) {
+      console.error('[IPC python:stt:info] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Python TTS (Text-to-Speech)
+  ipcMain.handle('python:tts:synthesize', async (event, { text, voice }: { text: string, voice?: string }) => {
+    try {
+      const result = await pythonApi.synthesizeSpeech(text, voice)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:tts:synthesize] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:tts:voices', async () => {
+    try {
+      const voices = await pythonApi.getAvailableVoices()
+      return { success: true, data: voices }
+    } catch (error: any) {
+      console.error('[IPC python:tts:voices] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:tts:test', async () => {
+    try {
+      const result = await pythonApi.testTTS()
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:tts:test] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:tts:ready', async () => {
+    try {
+      const ready = await pythonApi.isTTSReady()
+      return { success: true, ready }
+    } catch (error: any) {
+      console.error('[IPC python:tts:ready] Error:', error)
+      return { success: false, error: error.message, ready: false }
+    }
+  })
+
+  ipcMain.handle('python:tts:info', async () => {
+    try {
+      const info = await pythonApi.getTTSInfo()
+      return { success: true, data: info }
+    } catch (error: any) {
+      console.error('[IPC python:tts:info] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Python Embeddings
+  ipcMain.handle('python:embeddings:generate', async (event, { text }: { text: string }) => {
+    try {
+      const result = await pythonApi.generateEmbedding(text)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:generate] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:generate-batch', async (event, { texts }: { texts: string[] }) => {
+    try {
+      const result = await pythonApi.generateEmbeddings(texts)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:generate-batch] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:similarity', async (event, { embedding1, embedding2 }: { embedding1: number[], embedding2: number[] }) => {
+    try {
+      const result = await pythonApi.computeSimilarity(embedding1, embedding2)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:similarity] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:search', async (event, { queryEmbedding, candidateEmbeddings, topK }: { queryEmbedding: number[], candidateEmbeddings: number[][], topK?: number }) => {
+    try {
+      const result = await pythonApi.searchSimilar(queryEmbedding, candidateEmbeddings, topK)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:search] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:test', async () => {
+    try {
+      const result = await pythonApi.testEmbeddings()
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:test] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:ready', async () => {
+    try {
+      const ready = await pythonApi.isEmbeddingsReady()
+      return { success: true, ready }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:ready] Error:', error)
+      return { success: false, error: error.message, ready: false }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:info', async () => {
+    try {
+      const info = await pythonApi.getEmbeddingsInfo()
+      return { success: true, data: info }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:info] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
 }
 
+let googleIPCHandlersRegistered = false
+
 export function registerGoogleIPCHandlers(): void {
+  if (googleIPCHandlersRegistered) {
+    return
+  }
+  googleIPCHandlersRegistered = true
   async function withAuthenticatedClient<T>(
     operation: (authClient: any) => Promise<T>,
     serviceName: string
@@ -962,180 +1174,4 @@ export function registerGoogleIPCHandlers(): void {
     }
   })
 
-  // Kokoro TTS operations
-  ipcMain.handle(
-    'kokoroTTS:initialize',
-    async (
-      event,
-      {
-        voice,
-        quantization,
-      }: {
-        voice?: string
-        quantization?: 'fp32' | 'fp16' | 'q8' | 'q4' | 'q4f16'
-      }
-    ) => {
-      try {
-        const success = await kokoroTTSManager.initialize(voice, quantization)
-        return { success }
-      } catch (error: any) {
-        console.error('[IPC kokoroTTS:initialize] Error:', error)
-        return { success: false, error: error.message }
-      }
-    }
-  )
-
-  ipcMain.handle(
-    'kokoroTTS:generateSpeech',
-    async (
-      event,
-      {
-        text,
-        voice,
-      }: {
-        text: string
-        voice?: string
-      }
-    ) => {
-      try {
-        const audioBuffer = await kokoroTTSManager.generateSpeech(text, voice)
-        if (audioBuffer) {
-          return { success: true, data: audioBuffer }
-        } else {
-          return { success: false, error: 'Failed to generate speech' }
-        }
-      } catch (error: any) {
-        console.error('[IPC kokoroTTS:generateSpeech] Error:', error)
-        return { success: false, error: error.message }
-      }
-    }
-  )
-
-  ipcMain.handle('kokoroTTS:isReady', async () => {
-    try {
-      return { success: true, ready: kokoroTTSManager.isReady() }
-    } catch (error: any) {
-      console.error('[IPC kokoroTTS:isReady] Error:', error)
-      return { success: false, error: error.message, ready: false }
-    }
-  })
-
-  ipcMain.handle('kokoroTTS:getAvailableVoices', async () => {
-    try {
-      return { success: true, voices: kokoroTTSManager.getAvailableVoices() }
-    } catch (error: any) {
-      console.error('[IPC kokoroTTS:getAvailableVoices] Error:', error)
-      return { success: false, error: error.message, voices: [] }
-    }
-  })
-
-  ipcMain.handle('kokoroTTS:getCacheInfo', async () => {
-    try {
-      return { success: true, cacheInfo: kokoroTTSManager.getCacheInfo() }
-    } catch (error: any) {
-      console.error('[IPC kokoroTTS:getCacheInfo] Error:', error)
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('kokoroTTS:clearCache', async () => {
-    try {
-      const success = kokoroTTSManager.clearCache()
-      return { success }
-    } catch (error: any) {
-      console.error('[IPC kokoroTTS:clearCache] Error:', error)
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('kokoroTTS:dispose', async () => {
-    try {
-      kokoroTTSManager.dispose()
-      return { success: true }
-    } catch (error: any) {
-      console.error('[IPC kokoroTTS:dispose] Error:', error)
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('localEmbedding:initialize', async () => {
-    try {
-      const success = await localEmbeddingManager.initialize()
-      return { success }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('localEmbedding:generateEmbedding', async (event, { text }) => {
-    try {
-      const embedding = await localEmbeddingManager.generateEmbedding(text)
-      return { success: true, data: embedding }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('localEmbedding:generateEmbeddings', async (event, { texts }) => {
-    try {
-      const embeddings = await localEmbeddingManager.generateEmbeddings(texts)
-      return { success: true, data: embeddings }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('localEmbedding:isReady', async () => {
-    try {
-      const ready = localEmbeddingManager.isReady()
-      return { success: true, data: ready }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('localEmbedding:isInitializing', async () => {
-    try {
-      const initializing = localEmbeddingManager.isInitializingModel()
-      return { success: true, data: initializing }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('localEmbedding:getCacheInfo', async () => {
-    try {
-      const cacheInfo = localEmbeddingManager.getCacheInfo()
-      return { success: true, data: cacheInfo }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('localEmbedding:clearCache', async () => {
-    try {
-      const success = localEmbeddingManager.clearCache()
-      return { success }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('localEmbedding:dispose', async () => {
-    try {
-      localEmbeddingManager.dispose()
-      return { success: true }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  })
-
-  ipcMain.handle('localEmbedding:test', async () => {
-    try {
-      const testResult = await localEmbeddingManager.testEmbedding()
-      return { success: true, data: testResult }
-    } catch (error: any) {
-      return { success: false, error: error.message }
-    }
-  })
 }

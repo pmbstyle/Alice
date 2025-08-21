@@ -13,7 +13,55 @@ import {
   PREDEFINED_OPENAI_TOOLS,
   type ApiRequestBodyFunctionTool,
 } from '../utils/assistantTools'
-// Kokoro TTS is now in main process - use IPC
+
+/**
+ * Parse WAV file ArrayBuffer and extract raw PCM audio data as Float32Array
+ */
+function parseWavToFloat32Array(arrayBuffer: ArrayBuffer): Float32Array {
+  const dataView = new DataView(arrayBuffer)
+  
+  // Verify WAV format
+  if (dataView.getUint32(0, false) !== 0x52494646) { // "RIFF"
+    throw new Error('Invalid WAV file: missing RIFF header')
+  }
+  
+  if (dataView.getUint32(8, false) !== 0x57415645) { // "WAVE"
+    throw new Error('Invalid WAV file: missing WAVE header')
+  }
+  
+  // Find data chunk
+  let offset = 12
+  let dataOffset = -1
+  let dataSize = 0
+  
+  while (offset < arrayBuffer.byteLength) {
+    const chunkId = dataView.getUint32(offset, false)
+    const chunkSize = dataView.getUint32(offset + 4, true)
+    
+    if (chunkId === 0x64617461) { // "data"
+      dataOffset = offset + 8
+      dataSize = chunkSize
+      break
+    }
+    
+    offset += 8 + chunkSize
+  }
+  
+  if (dataOffset === -1) {
+    throw new Error('Invalid WAV file: data chunk not found')
+  }
+  
+  // Extract PCM data and convert to Float32
+  const pcmData = new Int16Array(arrayBuffer, dataOffset, dataSize / 2)
+  const float32Data = new Float32Array(pcmData.length)
+  
+  // Convert 16-bit PCM to Float32 (-1.0 to 1.0 range)
+  for (let i = 0; i < pcmData.length; i++) {
+    float32Data[i] = pcmData[i] / 32768.0
+  }
+  
+  return float32Data
+}
 
 /* 
 API Function Exports
@@ -959,23 +1007,16 @@ export const ttsStream = async (
 
   if (settings.ttsProvider === 'local') {
     try {
-      const readyResult = await window.ipcRenderer.invoke('kokoroTTS:isReady')
+      const readyResult = await window.pythonAPI.tts.isReady()
       
       if (!readyResult.success || !readyResult.ready) {
-        const initResult = await window.ipcRenderer.invoke('kokoroTTS:initialize', {
-          voice: settings.localTtsVoice || 'af_bella',
-          quantization: 'q8'
-        })
-        
-        if (!initResult.success) {
-          return fallbackToOpenAITTS(cleanedText, signal)
-        }
+        return fallbackToOpenAITTS(cleanedText, signal)
       }
 
-      const speechResult = await window.ipcRenderer.invoke('kokoroTTS:generateSpeech', {
-        text: cleanedText,
-        voice: settings.localTtsVoice
-      })
+      const speechResult = await window.pythonAPI.tts.synthesize(
+        cleanedText,
+        settings.localTtsVoice
+      )
 
       if (!speechResult.success || !speechResult.data) {
         return fallbackToOpenAITTS(cleanedText, signal)
@@ -1032,32 +1073,58 @@ export const transcribeWithGroq = async (
   return transcription?.text || ''
 }
 
-export const transcribeWithTransformers = async (
+export const transcribeWithPython = async (
   audioBuffer: ArrayBuffer,
-  fallbackToOpenAI: boolean = false
+  fallbackToOpenAI: boolean = false,
+  language?: string
 ): Promise<string> => {
   try {
-    const { transformersSTTService } = await import('./transformersSTT')
-
-    if (!transformersSTTService.isReady()) {
-      throw new Error(
-        'Transformers STT model not initialized. Please download a model in settings.'
-      )
+    const settingsStore = useSettingsStore()
+    const selectedLanguage = language || settingsStore.config.transformersLanguage || 'auto'
+    // Check if Python backend is ready
+    const healthResult = await window.pythonAPI.health()
+    if (!healthResult.success || !healthResult.healthy) {
+      throw new Error('Python backend not available - server not running')
     }
 
-    return await transformersSTTService.transcribe(audioBuffer)
-  } catch (error: any) {
-    console.error('[TransformersSTT] Local transcription failed:', error)
+    const sttReady = await window.pythonAPI.stt.isReady()
+    if (!sttReady.success || !sttReady.ready) {
+      throw new Error('Python STT service not ready - AI dependencies may not be installed')
+    }
 
+    // Parse WAV file to extract raw PCM audio data
+    const audioData = parseWavToFloat32Array(audioBuffer)
+    
+    // Filter out null/NaN values and ensure valid number range
+    const cleanedAudioData = Array.from(audioData).filter(value => 
+      value !== null && 
+      value !== undefined && 
+      !isNaN(value) && 
+      isFinite(value) &&
+      Math.abs(value) <= 1.5 // Allow slight headroom beyond -1.0 to 1.0 range
+    )
+    
+    if (cleanedAudioData.length === 0) {
+      throw new Error('Audio data contains no valid samples')
+    }
+    
+    // Skip very short audio clips
+    if (cleanedAudioData.length / 16000 < 0.5) {
+      throw new Error('Audio clip too short for reliable transcription')
+    }
+    
+    const result = await window.pythonAPI.stt.transcribeAudio(cleanedAudioData, 16000, selectedLanguage === 'auto' ? null : selectedLanguage)
+    
+    if (result.success) {
+      return result.data.text
+    } else {
+      throw new Error(result.error || 'Python STT transcription failed')
+    }
+  } catch (error: any) {
     if (fallbackToOpenAI) {
-      console.log('[TransformersSTT] Falling back to OpenAI STT...')
       try {
         return await transcribeWithOpenAI(audioBuffer)
       } catch (fallbackError: any) {
-        console.error(
-          '[TransformersSTT] Fallback to OpenAI also failed:',
-          fallbackError
-        )
         throw new Error(
           `Local STT failed: ${error.message}. Fallback to OpenAI also failed: ${fallbackError.message}`
         )
@@ -1103,20 +1170,15 @@ export const createEmbedding = async (textInput: any): Promise<number[]> => {
 
   if (settings.embeddingProvider === 'local') {
     try {
-      const readyResult = await window.ipcRenderer.invoke('localEmbedding:isReady')
-      if (!readyResult.success || !readyResult.data) {
-        const initResult = await window.ipcRenderer.invoke('localEmbedding:initialize')
-        if (!initResult.success) {
-          return fallbackToOpenAIEmbedding(textToEmbed)
-        }
+      const readyResult = await window.pythonAPI.embeddings.isReady()
+      if (!readyResult.success || !readyResult.ready) {
+        return fallbackToOpenAIEmbedding(textToEmbed)
       }
 
-      const result = await window.ipcRenderer.invoke('localEmbedding:generateEmbedding', {
-        text: textToEmbed
-      })
+      const result = await window.pythonAPI.embeddings.generate(textToEmbed)
       
       if (result.success && result.data) {
-        return result.data
+        return result.data.embedding
       } else {
         return fallbackToOpenAIEmbedding(textToEmbed)
       }

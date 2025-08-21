@@ -789,7 +789,7 @@ export const useConversationStore = defineStore('conversation', () => {
         const enableFallback =
           settingsStore.config.transformersEnableFallback &&
           !!settingsStore.config.VITE_OPENAI_API_KEY
-        return await api.transcribeWithTransformers(
+        return await api.transcribeWithPython(
           audioArrayBuffer,
           enableFallback
         )

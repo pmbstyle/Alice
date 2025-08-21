@@ -225,17 +225,12 @@ export function useAudioProcessing() {
       return
     }
 
-    console.log('[Audio Processing] Starting audio processing...')
     setAudioState('PROCESSING_AUDIO')
 
     try {
       const wavBuffer = float32ArrayToWav(audio, 16000)
-      console.log(
-        '[Audio Processing] Converted to WAV, sending for transcription...'
-      )
       const transcription =
         await conversationStore.transcribeAudioMessage(wavBuffer)
-      console.log('[Audio Processing] Received transcription:', transcription)
 
       if (transcription && transcription.trim()) {
         if (settingsStore.config.transformersWakeWordEnabled && 
@@ -266,7 +261,6 @@ export function useAudioProcessing() {
           eventBus.emit('processing-complete', transcription)
         }
       } else {
-        console.log('[Audio Processing] No speech detected in transcription.')
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
         isSpeechDetected.value = false
       }
@@ -313,7 +307,6 @@ export function useAudioProcessing() {
   }
 
   onUnmounted(() => {
-    console.log('[Audio Processing] Component unmounted, ensuring VAD cleanup.')
     destroyVAD()
     if (window.ipcRenderer) {
       window.ipcRenderer.off('global-hotkey-mic-toggle', handleGlobalMicToggle)

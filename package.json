@@ -21,8 +21,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && electron-builder",
+    "dev:python": "cd python && python dev.py",
+    "dev:full": "concurrently \"npm run dev:python\" \"npm run dev\"",
+    "build": "npm run build:python && vite build && electron-builder",
     "build:web": "vite build",
+    "build:python": "cd python && python build.py",
+    "build:python:win": "cd python && build.bat",
+    "build:python:unix": "cd python && ./build.sh",
     "rebuild": "electron-rebuild -f -w better-sqlite3,hnswlib-node",
     "preview": "vite preview",
     "format": "prettier --write ."
@@ -49,7 +54,6 @@
     "vue-tsc": "^2.0.6"
   },
   "dependencies": {
-    "@huggingface/transformers": "^3.7.1",
     "@ricky0123/vad-web": "^0.0.24",
     "@tailwindcss/vite": "^4.1.4",
     "@types/node-cron": "^3.0.11",
@@ -60,7 +64,6 @@
     "googleapis": "^149.0.0",
     "groq-sdk": "^0.29.0",
     "hnswlib-node": "^3.0.0",
-    "kokoro-js": "^1.2.1",
     "node-cron": "^4.2.1",
     "path": "^0.12.7",
     "prettier": "^3.6.2",

@@ -6,7 +6,7 @@ const { HierarchicalNSW } = HnswlibNode
 import Database from 'better-sqlite3'
 import { randomUUID } from 'node:crypto'
 
-const VECTOR_DIMENSION = 1536  // Keep OpenAI dimension for compatibility
+const VECTOR_DIMENSION = 1536  // OpenAI embedding dimension
 const MAX_ELEMENTS_HNSW = 10000
 const HNSW_INDEX_FILE_NAME = 'alice-thoughts-hnsw.index'
 const DB_FILE_NAME = 'alice-thoughts.sqlite'

@@ -11,6 +11,7 @@ import {
 import { loadSettings } from './settingsManager'
 import path from 'node:path'
 import os from 'node:os'
+import fs from 'node:fs'
 import { WebSocketServer } from 'ws'
 
 import {
@@ -30,42 +31,104 @@ import {
 import { initializeUpdater, checkForUpdates } from './updaterManager'
 import { registerAuthIPCHandlers, stopAuthServer } from './authManager'
 import DesktopManager from './desktopManager'
+import { pythonManager } from './pythonManager'
+
+// Global state for hot reload persistence
+declare global {
+  var aliceAppState: {
+    managersInitialized: boolean
+    appInitialized: boolean
+    initTimestamp: number
+    initId: string
+  } | undefined
+}
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_FULL_PATH = path.join(USER_DATA_PATH, 'generated_images')
 
 let isHandlingQuit = false
 let wss: WebSocketServer | null = null
+// Use global variables to persist across hot reloads
+if (!global.aliceAppState) {
+  global.aliceAppState = {
+    managersInitialized: false,
+    appInitialized: false,
+    initTimestamp: Date.now(),
+    initId: Math.random().toString(36).substr(2, 9)
+  }
+}
+
+let managersInitialized = global.aliceAppState.managersInitialized
+let appInitialized = global.aliceAppState.appInitialized
+const initId = global.aliceAppState.initId
+
+// Prevent clustering in development
+process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = 'true'
+process.env.NODE_OPTIONS = '--max-old-space-size=4096'
+
+const currentTime = Date.now()
+const timeSinceLastInit = currentTime - global.aliceAppState.initTimestamp
+
+console.log(`[Main Index ${initId}] Starting Electron main process... PID: ${process.pid}, Time since last init: ${timeSinceLastInit}ms`)
 
 function isBrowserContextToolEnabled(settings: any): boolean {
   return settings?.assistantTools?.includes('browser_context') || false
 }
 
+// Disable hardware acceleration for stability (Electron + WebGPU + Worker threads = crashes)
 if (os.release().startsWith('6.1') || process.platform === 'win32') {
   app.disableHardwareAcceleration()
 }
 
+// Optimize for CPU-only processing with stability focus
 app.commandLine.appendSwitch('--disable-gpu')
 app.commandLine.appendSwitch('--disable-gpu-sandbox')
 app.commandLine.appendSwitch('--disable-software-rasterizer')
 
-process.env.ONNX_WEB_WEBGPU_DISABLED = 'true'
-process.env.ONNX_WEB_INIT_TIMEOUT = '30000'
-process.env.ONNX_WEB_WASM_ENABLE_SIMD = 'true'
+// CPU optimization for worker threads
+process.env.ONNX_WEB_WEBGPU_DISABLED = 'true'  // Keep WebGPU disabled for stability
+process.env.ONNX_WEB_INIT_TIMEOUT = '60000'     // Longer timeout for models
+process.env.ONNX_WEB_WASM_ENABLE_SIMD = 'true'  // Enable SIMD for better CPU performance
+process.env.UV_THREADPOOL_SIZE = '8'            // More threads for libuv
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
-if (!app.requestSingleInstanceLock()) {
+// Use Electron's built-in single instance lock
+const gotTheLock = app.requestSingleInstanceLock()
+
+if (!gotTheLock) {
+  console.log(`[Main Index ${initId}] Electron single instance lock failed, quitting...`)
   app.quit()
   process.exit(0)
+} else {
+  console.log(`[Main Index ${initId}] Got Electron single instance lock, continuing to initialize...`)
 }
 
+console.log(`[Main Index ${initId}] About to define functions and event handlers...`)
+
+// Add error handlers to catch any unhandled exceptions
+process.on('uncaughtException', (error) => {
+  console.error(`[Main Index ${initId}] Uncaught Exception:`, error)
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error(`[Main Index ${initId}] Unhandled Rejection at:`, promise, 'reason:', reason)
+})
+
 function initializeManagers(): void {
-  new DesktopManager()
+  if (global.aliceAppState.managersInitialized) {
+    console.log(`[Main Index ${initId}] Managers already initialized, skipping...`)
+    return
+  }
+  global.aliceAppState.managersInitialized = true
+  
+  console.log(`[Main Index ${initId}] Initializing managers...`)
+  DesktopManager.getInstance()
   initializeUpdater()
 
   registerIPCHandlers()
   registerGoogleIPCHandlers()
   registerAuthIPCHandlers()
+  console.log(`[Main Index ${initId}] Managers initialization complete.`)
 }
 
 async function handleContextAction(actionData: any) {
@@ -105,6 +168,22 @@ async function handleContextAction(actionData: any) {
 }
 
 function startWebSocketServer() {
+  // Check if server is already running
+  if (wss && wss.readyState === 1) { // 1 = OPEN
+    console.log('[WebSocket] Server already running, skipping initialization')
+    return
+  }
+  
+  // Close existing server first
+  if (wss) {
+    try {
+      wss.close()
+      wss = null
+    } catch (error) {
+      console.warn('[WebSocket] Error closing existing server:', error)
+    }
+  }
+
   const setupWebSocketHandlers = (server: WebSocketServer, port: number) => {
     console.log(
       `[WebSocket] WebSocket server listening at ws://localhost:${port}`
@@ -133,6 +212,38 @@ function startWebSocketServer() {
         }
       })
     })
+
+    server.on('error', (error: any) => {
+      console.error('[WebSocket] Server error:', error)
+      if (error.code === 'EADDRINUSE') {
+        console.error(`[WebSocket] Port ${port} is already in use`)
+        // Try alternative ports
+        tryAlternativePorts(port + 1)
+      }
+    })
+  }
+
+  const tryAlternativePorts = (startPort: number) => {
+    const maxRetries = 5
+    for (let i = 0; i < maxRetries; i++) {
+      const port = startPort + i
+      try {
+        console.log(`[WebSocket] Trying alternative port ${port}...`)
+        wss = new WebSocketServer({ port })
+        setupWebSocketHandlers(wss, port)
+        return // Success
+      } catch (error: any) {
+        if (error.code === 'EADDRINUSE') {
+          console.warn(`[WebSocket] Port ${port} also in use, trying next...`)
+          continue
+        } else {
+          console.error(`[WebSocket] Unexpected error on port ${port}:`, error)
+          break
+        }
+      }
+    }
+    console.error('[WebSocket] Failed to find available port after retries')
+    wss = null
   }
 
   loadSettings()
@@ -142,12 +253,14 @@ function startWebSocketServer() {
       try {
         wss = new WebSocketServer({ port: websocketPort })
         setupWebSocketHandlers(wss, websocketPort)
-      } catch (error) {
+      } catch (error: any) {
         console.error(
           `[WebSocket] Failed to create WebSocket server on port ${websocketPort}:`,
           error
         )
-        throw error
+        if (error.code === 'EADDRINUSE') {
+          tryAlternativePorts(websocketPort + 1)
+        }
       }
     })
     .catch(error => {
@@ -159,12 +272,16 @@ function startWebSocketServer() {
       try {
         wss = new WebSocketServer({ port: 5421 })
         setupWebSocketHandlers(wss, 5421)
-      } catch (serverError) {
+      } catch (serverError: any) {
         console.error(
           '[WebSocket] Failed to create WebSocket server on default port 5421:',
           serverError
         )
-        wss = null
+        if (serverError.code === 'EADDRINUSE') {
+          tryAlternativePorts(5422)
+        } else {
+          wss = null
+        }
       }
     })
 }
@@ -178,9 +295,13 @@ export { startWebSocketServer }
 export function stopWebSocketServer() {
   if (wss) {
     console.log('[WebSocket] Stopping WebSocket server')
-    wss.close(() => {
-      console.log('[WebSocket] WebSocket server stopped')
-    })
+    try {
+      wss.close(() => {
+        console.log('[WebSocket] WebSocket server stopped')
+      })
+    } catch (error) {
+      console.warn('[WebSocket] Error stopping server:', error)
+    }
     wss = null
   }
 }
@@ -190,17 +311,16 @@ export function restartWebSocketServer() {
     '[WebSocket] Restarting WebSocket server with new port configuration'
   )
 
-  if (wss) {
-    wss.close(() => {
-      console.log('[WebSocket] Existing WebSocket server closed')
-      startWebSocketServer()
-    })
-  } else {
+  stopWebSocketServer()
+  
+  // Wait a moment before restarting
+  setTimeout(() => {
     startWebSocketServer()
-  }
+  }, 1000)
 }
 
 app.on('ready', () => {
+  console.log(`[Main Index ${initId}] App 'ready' event fired`)
   session.defaultSession.setPermissionRequestHandler(
     (webContents, permission, callback) => {
       if (permission === 'media') {
@@ -213,6 +333,14 @@ app.on('ready', () => {
 })
 
 app.whenReady().then(async () => {
+  console.log(`[Main Index ${initId}] whenReady called, appInitialized:`, global.aliceAppState.appInitialized)
+  if (global.aliceAppState.appInitialized) {
+    console.log(`[Main Index ${initId}] App already initialized, skipping...`)
+    return
+  }
+  global.aliceAppState.appInitialized = true
+  
+  console.log(`[Main Index ${initId}] Starting app initialization...`)
   initializeManagers()
 
   registerCustomProtocol(GENERATED_IMAGES_FULL_PATH)
@@ -267,6 +395,18 @@ app.whenReady().then(async () => {
   await createOverlayWindow()
   checkForUpdates()
 
+  try {
+    console.log('[Main App Ready] Starting Python AI backend...')
+    const pythonStarted = await pythonManager.start()
+    if (pythonStarted) {
+      console.log('[Main App Ready] Python AI backend started successfully')
+    } else {
+      console.error('[Main App Ready] Failed to start Python AI backend')
+    }
+  } catch (error) {
+    console.error('[Main App Ready] Error starting Python AI backend:', error)
+  }
+
   if (initialSettings && isBrowserContextToolEnabled(initialSettings)) {
     console.log(
       '[Main App Ready] browser_context tool is enabled, starting WebSocket server'
@@ -287,11 +427,13 @@ app.on('before-quit', async event => {
   unregisterAllHotkeys()
   stopAuthServer()
   shutdownScheduler()
+  stopWebSocketServer()
   console.log('[Main Index] Before quit: Performing cleanup...')
   event.preventDefault()
 
   try {
     await ensureThoughtStoreSave()
+    await pythonManager.stop()
     console.log('[Main Index] All cleanup tasks complete. Quitting now.')
   } catch (err) {
     console.error('[Main Index] Error during before-quit cleanup:', err)

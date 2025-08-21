@@ -4,7 +4,6 @@ import { useConversationStore } from './conversationStore'
 import { useGeneralStore } from './generalStore'
 import { reinitializeClients } from '../services/apiClients'
 import defaultSystemPromptFromMD from '../../docs/systemPrompt.md?raw'
-import { AVAILABLE_TRANSFORMERS_MODELS, transformersSTTService } from '../services/transformersSTT'
 
 export const DEFAULT_ASSISTANT_SYSTEM_PROMPT = defaultSystemPromptFromMD
 
@@ -27,13 +26,14 @@ export interface AliceSettings {
   sttProvider: 'openai' | 'groq' | 'transformers'
   aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
 
-  // Transformers STT settings
+  // Python STT settings
   transformersModel: string
   transformersDevice: 'webgpu' | 'wasm'
   transformersQuantization: 'fp32' | 'fp16' | 'q8' | 'q4'
   transformersEnableFallback: boolean
   transformersWakeWordEnabled: boolean
   transformersWakeWord: string
+  transformersLanguage: string
 
   ollamaBaseUrl: string
   lmStudioBaseUrl: string
@@ -86,6 +86,7 @@ const defaultSettings: AliceSettings = {
   transformersEnableFallback: true,
   transformersWakeWordEnabled: false,
   transformersWakeWord: 'Alice',
+  transformersLanguage: 'auto',
 
   ollamaBaseUrl: 'http://localhost:11434',
   lmStudioBaseUrl: 'http://localhost:1234',
@@ -138,13 +139,14 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   sttProvider: 'Speech-to-Text Provider',
   aiProvider: 'AI Provider',
 
-  // Transformers STT labels
+  // Python STT labels
   transformersModel: 'Local STT Model',
   transformersDevice: 'Processing Device',
   transformersQuantization: 'Model Quantization',
   transformersEnableFallback: 'Enable OpenAI Fallback',
   transformersWakeWordEnabled: 'Enable Wake Word',
   transformersWakeWord: 'Wake Word',
+  transformersLanguage: 'Language',
 
   ollamaBaseUrl: 'Ollama Base URL',
   lmStudioBaseUrl: 'LM Studio Base URL',
@@ -256,7 +258,7 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('VITE_GROQ_API_KEY')
     }
 
-    // Transformers STT doesn't require API keys, but needs model selection
+    // Python STT doesn't require API keys, but needs model selection
     if (settings.value.sttProvider === 'transformers') {
       essentialKeys.push('transformersModel')
     }
@@ -387,6 +389,15 @@ export const useSettingsStore = defineStore('settings', () => {
               ...devCombinedSettings,
               ...(loadedDevSettings as Partial<AliceSettings>),
             }
+            
+            // Auto-complete onboarding if API key exists but onboarding not marked complete
+            if (
+              !devCombinedSettings.onboardingCompleted &&
+              (loadedDevSettings as any).VITE_OPENAI_API_KEY?.trim()
+            ) {
+              console.log('[SettingsStore] Dev: Found existing API key, auto-completing onboarding')
+              devCombinedSettings.onboardingCompleted = true
+            }
           }
         }
         for (const key of Object.keys(defaultSettings) as Array<
@@ -417,39 +428,10 @@ export const useSettingsStore = defineStore('settings', () => {
           }
         }
         settings.value = validateAndFixSettings(devCombinedSettings)
-
-        if (
-          !settings.value.onboardingCompleted &&
-          settings.value.VITE_OPENAI_API_KEY?.trim()
-        ) {
-          console.log(
-            '[SettingsStore] Dev: Existing user with API key found, auto-completing onboarding'
-          )
-          settings.value.onboardingCompleted = true
-          if (window.settingsAPI?.saveSettings) {
-            await saveSettingsToFile()
-          }
-        }
+        // Auto-completion already handled above if needed
       }
 
-      // Try to restore Transformers model from cache if it's the selected STT provider
-      if (settings.value.sttProvider === 'transformers' && settings.value.transformersModel) {
-        try {
-          console.log('[SettingsStore] Attempting to restore Transformers model from cache:', settings.value.transformersModel)
-          const restored = await transformersSTTService.restoreModelFromCache(
-            settings.value.transformersModel,
-            settings.value.transformersDevice,
-            settings.value.transformersQuantization
-          )
-          if (restored) {
-            console.log('[SettingsStore] Transformers model restored successfully')
-          } else {
-            console.log('[SettingsStore] Transformers model not found in cache, will need to download')
-          }
-        } catch (error: any) {
-          console.warn('[SettingsStore] Failed to restore Transformers model:', error.message)
-        }
-      }
+      // Python backend will auto-initialize models on first use
 
       if (config.value.VITE_OPENAI_API_KEY) {
         try {
@@ -521,6 +503,9 @@ export const useSettingsStore = defineStore('settings', () => {
     if (key === 'transformersWakeWord') {
       settings.value[key] = value as string
     }
+    if (key === 'transformersLanguage') {
+      settings.value[key] = value as string
+    }
     if (key === 'ttsProvider') {
       settings.value[key] = value as 'openai' | 'local'
     }
@@ -563,13 +548,14 @@ export const useSettingsStore = defineStore('settings', () => {
         sttProvider: settings.value.sttProvider,
         aiProvider: settings.value.aiProvider,
 
-        // Transformers STT settings
+        // Python STT settings
         transformersModel: settings.value.transformersModel,
         transformersDevice: settings.value.transformersDevice,
         transformersQuantization: settings.value.transformersQuantization,
         transformersEnableFallback: settings.value.transformersEnableFallback,
         transformersWakeWordEnabled: settings.value.transformersWakeWordEnabled,
         transformersWakeWord: settings.value.transformersWakeWord,
+        transformersLanguage: settings.value.transformersLanguage,
 
         ollamaBaseUrl: settings.value.ollamaBaseUrl,
         lmStudioBaseUrl: settings.value.lmStudioBaseUrl,

@@ -21,6 +21,11 @@
       from: './app-config.json',
       to: 'app-config.json',
     },
+    {
+      from: 'resources/python',
+      to: 'python',
+      filter: ['**/*']
+    },
   ],
   mac: {
     target: ['dmg'],

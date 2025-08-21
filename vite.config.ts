@@ -37,15 +37,6 @@ export default defineConfig(({ mode, command }) => {
             src: 'node_modules/onnxruntime-web/dist/*.wasm',
             dest: './',
           },
-          // Transformers.js WASM files for local STT
-          {
-            src: 'node_modules/@huggingface/transformers/dist/*.wasm',
-            dest: './',
-          },
-          {
-            src: 'node_modules/@huggingface/transformers/dist/*.mjs',
-            dest: './',
-          },
         ],
       }),
       electron({
@@ -55,7 +46,11 @@ export default defineConfig(({ mode, command }) => {
             if (process.env.VSCODE_DEBUG) {
               console.log('[startup] Electron App')
             } else {
-              startup()
+              console.log('[Vite] Starting Electron main process...')
+              // Add a small delay to prevent race conditions
+              setTimeout(() => {
+                startup()
+              }, 100)
             }
           },
           vite: {
@@ -67,6 +62,9 @@ export default defineConfig(({ mode, command }) => {
                 external: Object.keys(
                   'dependencies' in pkg ? pkg.dependencies : {}
                 ),
+                input: {
+                  index: 'electron/main/index.ts'
+                },
               },
             },
           },

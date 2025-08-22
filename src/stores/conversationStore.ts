@@ -116,10 +116,7 @@ export const useConversationStore = defineStore('conversation', () => {
       return false
     }
 
-    if (
-      availableModels.value.length === 0 &&
-      settingsStore.config.VITE_OPENAI_API_KEY
-    ) {
+    if (availableModels.value.length === 0) {
       await fetchModels()
     }
     isInitialized.value = true
@@ -789,10 +786,7 @@ export const useConversationStore = defineStore('conversation', () => {
         const enableFallback =
           settingsStore.config.transformersEnableFallback &&
           !!settingsStore.config.VITE_OPENAI_API_KEY
-        return await api.transcribeWithPython(
-          audioArrayBuffer,
-          enableFallback
-        )
+        return await api.transcribeWithPython(audioArrayBuffer, enableFallback)
       } else {
         throw new Error(`Unknown STT provider: ${sttProvider}`)
       }
@@ -800,7 +794,6 @@ export const useConversationStore = defineStore('conversation', () => {
       generalStore.statusMessage = 'Error: Transcription failed'
       console.error('Transcription service error:', error)
 
-      // If Transformers STT fails, suggest downloading model
       if (
         sttProvider === 'transformers' &&
         error.message.includes('not initialized')

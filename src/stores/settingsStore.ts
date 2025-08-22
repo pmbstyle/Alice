@@ -220,7 +220,13 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     if (validated.sttProvider === 'transformers') {
-      const validModelIds = ['whisper-tiny.en', 'whisper-base', 'whisper-small', 'whisper-medium', 'whisper-large']
+      const validModelIds = [
+        'whisper-tiny.en',
+        'whisper-base',
+        'whisper-small',
+        'whisper-medium',
+        'whisper-large',
+      ]
       if (!validModelIds.includes(validated.transformersModel)) {
         validated.transformersModel = validModelIds[0] || 'whisper-tiny.en'
       }
@@ -378,7 +384,7 @@ export const useSettingsStore = defineStore('settings', () => {
               ...devCombinedSettings,
               ...(loadedDevSettings as Partial<AliceSettings>),
             }
-            
+
             if (
               !devCombinedSettings.onboardingCompleted &&
               (loadedDevSettings as any).VITE_OPENAI_API_KEY?.trim()
@@ -393,7 +399,7 @@ export const useSettingsStore = defineStore('settings', () => {
           if (key === 'onboardingCompleted') {
             continue
           }
-          
+
           if (import.meta.env[key]) {
             const envValue = import.meta.env[key]
             if (
@@ -421,7 +427,10 @@ export const useSettingsStore = defineStore('settings', () => {
         try {
           settings.value = validateAndFixSettings(devCombinedSettings)
         } catch (error) {
-          console.error('[SettingsStore] Settings validation failed, using unvalidated settings:', error)
+          console.error(
+            '[SettingsStore] Settings validation failed, using unvalidated settings:',
+            error
+          )
           settings.value = devCombinedSettings as AliceSettings
         }
       }
@@ -764,18 +773,39 @@ export const useSettingsStore = defineStore('settings', () => {
     VITE_OPENAI_API_KEY: string
     VITE_OPENROUTER_API_KEY: string
     sttProvider: 'openai' | 'groq' | 'transformers'
+    ttsProvider?: 'openai' | 'local'
+    embeddingProvider?: 'openai' | 'local'
     aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
+    assistantModel?: string
+    summarizationModel?: string
     VITE_GROQ_API_KEY: string
     ollamaBaseUrl?: string
     lmStudioBaseUrl?: string
+    useLocalModels?: boolean
   }) {
-
     settings.value.VITE_OPENAI_API_KEY = onboardingData.VITE_OPENAI_API_KEY
     settings.value.VITE_OPENROUTER_API_KEY =
       onboardingData.VITE_OPENROUTER_API_KEY
     settings.value.sttProvider = onboardingData.sttProvider
     settings.value.aiProvider = onboardingData.aiProvider
     settings.value.VITE_GROQ_API_KEY = onboardingData.VITE_GROQ_API_KEY
+
+    // Set models if provided
+    if (onboardingData.assistantModel) {
+      settings.value.assistantModel = onboardingData.assistantModel
+    }
+    if (onboardingData.summarizationModel) {
+      settings.value.SUMMARIZATION_MODEL = onboardingData.summarizationModel
+    }
+
+    // Set TTS and embedding providers based on local models preference
+    if (onboardingData.useLocalModels) {
+      settings.value.ttsProvider = 'local'
+      settings.value.embeddingProvider = 'local'
+    } else {
+      settings.value.ttsProvider = 'openai'
+      settings.value.embeddingProvider = 'openai'
+    }
 
     if (onboardingData.ollamaBaseUrl) {
       settings.value.ollamaBaseUrl = onboardingData.ollamaBaseUrl

@@ -46,7 +46,7 @@
 import { useRoute } from 'vue-router'
 import Main from './components/Main.vue'
 import Overlay from './components/Overlay.vue'
-import OnboardingWizard from './components/OnboardingWizard.vue'
+import OnboardingWizard from './components/wizard/OnboardingWizard.vue'
 import CommandApprovalDialog from './components/CommandApprovalDialog.vue'
 import { useSettingsStore } from './stores/settingsStore'
 import { useGeneralStore } from './stores/generalStore'

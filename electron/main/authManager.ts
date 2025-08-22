@@ -6,8 +6,13 @@ import { getMainWindow } from './windowManager'
 
 const OAUTH_SERVER_PORT = 9876
 let authServer: http.Server | null = null
+let authIPCHandlersRegistered = false
 
 export function registerAuthIPCHandlers(): void {
+  if (authIPCHandlersRegistered) {
+    return
+  }
+  authIPCHandlersRegistered = true
   ipcMain.handle('google-calendar:get-auth-url', async () => {
     try {
       await startAuthServer()

@@ -214,7 +214,8 @@ watch(
 const isAtBottom = () => {
   if (!sidebarContentElement.value) return false
   const element = sidebarContentElement.value
-  const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight
+  const distanceFromBottom =
+    element.scrollHeight - element.scrollTop - element.clientHeight
   return distanceFromBottom <= scrollThreshold
 }
 

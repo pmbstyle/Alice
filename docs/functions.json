@@ -150,7 +150,7 @@
       "additionalProperties": false
     }
   },
-  
+
   {
     "type": "function",
     "name": "schedule_task",
@@ -460,6 +460,23 @@
           "default": 4000
         }
       },
+      "additionalProperties": false
+    }
+  },
+  {
+    "type": "function",
+    "name": "perform_web_search",
+    "description": "Searches the web for information on a given query. Use this for current events, general knowledge questions, or topics not covered by other tools. Use this tool for browsing the web and when you don't know something or need additional context or data.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The specific search query or question to look up on the web."
+        }
+      },
+      "required": ["query"],
       "additionalProperties": false
     }
   }

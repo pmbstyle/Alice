@@ -46,7 +46,11 @@ export default defineConfig(({ mode, command }) => {
             if (process.env.VSCODE_DEBUG) {
               console.log('[startup] Electron App')
             } else {
-              startup()
+              console.log('[Vite] Starting Electron main process...')
+              // Add a small delay to prevent race conditions
+              setTimeout(() => {
+                startup()
+              }, 100)
             }
           },
           vite: {
@@ -58,6 +62,9 @@ export default defineConfig(({ mode, command }) => {
                 external: Object.keys(
                   'dependencies' in pkg ? pkg.dependencies : {}
                 ),
+                input: {
+                  index: 'electron/main/index.ts'
+                },
               },
             },
           },
@@ -112,6 +119,18 @@ export default defineConfig(({ mode, command }) => {
       }
     })(),
     clearScreen: false,
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vue': ['vue'],
+            'openai': ['openai'],
+            'vendor': ['pinia']
+          }
+        }
+      }
+    },
     define: {
       global: {},
       __APP_MODE__: JSON.stringify(process.env.ELECTRON ? 'electron' : 'web'),

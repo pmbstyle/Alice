@@ -46,7 +46,7 @@
 import { useRoute } from 'vue-router'
 import Main from './components/Main.vue'
 import Overlay from './components/Overlay.vue'
-import OnboardingWizard from './components/OnboardingWizard.vue'
+import OnboardingWizard from './components/wizard/OnboardingWizard.vue'
 import CommandApprovalDialog from './components/CommandApprovalDialog.vue'
 import { useSettingsStore } from './stores/settingsStore'
 import { useGeneralStore } from './stores/generalStore'
@@ -63,6 +63,10 @@ const showOverlay = computed(() => {
 })
 
 const showOnboarding = computed(() => {
+  if (!settingsStore.initialLoadAttempted) {
+    return false
+  }
+  
   return !settingsStore.settings.onboardingCompleted
 })
 
@@ -116,7 +120,7 @@ const handleContextAction = async (data: any) => {
     await conversationStore.initialize()
     await conversationStore.chatWithContextAction(prompt)
   } catch (error) {
-    console.error('Error handling context action:', error)
+    // Handle context action error silently
   }
 }
 
@@ -126,14 +130,32 @@ onMounted(async () => {
 
   if (window.ipcRenderer) {
     window.ipcRenderer.on('update-downloaded', (event, info) => {
-      console.log('Update downloaded in renderer:', info)
       updateInfo.value = info
       updateAvailable.value = true
     })
 
     window.ipcRenderer.on('context-action', (event, data) => {
-      console.log('Context action received in renderer:', data)
       handleContextAction(data)
+    })
+
+    // Handle TTS progress updates to show the app is responsive
+    window.ipcRenderer.on('kokoro-tts-progress', (event, data) => {
+      const { message, progress } = data
+      if (progress >= 0) {
+        generalStore.statusMessage = `TTS: ${message}`
+      } else {
+        generalStore.statusMessage = 'TTS generation failed'
+      }
+    })
+
+    // Handle local embedding progress updates
+    window.ipcRenderer.on('local-embedding-progress', (event, data) => {
+      const { message, progress } = data
+      if (progress >= 0) {
+        generalStore.statusMessage = `Embedding: ${message}`
+      } else {
+        generalStore.statusMessage = 'Embedding generation failed'
+      }
     })
   }
 })
@@ -141,6 +163,9 @@ onMounted(async () => {
 onUnmounted(() => {
   if (window.ipcRenderer) {
     window.ipcRenderer.removeAllListeners('update-downloaded')
+    window.ipcRenderer.removeAllListeners('context-action')
+    window.ipcRenderer.removeAllListeners('kokoro-tts-progress')
+    window.ipcRenderer.removeAllListeners('local-embedding-progress')
   }
 })
 </script>

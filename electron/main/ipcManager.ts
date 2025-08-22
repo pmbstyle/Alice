@@ -45,6 +45,8 @@ import {
   registerMutePlaybackHotkey,
   registerTakeScreenshotHotkey,
 } from './hotkeyManager'
+import { pythonManager } from './pythonManager'
+import { pythonApi } from '../../src/services/pythonApi'
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_DIR_NAME = 'generated_images'
@@ -55,7 +57,14 @@ const GENERATED_IMAGES_FULL_PATH = path.join(
 
 let screenshotDataURL: string | null = null
 
+let ipcHandlersRegistered = false
+
 export function registerIPCHandlers(): void {
+  if (ipcHandlersRegistered) {
+    return
+  }
+  ipcHandlersRegistered = true
+
   // Window management
   ipcMain.on('resize', (event, arg) => {
     if (
@@ -95,7 +104,9 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
-        await addThoughtVector(conversationId, role, textContent, embedding)
+        const provider: 'openai' | 'local' = embedding.length === 1024 ? 'local' : 'openai'
+        
+        await addThoughtVector(conversationId, role, textContent, embedding, provider)
         return { success: true }
       } catch (error) {
         console.error('IPC thoughtVector:add error:', error)
@@ -117,9 +128,14 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
+        const provider: 'openai' | 'local' | 'both' = 
+          queryEmbedding.length === 1024 ? 'local' :
+          queryEmbedding.length === 1536 ? 'openai' : 'both'
+        
         const thoughtsMetadatas = await searchSimilarThoughts(
           queryEmbedding,
-          topK
+          topK,
+          provider
         )
         const thoughtTexts = thoughtsMetadatas.map(t => t.textContent)
         return { success: true, data: thoughtTexts }
@@ -360,6 +376,7 @@ export function registerIPCHandlers(): void {
   ipcMain.handle('focus-main-window', () => {
     return focusMainWindow()
   })
+
 
   // Settings management
   ipcMain.handle('settings:load', async () => {
@@ -665,9 +682,229 @@ export function registerIPCHandlers(): void {
       }
     }
   )
+
+  // Python Backend Management
+  ipcMain.handle('python:start', async () => {
+    try {
+      const success = await pythonManager.start()
+      return { success }
+    } catch (error: any) {
+      console.error('[IPC python:start] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:stop', async () => {
+    try {
+      await pythonManager.stop()
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC python:stop] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:restart', async () => {
+    try {
+      const success = await pythonManager.restart()
+      return { success }
+    } catch (error: any) {
+      console.error('[IPC python:restart] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:health', async () => {
+    try {
+      const isHealthy = await pythonManager.isHealthy()
+      return { success: true, healthy: isHealthy }
+    } catch (error: any) {
+      console.error('[IPC python:health] Error:', error)
+      return { success: false, error: error.message, healthy: false }
+    }
+  })
+
+  ipcMain.handle('python:service-status', async () => {
+    try {
+      const serviceStatus = await pythonManager.getServiceStatus()
+      return { success: true, data: serviceStatus }
+    } catch (error: any) {
+      console.error('[IPC python:service-status] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Python STT (Speech-to-Text)
+  ipcMain.handle('python:stt:transcribe-audio', async (event, { audioData, sampleRate, language }: { audioData: number[], sampleRate?: number, language?: string }) => {
+    try {
+      const result = await pythonApi.transcribeAudio(new Float32Array(audioData), sampleRate, language)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:stt:transcribe-audio] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:stt:transcribe-file', async (event, { file, language }: { file: Blob, language?: string }) => {
+    try {
+      const result = await pythonApi.transcribeFile(file, language)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:stt:transcribe-file] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:stt:ready', async () => {
+    try {
+      const ready = await pythonApi.isSTTReady()
+      return { success: true, ready }
+    } catch (error: any) {
+      console.error('[IPC python:stt:ready] Error:', error)
+      return { success: false, error: error.message, ready: false }
+    }
+  })
+
+  ipcMain.handle('python:stt:info', async () => {
+    try {
+      const info = await pythonApi.getSTTInfo()
+      return { success: true, data: info }
+    } catch (error: any) {
+      console.error('[IPC python:stt:info] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Python TTS (Text-to-Speech)
+  ipcMain.handle('python:tts:synthesize', async (event, { text, voice }: { text: string, voice?: string }) => {
+    try {
+      const result = await pythonApi.synthesizeSpeech(text, voice)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:tts:synthesize] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:tts:voices', async () => {
+    try {
+      const voices = await pythonApi.getAvailableVoices()
+      return { success: true, data: voices }
+    } catch (error: any) {
+      console.error('[IPC python:tts:voices] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:tts:test', async () => {
+    try {
+      const result = await pythonApi.testTTS()
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:tts:test] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:tts:ready', async () => {
+    try {
+      const ready = await pythonApi.isTTSReady()
+      return { success: true, ready }
+    } catch (error: any) {
+      console.error('[IPC python:tts:ready] Error:', error)
+      return { success: false, error: error.message, ready: false }
+    }
+  })
+
+  ipcMain.handle('python:tts:info', async () => {
+    try {
+      const info = await pythonApi.getTTSInfo()
+      return { success: true, data: info }
+    } catch (error: any) {
+      console.error('[IPC python:tts:info] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Python Embeddings
+  ipcMain.handle('python:embeddings:generate', async (event, { text }: { text: string }) => {
+    try {
+      const result = await pythonApi.generateEmbedding(text)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:generate] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:generate-batch', async (event, { texts }: { texts: string[] }) => {
+    try {
+      const result = await pythonApi.generateEmbeddings(texts)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:generate-batch] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:similarity', async (event, { embedding1, embedding2 }: { embedding1: number[], embedding2: number[] }) => {
+    try {
+      const result = await pythonApi.computeSimilarity(embedding1, embedding2)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:similarity] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:search', async (event, { queryEmbedding, candidateEmbeddings, topK }: { queryEmbedding: number[], candidateEmbeddings: number[][], topK?: number }) => {
+    try {
+      const result = await pythonApi.searchSimilar(queryEmbedding, candidateEmbeddings, topK)
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:search] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:test', async () => {
+    try {
+      const result = await pythonApi.testEmbeddings()
+      return { success: true, data: result }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:test] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:ready', async () => {
+    try {
+      const ready = await pythonApi.isEmbeddingsReady()
+      return { success: true, ready }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:ready] Error:', error)
+      return { success: false, error: error.message, ready: false }
+    }
+  })
+
+  ipcMain.handle('python:embeddings:info', async () => {
+    try {
+      const info = await pythonApi.getEmbeddingsInfo()
+      return { success: true, data: info }
+    } catch (error: any) {
+      console.error('[IPC python:embeddings:info] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
 }
 
+let googleIPCHandlersRegistered = false
+
 export function registerGoogleIPCHandlers(): void {
+  if (googleIPCHandlersRegistered) {
+    return
+  }
+  googleIPCHandlersRegistered = true
   async function withAuthenticatedClient<T>(
     operation: (authClient: any) => Promise<T>,
     serviceName: string
@@ -943,4 +1180,5 @@ export function registerGoogleIPCHandlers(): void {
       }
     }
   })
+
 }

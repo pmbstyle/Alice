@@ -27,12 +27,15 @@ def get_platform_info():
     return system, arch
 
 def install_dependencies():
-    """Install required dependencies"""
-    print("Installing dependencies...")
+    """Install required dependencies (minimal build-time only)"""
+    print("Installing build dependencies...")
     subprocess.run([sys.executable, '-m', 'pip', 'install', '--upgrade', 'pip'], check=True)
     subprocess.run([sys.executable, '-m', 'pip', 'install', 'pyinstaller'], check=True)
-    subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements.txt'], check=True)
-    print("Dependencies installed successfully")
+    
+    # Use minimal requirements for build to avoid bundling large AI models
+    subprocess.run([sys.executable, '-m', 'pip', 'install', '-r', 'requirements-build.txt'], check=True)
+    print("Build dependencies installed successfully")
+    print("Note: AI models will be downloaded at runtime")
 
 def clean_build():
     """Clean previous build artifacts"""
@@ -132,23 +135,36 @@ def verify_build():
     
     print("Verifying executable...")
     
-    # Test that the executable can be run (just check that it starts)
+    # Test that the executable can be run (just check that it imports properly)
     try:
-        # Run with --help flag to avoid starting the server
-        result = subprocess.run([str(exe_path), '--help'], 
-                              capture_output=True, text=True, timeout=10)
+        # Start the process and terminate it quickly to verify it can initialize
+        process = subprocess.Popen([str(exe_path)], 
+                                 stdout=subprocess.PIPE, 
+                                 stderr=subprocess.PIPE)
         
-        if result.returncode == 0:
-            print("Executable verification successful")
+        # Wait a short time to see if it crashes immediately
+        try:
+            stdout, stderr = process.communicate(timeout=3)
+            # If it exits within 3 seconds, check why
+            if process.returncode != 0:
+                print(f"Executable verification failed with return code {process.returncode}")
+                if stderr:
+                    print("STDERR:", stderr.decode())
+                return False
+        except subprocess.TimeoutExpired:
+            # Process is still running after 3 seconds, that's good
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait()
+            print("Executable verification successful - process started correctly")
             return True
-        else:
-            print(f"Executable verification failed with return code {result.returncode}")
-            print("STDERR:", result.stderr)
-            return False
-    
-    except subprocess.TimeoutExpired:
-        print("WARNING: Executable verification timed out (this may be normal)")
+        
+        print("Executable verification successful")
         return True
+    
     except Exception as e:
         print(f"Executable verification failed: {e}")
         return False
@@ -159,7 +175,7 @@ def main():
     print(f"Building Alice AI Backend for {system}-{arch}")
     
     try:
-        # Step 1: Install dependencies
+        # Step 1: Install build dependencies (minimal)
         install_dependencies()
         
         # Step 2: Clean previous builds

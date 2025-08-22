@@ -19,6 +19,7 @@ except ImportError:
 
 from config import settings, get_models_cache_dir
 from utils.logger import get_logger
+from utils.runtime_installer import runtime_installer
 
 logger = get_logger(__name__)
 
@@ -37,8 +38,17 @@ class STTService:
     
     async def initialize(self) -> bool:
         """Initialize the STT service."""
-        if not FASTER_WHISPER_AVAILABLE:
-            logger.error("faster-whisper is not available. Please install it: pip install faster-whisper")
+        try:
+            # Ensure faster-whisper is installed
+            installed = await runtime_installer.ensure_package_installed(
+                'faster-whisper',
+                import_test=lambda: _import_faster_whisper()
+            )
+            if not installed:
+                logger.error("Failed to install or import faster-whisper")
+                return False
+        except Exception as e:
+            logger.error(f"Error setting up faster-whisper: {e}")
             return False
         
         async with self._lock:

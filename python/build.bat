@@ -10,11 +10,12 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Install dependencies
-echo Installing dependencies...
+REM Install build dependencies (minimal)
+echo Installing build dependencies...
 python -m pip install --upgrade pip
 python -m pip install pyinstaller
-python -m pip install -r requirements.txt
+python -m pip install -r requirements-build.txt
+echo Note: AI models will be downloaded at runtime
 
 REM Clean previous builds
 echo Cleaning previous builds...

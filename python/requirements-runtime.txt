@@ -1,0 +1,15 @@
+# Runtime requirements (downloaded when first needed)
+# These are the large AI model dependencies
+
+# AI Libraries
+faster-whisper>=0.10.0
+sentence-transformers>=2.7.0
+kokoro>=0.9.4
+
+# Audio processing
+soundfile>=0.12.1
+librosa>=0.10.1
+
+# Core ML dependencies
+torch>=2.1.0
+transformers>=4.51.0

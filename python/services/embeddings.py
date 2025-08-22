@@ -8,17 +8,31 @@ import os
 from typing import Optional, Dict, Any, List, Union
 import numpy as np
 
-try:
-    from sentence_transformers import SentenceTransformer
-    import torch
-    SENTENCE_TRANSFORMERS_AVAILABLE = True
-except ImportError:
-    SENTENCE_TRANSFORMERS_AVAILABLE = False
-    SentenceTransformer = None
-    torch = None
+# Import will be done at runtime to avoid bundling dependencies
+SENTENCE_TRANSFORMERS_AVAILABLE = False
+SentenceTransformer = None
+torch = None
+
+def _import_sentence_transformers():
+    """Import sentence-transformers at runtime."""
+    global SENTENCE_TRANSFORMERS_AVAILABLE, SentenceTransformer, torch
+    if not SENTENCE_TRANSFORMERS_AVAILABLE:
+        try:
+            from sentence_transformers import SentenceTransformer as _SentenceTransformer
+            import torch as _torch
+            SentenceTransformer = _SentenceTransformer
+            torch = _torch
+            SENTENCE_TRANSFORMERS_AVAILABLE = True
+            logger.info("sentence-transformers imported successfully")
+        except ImportError as e:
+            logger.error(f"Failed to import sentence-transformers: {e}")
+            logger.info("Install with: pip install sentence-transformers torch")
+            raise
+    return SentenceTransformer, torch
 
 from config import settings, get_models_cache_dir
 from utils.logger import get_logger
+from utils.runtime_installer import runtime_installer
 
 logger = get_logger(__name__)
 
@@ -40,8 +54,21 @@ class EmbeddingsService:
     
     async def initialize(self) -> bool:
         """Initialize the Embeddings service."""
-        if not SENTENCE_TRANSFORMERS_AVAILABLE:
-            logger.error("sentence-transformers is not available. Please install it: pip install sentence-transformers")
+        try:
+            # Ensure sentence-transformers is installed
+            installed = await runtime_installer.ensure_package_installed(
+                'sentence-transformers',
+                import_test=lambda: _import_sentence_transformers()
+            )
+            if not installed:
+                logger.error("Failed to install or import sentence-transformers")
+                return False
+            
+            # Import the classes after successful installation
+            _import_sentence_transformers()
+            
+        except Exception as e:
+            logger.error(f"Error setting up sentence-transformers: {e}")
             return False
         
         async with self._lock:
@@ -80,8 +107,12 @@ class EmbeddingsService:
                 logger.error(f"Failed to initialize Embeddings service: {e}")
                 return False
     
-    def _create_model(self, device: str) -> SentenceTransformer:
+    def _create_model(self, device: str):
         """Create SentenceTransformer instance (runs in thread pool)."""
+        if not SENTENCE_TRANSFORMERS_AVAILABLE or SentenceTransformer is None:
+            raise RuntimeError("sentence-transformers not available or not imported correctly")
+        
+        logger.info(f"Downloading embedding model {self.model_name} if not cached...")
         return SentenceTransformer(
             self.model_name,
             device=device,

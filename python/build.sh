@@ -11,11 +11,12 @@ if ! command -v python3 &> /dev/null; then
     exit 1
 fi
 
-# Install dependencies
-echo "Installing dependencies..."
+# Install build dependencies (minimal)
+echo "Installing build dependencies..."
 pip3 install --upgrade pip
 pip3 install pyinstaller
-pip3 install -r requirements.txt
+pip3 install -r requirements-build.txt
+echo "Note: AI models will be downloaded at runtime"
 
 # Clean previous builds
 echo "Cleaning previous builds..."

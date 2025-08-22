@@ -220,7 +220,7 @@ export const useSettingsStore = defineStore('settings', () => {
     }
 
     if (validated.sttProvider === 'transformers') {
-      const validModelIds = AVAILABLE_TRANSFORMERS_MODELS.map(m => m.id)
+      const validModelIds = ['whisper-tiny.en', 'whisper-base', 'whisper-small', 'whisper-medium', 'whisper-large']
       if (!validModelIds.includes(validated.transformersModel)) {
         validated.transformersModel = validModelIds[0] || 'whisper-tiny.en'
       }
@@ -249,7 +249,6 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('lmStudioBaseUrl')
     }
 
-    // Always require OpenAI key for TTS/embeddings/STT fallback
     if (settings.value.aiProvider !== 'openai') {
       essentialKeys.push('VITE_OPENAI_API_KEY')
     }
@@ -258,7 +257,6 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('VITE_GROQ_API_KEY')
     }
 
-    // Python STT doesn't require API keys, but needs model selection
     if (settings.value.sttProvider === 'transformers') {
       essentialKeys.push('transformersModel')
     }
@@ -275,7 +273,6 @@ export const useSettingsStore = defineStore('settings', () => {
   const areCoreApiKeysSufficientForTesting = computed(() => {
     if (!isProduction.value) return true
 
-    // Always need OpenAI key for TTS/embeddings/STT fallback (except when using Ollama/LM Studio as primary)
     const needsOpenAI =
       settings.value.aiProvider === 'openai' ||
       settings.value.aiProvider === 'openrouter' ||
@@ -346,19 +343,17 @@ export const useSettingsStore = defineStore('settings', () => {
   })
 
   async function loadSettings() {
-    if (initialLoadAttempted.value && isProduction.value) {
+    if (initialLoadAttempted.value) {
       return
     }
 
+    initialLoadAttempted.value = true
     isLoading.value = true
     error.value = null
     successMessage.value = null
     coreOpenAISettingsValid.value = false
     try {
       if (isProduction.value) {
-        console.log(
-          '[SettingsStore] Production: Loading settings from main process...'
-        )
         const loaded = await window.settingsAPI.loadSettings()
         if (loaded) {
           settings.value = validateAndFixSettings(
@@ -368,9 +363,6 @@ export const useSettingsStore = defineStore('settings', () => {
             !settings.value.onboardingCompleted &&
             settings.value.VITE_OPENAI_API_KEY?.trim()
           ) {
-            console.log(
-              '[SettingsStore] Existing user with API key found, auto-completing onboarding'
-            )
             settings.value.onboardingCompleted = true
             await saveSettingsToFile()
           }
@@ -378,9 +370,6 @@ export const useSettingsStore = defineStore('settings', () => {
           settings.value = validateAndFixSettings({})
         }
       } else {
-        console.log(
-          '[SettingsStore] Development: Populating with defaults, persisted dev settings, then .env.'
-        )
         let devCombinedSettings: AliceSettings = { ...defaultSettings }
         if (window.settingsAPI) {
           const loadedDevSettings = await window.settingsAPI.loadSettings()
@@ -390,12 +379,10 @@ export const useSettingsStore = defineStore('settings', () => {
               ...(loadedDevSettings as Partial<AliceSettings>),
             }
             
-            // Auto-complete onboarding if API key exists but onboarding not marked complete
             if (
               !devCombinedSettings.onboardingCompleted &&
               (loadedDevSettings as any).VITE_OPENAI_API_KEY?.trim()
             ) {
-              console.log('[SettingsStore] Dev: Found existing API key, auto-completing onboarding')
               devCombinedSettings.onboardingCompleted = true
             }
           }
@@ -403,6 +390,10 @@ export const useSettingsStore = defineStore('settings', () => {
         for (const key of Object.keys(defaultSettings) as Array<
           keyof AliceSettings
         >) {
+          if (key === 'onboardingCompleted') {
+            continue
+          }
+          
           if (import.meta.env[key]) {
             const envValue = import.meta.env[key]
             if (
@@ -427,20 +418,19 @@ export const useSettingsStore = defineStore('settings', () => {
             }
           }
         }
-        settings.value = validateAndFixSettings(devCombinedSettings)
-        // Auto-completion already handled above if needed
+        try {
+          settings.value = validateAndFixSettings(devCombinedSettings)
+        } catch (error) {
+          console.error('[SettingsStore] Settings validation failed, using unvalidated settings:', error)
+          settings.value = devCombinedSettings as AliceSettings
+        }
       }
-
-      // Python backend will auto-initialize models on first use
 
       if (config.value.VITE_OPENAI_API_KEY) {
         try {
           const conversationStore = useConversationStore()
           await conversationStore.fetchModels()
           coreOpenAISettingsValid.value = true
-          console.log(
-            '[SettingsStore] Core OpenAI API key validated on load via fetchModels.'
-          )
         } catch (e: any) {
           console.warn(
             `[SettingsStore] Core OpenAI API key validation failed on load: ${e.message}`
@@ -454,7 +444,6 @@ export const useSettingsStore = defineStore('settings', () => {
       coreOpenAISettingsValid.value = false
     } finally {
       isLoading.value = false
-      initialLoadAttempted.value = true
     }
   }
 
@@ -531,9 +520,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function saveSettingsToFile(): Promise<boolean> {
     if (!isProduction.value && !window.settingsAPI?.saveSettings) {
-      console.log(
-        '[SettingsStore] Dev mode (or no IPC): Skipping saveSettingsToFile.'
-      )
       successMessage.value =
         'Settings updated (Dev Mode - Not saved to file unless IPC available)'
       return true
@@ -548,7 +534,6 @@ export const useSettingsStore = defineStore('settings', () => {
         sttProvider: settings.value.sttProvider,
         aiProvider: settings.value.aiProvider,
 
-        // Python STT settings
         transformersModel: settings.value.transformersModel,
         transformersDevice: settings.value.transformersDevice,
         transformersQuantization: settings.value.transformersQuantization,
@@ -593,7 +578,6 @@ export const useSettingsStore = defineStore('settings', () => {
       const saveResult = await window.settingsAPI.saveSettings(plainSettings)
 
       if (saveResult.success) {
-        console.log('[SettingsStore] Settings saved to file successfully.')
         isSaving.value = false
         return true
       } else {
@@ -625,7 +609,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
     const currentConfigForTest = config.value
 
-    // Validate API keys/URLs based on provider
     if (currentConfigForTest.aiProvider === 'openai') {
       if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
         error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing.`
@@ -700,9 +683,6 @@ export const useSettingsStore = defineStore('settings', () => {
       await conversationStore.fetchModels()
       openAIServiceTestSuccess = true
       coreOpenAISettingsValid.value = true
-      console.log(
-        `[SettingsStore] ${currentConfigForTest.aiProvider} API connection test successful (fetchModels).`
-      )
     } catch (e: any) {
       const providerNameMap = {
         openai: 'OpenAI',
@@ -789,7 +769,6 @@ export const useSettingsStore = defineStore('settings', () => {
     ollamaBaseUrl?: string
     lmStudioBaseUrl?: string
   }) {
-    console.log('[SettingsStore] Completing onboarding...')
 
     settings.value.VITE_OPENAI_API_KEY = onboardingData.VITE_OPENAI_API_KEY
     settings.value.VITE_OPENROUTER_API_KEY =
@@ -809,9 +788,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
     const success = await saveSettingsToFile()
     if (success) {
-      console.log(
-        '[SettingsStore] Onboarding settings saved. Re-initializing clients.'
-      )
       reinitializeClients()
       const conversationStore = useConversationStore()
       await conversationStore.initialize()

@@ -45,8 +45,9 @@
     oneClick: true,
     perMachine: false,
     allowToChangeInstallationDirectory: false,
-    deleteAppDataOnUninstall: false,
+    deleteAppDataOnUninstall: false
   },
+  compression: 'store',
   linux: {
     target: ['AppImage'],
     category: 'Utility',

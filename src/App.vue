@@ -63,6 +63,10 @@ const showOverlay = computed(() => {
 })
 
 const showOnboarding = computed(() => {
+  if (!settingsStore.initialLoadAttempted) {
+    return false
+  }
+  
   return !settingsStore.settings.onboardingCompleted
 })
 

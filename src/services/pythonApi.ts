@@ -54,6 +54,27 @@ export interface ServiceInfo {
   [key: string]: any
 }
 
+export interface ModelDownloadStatus {
+  stt: {
+    installed: boolean
+    downloading: boolean
+  }
+  tts: {
+    installed: boolean
+    downloading: boolean
+  }
+  embeddings: {
+    installed: boolean
+    downloading: boolean
+  }
+}
+
+export interface ModelDownloadResponse {
+  success: boolean
+  message?: string
+  error?: string
+}
+
 export class PythonApiClient {
   private client: AxiosInstance
   private baseUrl: string
@@ -95,6 +116,18 @@ export class PythonApiClient {
 
   async getModelStatus(): Promise<Record<string, ServiceInfo>> {
     const response = await this.client.get<Record<string, ServiceInfo>>('/api/models/status')
+    return response.data
+  }
+
+  async getModelDownloadStatus(): Promise<ModelDownloadStatus> {
+    const response = await this.client.get<ModelDownloadStatus>('/api/models/download-status')
+    return response.data
+  }
+
+  async downloadModel(service: 'stt' | 'tts' | 'embeddings'): Promise<ModelDownloadResponse> {
+    const response = await this.client.post<ModelDownloadResponse>(`/api/models/download/${service}`, {}, {
+      timeout: 300000 // 5 minutes timeout for model download
+    })
     return response.data
   }
 

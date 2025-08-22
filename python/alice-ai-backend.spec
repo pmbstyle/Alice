@@ -17,35 +17,34 @@ a = Analysis(
     pathex=[current_dir],
     binaries=[],
     datas=[
-        # Include configuration files
-        ('config.py', '.'),
-        # Include all service modules
-        ('services/*.py', 'services'),
-        ('api/*.py', 'api'),
-        ('utils/*.py', 'utils'),
+        # Include any data files needed at runtime (not Python modules)
     ],
     hiddenimports=[
-        # Core dependencies
+        # Local application modules
+        'config',
+        'main',
+        'services',
+        'services.stt',
+        'services.tts', 
+        'services.embeddings',
+        'api',
+        'api.stt',
+        'api.tts',
+        'api.embeddings',
+        'utils',
+        'utils.logger',
+        'utils.runtime_installer',
+        
+        # Core dependencies only (AI libraries installed at runtime)
         'uvicorn',
         'fastapi',
         'pydantic',
         'pydantic_settings',
         'multipart',
         'aiofiles',
-        
-        # AI/ML libraries
-        'faster_whisper',
-        'sentence_transformers',
-        'kokoro',
-        'torch',
-        'transformers',
         'numpy',
         
-        # Audio processing
-        'soundfile',
-        'librosa',
-        
-        # Additional imports that might be missed
+        # FastAPI/Uvicorn internals
         'uvicorn.workers',
         'uvicorn.protocols',
         'uvicorn.protocols.http',
@@ -53,42 +52,36 @@ a = Analysis(
         'uvicorn.lifespan',
         'uvicorn.lifespan.on',
         'uvicorn.main',
-        
-        # FastAPI internal modules
         'fastapi.responses',
         'fastapi.routing',
         'fastapi.middleware',
         'fastapi.middleware.cors',
-        
-        # Torch extensions
-        'torch._C',
-        'torch.distributed',
-        
-        # Sentence transformers modules
-        'sentence_transformers.models',
-        'sentence_transformers.evaluation',
-        'sentence_transformers.readers',
-        'sentence_transformers.losses',
-        
-        # Audio library internals
-        'soundfile._soundfile_data',
-        'librosa.core',
-        'librosa.feature',
-        'librosa.effects',
     ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[
-        # Exclude unnecessary modules to reduce size
+        # Exclude AI libraries (will be installed at runtime)
+        'torch',
+        'torchvision',
+        'torchaudio',
+        'transformers',
+        'sentence_transformers',
+        'faster_whisper',
+        'kokoro',
+        'soundfile',
+        'librosa',
+        'sklearn',
+        'scipy',
         'matplotlib',
-        'scipy.spatial.distance',
-        'scipy.linalg',
         'PIL',
         'tkinter',
         'pytest',
         'ipython',
         'jupyter',
+        'cv2',
+        'tf',
+        'tensorflow',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

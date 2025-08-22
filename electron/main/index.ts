@@ -35,12 +35,14 @@ import { pythonManager } from './pythonManager'
 
 // Global state for hot reload persistence
 declare global {
-  var aliceAppState: {
-    managersInitialized: boolean
-    appInitialized: boolean
-    initTimestamp: number
-    initId: string
-  } | undefined
+  var aliceAppState:
+    | {
+        managersInitialized: boolean
+        appInitialized: boolean
+        initTimestamp: number
+        initId: string
+      }
+    | undefined
 }
 
 const USER_DATA_PATH = app.getPath('userData')
@@ -54,7 +56,7 @@ if (!global.aliceAppState) {
     managersInitialized: false,
     appInitialized: false,
     initTimestamp: Date.now(),
-    initId: Math.random().toString(36).substr(2, 9)
+    initId: Math.random().toString(36).substr(2, 9),
   }
 }
 
@@ -69,13 +71,15 @@ process.env.NODE_OPTIONS = '--max-old-space-size=4096'
 const currentTime = Date.now()
 const timeSinceLastInit = currentTime - global.aliceAppState.initTimestamp
 
-console.log(`[Main Index ${initId}] Starting Electron main process... PID: ${process.pid}, Time since last init: ${timeSinceLastInit}ms`)
+console.log(
+  `[Main Index ${initId}] Starting Electron main process... PID: ${process.pid}, Time since last init: ${timeSinceLastInit}ms`
+)
 
 function isBrowserContextToolEnabled(settings: any): boolean {
   return settings?.assistantTools?.includes('browser_context') || false
 }
 
-// Disable hardware acceleration for stability (Electron + WebGPU + Worker threads = crashes)
+
 if (os.release().startsWith('6.1') || process.platform === 'win32') {
   app.disableHardwareAcceleration()
 }
@@ -86,41 +90,54 @@ app.commandLine.appendSwitch('--disable-gpu-sandbox')
 app.commandLine.appendSwitch('--disable-software-rasterizer')
 
 // CPU optimization for worker threads
-process.env.ONNX_WEB_WEBGPU_DISABLED = 'true'  // Keep WebGPU disabled for stability
-process.env.ONNX_WEB_INIT_TIMEOUT = '60000'     // Longer timeout for models
-process.env.ONNX_WEB_WASM_ENABLE_SIMD = 'true'  // Enable SIMD for better CPU performance
-process.env.UV_THREADPOOL_SIZE = '8'            // More threads for libuv
+process.env.ONNX_WEB_WEBGPU_DISABLED = 'true'
+process.env.ONNX_WEB_INIT_TIMEOUT = '60000'
+process.env.ONNX_WEB_WASM_ENABLE_SIMD = 'true'
+process.env.UV_THREADPOOL_SIZE = '8'
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 // Use Electron's built-in single instance lock
 const gotTheLock = app.requestSingleInstanceLock()
 
 if (!gotTheLock) {
-  console.log(`[Main Index ${initId}] Electron single instance lock failed, quitting...`)
+  console.log(
+    `[Main Index ${initId}] Electron single instance lock failed, quitting...`
+  )
   app.quit()
   process.exit(0)
 } else {
-  console.log(`[Main Index ${initId}] Got Electron single instance lock, continuing to initialize...`)
+  console.log(
+    `[Main Index ${initId}] Got Electron single instance lock, continuing to initialize...`
+  )
 }
 
-console.log(`[Main Index ${initId}] About to define functions and event handlers...`)
+console.log(
+  `[Main Index ${initId}] About to define functions and event handlers...`
+)
 
 // Add error handlers to catch any unhandled exceptions
-process.on('uncaughtException', (error) => {
+process.on('uncaughtException', error => {
   console.error(`[Main Index ${initId}] Uncaught Exception:`, error)
 })
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error(`[Main Index ${initId}] Unhandled Rejection at:`, promise, 'reason:', reason)
+  console.error(
+    `[Main Index ${initId}] Unhandled Rejection at:`,
+    promise,
+    'reason:',
+    reason
+  )
 })
 
 function initializeManagers(): void {
   if (global.aliceAppState.managersInitialized) {
-    console.log(`[Main Index ${initId}] Managers already initialized, skipping...`)
+    console.log(
+      `[Main Index ${initId}] Managers already initialized, skipping...`
+    )
     return
   }
   global.aliceAppState.managersInitialized = true
-  
+
   console.log(`[Main Index ${initId}] Initializing managers...`)
   DesktopManager.getInstance()
   initializeUpdater()
@@ -169,11 +186,12 @@ async function handleContextAction(actionData: any) {
 
 function startWebSocketServer() {
   // Check if server is already running
-  if (wss && wss.readyState === 1) { // 1 = OPEN
+  if (wss && wss.readyState === 1) {
+    // 1 = OPEN
     console.log('[WebSocket] Server already running, skipping initialization')
     return
   }
-  
+
   // Close existing server first
   if (wss) {
     try {
@@ -312,8 +330,7 @@ export function restartWebSocketServer() {
   )
 
   stopWebSocketServer()
-  
-  // Wait a moment before restarting
+
   setTimeout(() => {
     startWebSocketServer()
   }, 1000)
@@ -333,13 +350,16 @@ app.on('ready', () => {
 })
 
 app.whenReady().then(async () => {
-  console.log(`[Main Index ${initId}] whenReady called, appInitialized:`, global.aliceAppState.appInitialized)
+  console.log(
+    `[Main Index ${initId}] whenReady called, appInitialized:`,
+    global.aliceAppState.appInitialized
+  )
   if (global.aliceAppState.appInitialized) {
     console.log(`[Main Index ${initId}] App already initialized, skipping...`)
     return
   }
   global.aliceAppState.appInitialized = true
-  
+
   console.log(`[Main Index ${initId}] Starting app initialization...`)
   initializeManagers()
 
@@ -431,14 +451,24 @@ app.on('before-quit', async event => {
   console.log('[Main Index] Before quit: Performing cleanup...')
   event.preventDefault()
 
+  const cleanupTimeout = setTimeout(() => {
+    console.warn('[Main Index] Cleanup timeout reached, forcing quit...')
+    app.exit(0)
+  }, 5000)
+
   try {
-    await ensureThoughtStoreSave()
-    await pythonManager.stop()
+    await Promise.race([
+      Promise.all([ensureThoughtStoreSave(), pythonManager.stop()]),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Cleanup timeout')), 4000)
+      ),
+    ])
     console.log('[Main Index] All cleanup tasks complete. Quitting now.')
   } catch (err) {
     console.error('[Main Index] Error during before-quit cleanup:', err)
   } finally {
-    app.exit()
+    clearTimeout(cleanupTimeout)
+    app.exit(0)
   }
 })
 

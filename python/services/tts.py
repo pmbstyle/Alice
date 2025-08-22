@@ -10,19 +10,34 @@ import tempfile
 from typing import Optional, Dict, Any, List, Union
 import numpy as np
 
-try:
-    from kokoro import KPipeline
-    import torch
-    import soundfile as sf
-    KOKORO_AVAILABLE = True
-except ImportError:
-    KOKORO_AVAILABLE = False
-    KPipeline = None
-    torch = None
-    sf = None
+# Import will be done at runtime to avoid bundling dependencies
+KOKORO_AVAILABLE = False
+KPipeline = None
+torch = None
+sf = None
+
+def _import_kokoro():
+    """Import kokoro at runtime."""
+    global KOKORO_AVAILABLE, KPipeline, torch, sf
+    if not KOKORO_AVAILABLE:
+        try:
+            from kokoro import KPipeline as _KPipeline
+            import torch as _torch
+            import soundfile as _sf
+            KPipeline = _KPipeline
+            torch = _torch
+            sf = _sf
+            KOKORO_AVAILABLE = True
+            logger.info("kokoro imported successfully")
+        except ImportError as e:
+            logger.error(f"Failed to import kokoro: {e}")
+            logger.info("Install with: pip install kokoro>=0.9.4 torch soundfile")
+            raise
+    return KPipeline
 
 from config import settings, get_models_cache_dir
 from utils.logger import get_logger
+from utils.runtime_installer import runtime_installer
 
 logger = get_logger(__name__)
 
@@ -56,8 +71,21 @@ class TTSService:
     
     async def initialize(self) -> bool:
         """Initialize the TTS service."""
-        if not KOKORO_AVAILABLE:
-            logger.error("Kokoro TTS is not available. Please install it: pip install kokoro>=0.9.4")
+        try:
+            # Ensure kokoro is installed
+            installed = await runtime_installer.ensure_package_installed(
+                'kokoro',
+                import_test=lambda: _import_kokoro()
+            )
+            if not installed:
+                logger.error("Failed to install or import kokoro")
+                return False
+            
+            # Import the classes after successful installation
+            _import_kokoro()
+            
+        except Exception as e:
+            logger.error(f"Error setting up kokoro: {e}")
             return False
         
         async with self._lock:
@@ -87,8 +115,12 @@ class TTSService:
                 logger.error(f"Failed to initialize TTS service: {e}")
                 return False
     
-    def _create_pipeline(self, lang_code: str) -> KPipeline:
+    def _create_pipeline(self, lang_code: str):
         """Create KPipeline instance (runs in thread pool)."""
+        if not KOKORO_AVAILABLE or KPipeline is None:
+            raise RuntimeError("kokoro not available or not imported correctly")
+        
+        logger.info(f"Downloading Kokoro TTS model for language {lang_code} if not cached...")
         return KPipeline(lang_code=lang_code)
     
     async def synthesize_speech(self, text: str, voice: Optional[str] = None) -> Optional[bytes]:

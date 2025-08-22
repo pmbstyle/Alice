@@ -119,6 +119,18 @@ export default defineConfig(({ mode, command }) => {
       }
     })(),
     clearScreen: false,
+    build: {
+      chunkSizeWarningLimit: 1000,
+      rollupOptions: {
+        output: {
+          manualChunks: {
+            'vue': ['vue'],
+            'openai': ['openai'],
+            'vendor': ['pinia']
+          }
+        }
+      }
+    },
     define: {
       global: {},
       __APP_MODE__: JSON.stringify(process.env.ELECTRON ? 'electron' : 'web'),

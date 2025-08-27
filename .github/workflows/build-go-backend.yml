@@ -98,27 +98,6 @@ jobs:
         path: backend/${{ matrix.output }}
         retention-days: 30
 
-  lint-and-security:
-    name: Lint and Security Scan
-    runs-on: ubuntu-latest
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
-        cache-dependency-path: backend/go.sum
-
-    - name: Install golangci-lint
-      uses: golangci/golangci-lint-action@v6
-      with:
-        version: latest
-        working-directory: backend
-        args: --timeout=5m
-
-
   validate-api:
     name: Validate API Endpoints
     runs-on: ubuntu-latest

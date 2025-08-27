@@ -21,13 +21,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:python": "cd python && python dev.py",
-    "dev:full": "concurrently \"npm run dev:python\" \"npm run dev\"",
-    "build": "npm run build:python && vite build && electron-builder",
+    "build": "npm run build:go && vite build && electron-builder",
     "build:web": "vite build",
-    "build:python": "cd python && python build.py",
-    "build:python:win": "cd python && build.bat",
-    "build:python:unix": "cd python && ./build.sh",
+    "build:go": "cd backend && go build -o ../resources/backend/alice-backend.exe",
+    "build:go:win": "cd backend && set GOOS=windows&& set GOARCH=amd64&& go build -o ../resources/backend/alice-backend.exe",
+    "build:go:mac": "cd backend && GOOS=darwin GOARCH=amd64 go build -o ../resources/backend/alice-backend",
+    "build:go:linux": "cd backend && GOOS=linux GOARCH=amd64 go build -o ../resources/backend/alice-backend",
     "rebuild": "electron-rebuild -f -w better-sqlite3,hnswlib-node",
     "preview": "vite preview",
     "format": "prettier --write ."

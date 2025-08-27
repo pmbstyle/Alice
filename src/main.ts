@@ -12,6 +12,11 @@ const app = createApp(App)
 app.use(createPinia())
 app.use(router)
 
-initializeClients()
-
-app.mount('#app')
+// Initialize clients and then mount the app
+initializeClients().then(() => {
+  console.log('All clients initialized, mounting app')
+  app.mount('#app')
+}).catch((error) => {
+  console.error('Failed to initialize clients, mounting app anyway:', error)
+  app.mount('#app')
+})

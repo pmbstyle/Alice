@@ -1,0 +1,180 @@
+name: Build Go Backend
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/build-go-backend.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/build-go-backend.yml'
+
+jobs:
+  build-go:
+    name: Build Go Backend
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - goos: windows
+            goarch: amd64
+            output: alice-backend.exe
+          - goos: darwin
+            goarch: amd64
+            output: alice-backend
+          - goos: darwin
+            goarch: arm64
+            output: alice-backend
+          - goos: linux
+            goarch: amd64
+            output: alice-backend
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        cache-dependency-path: backend/go.sum
+
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('backend/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.goos }}-${{ matrix.goarch }}-
+          ${{ runner.os }}-go-
+
+    - name: Install dependencies
+      working-directory: backend
+      run: go mod download
+
+    - name: Verify dependencies
+      working-directory: backend
+      run: go mod verify
+
+    - name: Run tests
+      working-directory: backend
+      env:
+        CGO_ENABLED: 1
+      run: go test -v ./...
+
+    - name: Build binary
+      working-directory: backend
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        CGO_ENABLED: 1
+      run: |
+        # Install cross-compilation tools if needed
+        if [ "${{ matrix.goos }}" = "windows" ]; then
+          sudo apt-get update
+          sudo apt-get install -y gcc-mingw-w64
+          export CC=x86_64-w64-mingw32-gcc
+          export CXX=x86_64-w64-mingw32-g++
+        fi
+        
+        go build -v -ldflags="-s -w" -o ${{ matrix.output }} .
+
+    - name: Test binary
+      working-directory: backend
+      if: matrix.goos == 'linux'
+      run: |
+        chmod +x ${{ matrix.output }}
+        timeout 10s ./${{ matrix.output }} --version || true
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: alice-backend-${{ matrix.goos }}-${{ matrix.goarch }}
+        path: backend/${{ matrix.output }}
+        retention-days: 30
+
+  lint-and-security:
+    name: Lint and Security Scan
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.21'
+        cache-dependency-path: backend/go.sum
+
+    - name: Install golangci-lint
+      uses: golangci/golangci-lint-action@v3
+      with:
+        version: latest
+        working-directory: backend
+        args: --timeout=5m
+
+    - name: Run gosec security scanner
+      uses: securecodewarrior/github-action-gosec@master
+      with:
+        args: '-fmt sarif -out gosec.sarif ./backend/...'
+
+    - name: Upload SARIF file
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: gosec.sarif
+
+  validate-api:
+    name: Validate API Endpoints
+    runs-on: ubuntu-latest
+    needs: build-go
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download Linux binary
+      uses: actions/download-artifact@v3
+      with:
+        name: alice-backend-linux-amd64
+        path: backend/
+
+    - name: Start backend server
+      working-directory: backend
+      run: |
+        chmod +x alice-backend
+        ./alice-backend &
+        BACKEND_PID=$!
+        echo "BACKEND_PID=$BACKEND_PID" >> $GITHUB_ENV
+        
+        # Wait for server to start
+        for i in {1..30}; do
+          if curl -f http://127.0.0.1:8765/api/health; then
+            echo "Backend started successfully"
+            break
+          fi
+          echo "Waiting for backend to start... ($i/30)"
+          sleep 2
+        done
+
+    - name: Test API endpoints
+      run: |
+        # Test health endpoint
+        curl -f http://127.0.0.1:8765/api/health
+        
+        # Test service status endpoints
+        curl -f http://127.0.0.1:8765/api/stt/ready || echo "STT not ready (expected)"
+        curl -f http://127.0.0.1:8765/api/tts/ready || echo "TTS not ready (expected)"
+        curl -f http://127.0.0.1:8765/api/embeddings/ready || echo "Embeddings not ready (expected)"
+
+    - name: Stop backend server
+      if: always()
+      run: |
+        if [ ! -z "$BACKEND_PID" ]; then
+          kill $BACKEND_PID || true
+        fi
+        pkill -f alice-backend || true

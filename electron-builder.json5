@@ -22,8 +22,8 @@
       to: 'app-config.json',
     },
     {
-      from: 'resources/python',
-      to: 'python',
+      from: 'resources/backend',
+      to: 'backend',
       filter: ['**/*']
     },
   ],

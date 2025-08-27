@@ -31,7 +31,7 @@ import {
 import { initializeUpdater, checkForUpdates } from './updaterManager'
 import { registerAuthIPCHandlers, stopAuthServer } from './authManager'
 import DesktopManager from './desktopManager'
-import { pythonManager } from './pythonManager'
+import { backendManager } from './backendManager'
 
 // Global state for hot reload persistence
 declare global {
@@ -416,15 +416,15 @@ app.whenReady().then(async () => {
   checkForUpdates()
 
   try {
-    console.log('[Main App Ready] Starting Python AI backend...')
-    const pythonStarted = await pythonManager.start()
-    if (pythonStarted) {
-      console.log('[Main App Ready] Python AI backend started successfully')
+    console.log('[Main App Ready] Starting Go AI backend...')
+    const backendStarted = await backendManager.start()
+    if (backendStarted) {
+      console.log('[Main App Ready] Go AI backend started successfully')
     } else {
-      console.error('[Main App Ready] Failed to start Python AI backend')
+      console.error('[Main App Ready] Failed to start Go AI backend')
     }
   } catch (error) {
-    console.error('[Main App Ready] Error starting Python AI backend:', error)
+    console.error('[Main App Ready] Error starting Go AI backend:', error)
   }
 
   if (initialSettings && isBrowserContextToolEnabled(initialSettings)) {
@@ -458,7 +458,7 @@ app.on('before-quit', async event => {
 
   try {
     await Promise.race([
-      Promise.all([ensureThoughtStoreSave(), pythonManager.stop()]),
+      Promise.all([ensureThoughtStoreSave(), backendManager.stop()]),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Cleanup timeout')), 4000)
       ),

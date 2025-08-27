@@ -1007,28 +1007,36 @@ export const ttsStream = async (
 
   if (settings.ttsProvider === 'local') {
     try {
-      const readyResult = await window.pythonAPI.tts.isReady()
+      // Import the backend API
+      const { backendApi } = await import('./backendApi')
       
-      if (!readyResult.success || !readyResult.ready) {
+      const ttsReady = await backendApi.isTTSReady()
+      
+      if (!ttsReady) {
         return fallbackToOpenAITTS(cleanedText, signal)
       }
 
-      const speechResult = await window.pythonAPI.tts.synthesize(
+      const speechResult = await backendApi.synthesizeSpeech(
         cleanedText,
         settings.localTtsVoice
       )
 
-      if (!speechResult.success || !speechResult.data) {
+      if (!speechResult.audio) {
         return fallbackToOpenAITTS(cleanedText, signal)
       }
 
-      const audioBlob = new Blob([speechResult.data], { type: 'audio/wav' })
+      // Convert number array to ArrayBuffer
+      const audioBuffer = new ArrayBuffer(speechResult.audio.length)
+      const audioView = new Uint8Array(audioBuffer)
+      audioView.set(speechResult.audio)
+      
+      const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' })
       return new Response(audioBlob, {
         status: 200,
         statusText: 'OK',
         headers: {
           'Content-Type': 'audio/wav',
-          'Content-Length': speechResult.data.byteLength.toString()
+          'Content-Length': audioBuffer.byteLength.toString()
         }
       })
     } catch (error: any) {
@@ -1073,7 +1081,7 @@ export const transcribeWithGroq = async (
   return transcription?.text || ''
 }
 
-export const transcribeWithPython = async (
+export const transcribeWithBackend = async (
   audioBuffer: ArrayBuffer,
   fallbackToOpenAI: boolean = false,
   language?: string
@@ -1081,15 +1089,19 @@ export const transcribeWithPython = async (
   try {
     const settingsStore = useSettingsStore()
     const selectedLanguage = language || settingsStore.config.transformersLanguage || 'auto'
-    // Check if Python backend is ready
-    const healthResult = await window.pythonAPI.health()
-    if (!healthResult.success || !healthResult.healthy) {
-      throw new Error('Python backend not available - server not running')
+    
+    // Import the backend API
+    const { backendApi } = await import('./backendApi')
+    
+    // Check if Go backend is ready
+    const isHealthy = await backendApi.isHealthy()
+    if (!isHealthy) {
+      throw new Error('Go backend not available - server not running')
     }
 
-    const sttReady = await window.pythonAPI.stt.isReady()
-    if (!sttReady.success || !sttReady.ready) {
-      throw new Error('Python STT service not ready - AI dependencies may not be installed')
+    const sttReady = await backendApi.isSTTReady()
+    if (!sttReady) {
+      throw new Error('Go STT service not ready - AI dependencies may not be installed')
     }
 
     // Parse WAV file to extract raw PCM audio data
@@ -1113,13 +1125,10 @@ export const transcribeWithPython = async (
       throw new Error('Audio clip too short for reliable transcription')
     }
     
-    const result = await window.pythonAPI.stt.transcribeAudio(cleanedAudioData, 16000, selectedLanguage === 'auto' ? null : selectedLanguage)
+    const audioDataFloat32 = new Float32Array(cleanedAudioData)
+    const result = await backendApi.transcribeAudio(audioDataFloat32, 16000, selectedLanguage === 'auto' ? undefined : selectedLanguage)
     
-    if (result.success) {
-      return result.data.text
-    } else {
-      throw new Error(result.error || 'Python STT transcription failed')
-    }
+    return result.text
   } catch (error: any) {
     if (fallbackToOpenAI) {
       try {
@@ -1170,15 +1179,18 @@ export const createEmbedding = async (textInput: any): Promise<number[]> => {
 
   if (settings.embeddingProvider === 'local') {
     try {
-      const readyResult = await window.pythonAPI.embeddings.isReady()
-      if (!readyResult.success || !readyResult.ready) {
+      // Import the backend API
+      const { backendApi } = await import('./backendApi')
+      
+      const embeddingsReady = await backendApi.isEmbeddingsReady()
+      if (!embeddingsReady) {
         return fallbackToOpenAIEmbedding(textToEmbed)
       }
 
-      const result = await window.pythonAPI.embeddings.generate(textToEmbed)
+      const embedding = await backendApi.generateEmbedding(textToEmbed)
       
-      if (result.success && result.data) {
-        return result.data.embedding
+      if (embedding && embedding.length > 0) {
+        return embedding
       } else {
         return fallbackToOpenAIEmbedding(textToEmbed)
       }

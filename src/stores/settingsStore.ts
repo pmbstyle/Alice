@@ -111,7 +111,7 @@ const defaultSettings: AliceSettings = {
   SUMMARIZATION_SYSTEM_PROMPT: DEFAULT_SUMMARIZATION_SYSTEM_PROMPT,
   ttsProvider: 'openai',
   ttsVoice: 'nova',
-  localTtsVoice: 'af_bella',
+  localTtsVoice: 'en_US-amy-medium',
   embeddingProvider: 'openai',
 
   microphoneToggleHotkey: 'Alt+M',

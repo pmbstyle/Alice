@@ -37,7 +37,7 @@
           >
             <option value="openai">OpenAI (gpt-4o-transcribe)</option>
             <option value="groq">Groq (whisper-large-v3)</option>
-            <option value="transformers">Local (Python STT)</option>
+            <option value="transformers">Local</option>
           </select>
         </div>
         <div>
@@ -126,42 +126,84 @@
       v-if="currentSettings.sttProvider === 'transformers'"
       class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
     >
-      <legend class="fieldset-legend">Speech-to-Text Configuration</legend>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
-        <div>
-          <label for="stt-language" class="block mb-1 text-sm"
-            >Language *</label
-          >
-          <select
-            id="stt-language"
-            v-model="currentSettings.transformersLanguage"
-            class="select select-bordered w-full focus:select-primary"
-            @change="e => $emit('update:setting', 'transformersLanguage', e.target.value)"
-          >
-            <option value="auto">Auto-detect</option>
-            <option value="en">English</option>
-            <option value="es">Spanish</option>
-            <option value="fr">French</option>
-            <option value="de">German</option>
-            <option value="it">Italian</option>
-            <option value="pt">Portuguese</option>
-            <option value="ru">Russian</option>
-            <option value="ja">Japanese</option>
-            <option value="ko">Korean</option>
-            <option value="zh">Chinese</option>
-            <option value="ar">Arabic</option>
-            <option value="hi">Hindi</option>
-            <option value="tr">Turkish</option>
-            <option value="pl">Polish</option>
-            <option value="nl">Dutch</option>
-            <option value="sv">Swedish</option>
-            <option value="da">Danish</option>
-            <option value="no">Norwegian</option>
-            <option value="fi">Finnish</option>
-          </select>
-          <p class="text-xs text-gray-400 mt-1">
-            Auto-detect works for most languages. Select a specific language for better accuracy.
-          </p>
+      <legend class="fieldset-legend">
+        Speech-to-Text Configuration
+        <span 
+          class="w-2 h-2 rounded-full inline-block"
+          :class="getServiceStatusClass('stt')"
+          :title="getServiceStatusText('stt')"
+        ></span>
+      </legend>
+      <div class="space-y-4 p-2">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="stt-language" class="block mb-1 text-sm"
+              >Language *</label
+            >
+            <select
+              id="stt-language"
+              v-model="currentSettings.transformersLanguage"
+              class="select select-bordered w-full focus:select-primary"
+              @change="e => $emit('update:setting', 'transformersLanguage', e.target.value)"
+            >
+              <option value="auto">Auto-detect</option>
+              <option value="en">English</option>
+              <option value="es">Spanish</option>
+              <option value="fr">French</option>
+              <option value="de">German</option>
+              <option value="it">Italian</option>
+              <option value="pt">Portuguese</option>
+              <option value="ru">Russian</option>
+              <option value="ja">Japanese</option>
+              <option value="ko">Korean</option>
+              <option value="zh">Chinese</option>
+              <option value="ar">Arabic</option>
+              <option value="hi">Hindi</option>
+              <option value="tr">Turkish</option>
+              <option value="pl">Polish</option>
+              <option value="nl">Dutch</option>
+              <option value="sv">Swedish</option>
+              <option value="da">Danish</option>
+              <option value="no">Norwegian</option>
+              <option value="fi">Finnish</option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">
+              Auto-detect works for most languages. Select a specific language for better accuracy.
+            </p>
+          </div>
+          <div v-if="currentSettings.transformersWakeWordEnabled">
+            <label for="wake-word" class="block mb-1 text-sm"
+              >Wake Word *</label
+            >
+            <input
+              id="wake-word"
+              type="text"
+              v-model="currentSettings.transformersWakeWord"
+              class="input input-bordered w-full focus:input-primary"
+              placeholder="Alice"
+              @input="e => $emit('update:setting', 'transformersWakeWord', e.target.value)"
+            />
+            <p class="text-xs text-gray-400 mt-1">
+              Say this word to activate voice recognition. Keep it simple and distinct.
+            </p>
+          </div>
+        </div>
+        
+        <div class="form-control">
+          <label class="cursor-pointer label justify-start gap-3">
+            <input
+              type="checkbox"
+              v-model="currentSettings.transformersWakeWordEnabled"
+              class="checkbox checkbox-primary"
+              @change="e => $emit('update:setting', 'transformersWakeWordEnabled', e.target.checked)"
+            />
+            <div class="flex flex-col">
+              <span class="label-text font-medium">Enable Wake Word Detection</span>
+              <span class="label-text-alt text-gray-400">
+                Always listen for a specific wake word before starting transcription (like "Hey Siri" or "Alexa")
+              </span>
+            </div>
+          </label>
         </div>
       </div>
     </fieldset>
@@ -170,7 +212,14 @@
     <fieldset
       class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
     >
-      <legend class="fieldset-legend">Text-to-Speech Configuration</legend>
+      <legend class="fieldset-legend">
+        Text-to-Speech Configuration
+        <span 
+          class="w-2 h-2 rounded-full inline-block"
+          :class="getServiceStatusClass('tts')"
+          :title="getServiceStatusText('tts')"
+        ></span>
+      </legend>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
         <div>
           <label for="tts-provider" class="block mb-1 text-sm"
@@ -182,10 +231,10 @@
             class="select select-bordered w-full focus:select-primary"
           >
             <option value="openai">OpenAI (Cloud)</option>
-            <option value="local">Local (Kokoro)</option>
+            <option value="local">Local (Piper)</option>
           </select>
           <p class="text-xs text-gray-400 mt-1">
-            Choose between cloud-based OpenAI TTS or local Kokoro TTS.
+            Choose between cloud-based OpenAI TTS or local Piper TTS.
           </p>
         </div>
         <div v-if="currentSettings.ttsProvider === 'openai'">
@@ -209,27 +258,38 @@
           <label for="local-tts-voice" class="block mb-1 text-sm"
             >Local TTS Voice</label
           >
-          <select
-            id="local-tts-voice"
-            v-model="currentSettings.localTtsVoice"
-            class="select select-bordered w-full focus:select-primary"
-          >
-            <option value="af_heart">af_heart</option>
-            <option value="af_alloy">af_alloy</option>
-            <option value="af_aoede">af_aoede</option>
-            <option value="af_bella">af_bella</option>
-            <option value="af_jessica">af_jessica</option>
-            <option value="af_kore">af_kore</option>
-            <option value="af_nicole">af_nicole</option>
-            <option value="af_nova">af_nova</option>
-            <option value="af_river">af_river</option>
-            <option value="af_sarah">af_sarah</option>
-            <option value="af_sky">af_sky</option>
-            <option value="bf_alice">bf_alice</option>
-            <option value="bf_emma">bf_emma</option>
-            <option value="bf_isabella">bf_isabella</option>
-            <option value="bf_lily">bf_lily</option>
-          </select>
+          <div class="flex gap-2 items-center">
+            <select
+              id="local-tts-voice"
+              v-model="currentSettings.localTtsVoice"
+              class="select select-bordered flex-1 focus:select-primary"
+              @change="onVoiceChange"
+            >
+              <option v-if="availableVoices.length === 0" disabled value="">
+                {{ isRefreshingVoices ? 'Loading voices...' : 'No voices available' }}
+              </option>
+              <option 
+                v-for="voice in availableVoices" 
+                :key="voice.name" 
+                :value="voice.name"
+              >
+                {{ voice.description || voice.name }}
+              </option>
+            </select>
+            <button
+              type="button"
+              @click="refreshVoices"
+              :disabled="isRefreshingVoices"
+              class="btn btn-square btn-sm"
+              title="Refresh voices"
+            >
+              <span v-if="isRefreshingVoices" class="loading loading-spinner loading-xs"></span>
+              <span v-else>🔄</span>
+            </button>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">
+            {{ availableVoices.length }} voice{{ availableVoices.length !== 1 ? 's' : '' }} available. Voice models are downloaded automatically.
+          </p>
         </div>
       </div>
     </fieldset>
@@ -238,7 +298,14 @@
     <fieldset
       class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
     >
-      <legend class="fieldset-legend">Embedding Configuration</legend>
+      <legend class="fieldset-legend">
+        Embedding Configuration
+        <span 
+          class="w-2 h-2 rounded-full inline-block"
+          :class="getServiceStatusClass('embeddings')"
+          :title="getServiceStatusText('embeddings')"
+        ></span>
+      </legend>
       <div class="grid grid-cols-1 gap-4 p-2">
         <div>
           <label for="embedding-provider" class="block mb-1 text-sm"
@@ -259,112 +326,19 @@
       </div>
     </fieldset>
 
-    <!-- Local AI Models Management Section -->
-    <fieldset
-      v-if="showLocalModelsSection"
-      class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
-    >
-      <legend class="fieldset-legend">Local AI Models Management</legend>
-      <div class="space-y-4 p-2">
-        <div class="alert alert-info">
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-          </svg>
-          <span>Local AI models are downloaded on-demand to reduce bundle size. Download models for the services you want to use locally.</span>
-        </div>
-
-        <div v-if="backendOffline" class="alert alert-warning">
-          <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-          </svg>
-          <span>Python AI backend is offline. Models cannot be downloaded or used until the backend is running.</span>
-        </div>
-
-        <!-- STT Model Management -->
-        <div class="flex items-center justify-between p-4 bg-base-200 rounded-lg">
-          <div>
-            <h4 class="font-medium">Speech-to-Text (Faster Whisper)</h4>
-            <p class="text-sm text-gray-400">Local speech recognition using faster-whisper</p>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="badge" :class="modelStatus.stt.installed ? 'badge-success' : 'badge-error'">
-                {{ modelStatus.stt.installed ? 'Installed' : 'Not Installed' }}
-              </span>
-              <span v-if="modelStatus.stt.downloading" class="loading loading-spinner loading-sm"></span>
-              <span v-if="modelStatus.stt.downloading" class="text-sm text-yellow-400">Downloading...</span>
-            </div>
-          </div>
-          <button
-            @click="downloadModel('stt')"
-            :disabled="backendOffline || modelStatus.stt.installed || modelStatus.stt.downloading"
-            class="btn btn-primary btn-sm"
-          >
-            <span v-if="modelStatus.stt.downloading" class="loading loading-spinner loading-sm"></span>
-            <span v-else-if="modelStatus.stt.installed">✓ Installed</span>
-            <span v-else>Download</span>
-          </button>
-        </div>
-
-        <!-- TTS Model Management -->
-        <div class="flex items-center justify-between p-4 bg-base-200 rounded-lg">
-          <div>
-            <h4 class="font-medium">Text-to-Speech (Kokoro)</h4>
-            <p class="text-sm text-gray-400">Local speech synthesis using Kokoro TTS</p>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="badge" :class="modelStatus.tts.installed ? 'badge-success' : 'badge-error'">
-                {{ modelStatus.tts.installed ? 'Installed' : 'Not Installed' }}
-              </span>
-              <span v-if="modelStatus.tts.downloading" class="loading loading-spinner loading-sm"></span>
-              <span v-if="modelStatus.tts.downloading" class="text-sm text-yellow-400">Downloading...</span>
-            </div>
-          </div>
-          <button
-            @click="downloadModel('tts')"
-            :disabled="backendOffline || modelStatus.tts.installed || modelStatus.tts.downloading"
-            class="btn btn-primary btn-sm"
-          >
-            <span v-if="modelStatus.tts.downloading" class="loading loading-spinner loading-sm"></span>
-            <span v-else-if="modelStatus.tts.installed">✓ Installed</span>
-            <span v-else>Download</span>
-          </button>
-        </div>
-
-        <!-- Embeddings Model Management -->
-        <div class="flex items-center justify-between p-4 bg-base-200 rounded-lg">
-          <div>
-            <h4 class="font-medium">Embeddings (Sentence Transformers)</h4>
-            <p class="text-sm text-gray-400">Local text embeddings using Qwen3</p>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="badge" :class="modelStatus.embeddings.installed ? 'badge-success' : 'badge-error'">
-                {{ modelStatus.embeddings.installed ? 'Installed' : 'Not Installed' }}
-              </span>
-              <span v-if="modelStatus.embeddings.downloading" class="loading loading-spinner loading-sm"></span>
-              <span v-if="modelStatus.embeddings.downloading" class="text-sm text-yellow-400">Downloading...</span>
-            </div>
-          </div>
-          <button
-            @click="downloadModel('embeddings')"
-            :disabled="backendOffline || modelStatus.embeddings.installed || modelStatus.embeddings.downloading"
-            class="btn btn-primary btn-sm"
-          >
-            <span v-if="modelStatus.embeddings.downloading" class="loading loading-spinner loading-sm"></span>
-            <span v-else-if="modelStatus.embeddings.installed">✓ Installed</span>
-            <span v-else>Download</span>
-          </button>
-        </div>
-
-        <div class="text-xs text-gray-400 mt-4">
-          <p>Note: Model downloads require an active internet connection and may take several minutes. The application will remain functional during downloads.</p>
-        </div>
-      </div>
-    </fieldset>
 
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import type { AliceSettings } from '../../stores/settingsStore'
-import { pythonApi, type ModelDownloadStatus } from '../../services/pythonApi'
+import { backendApi, type Voice } from '../../services/backendApi'
+
+// Type for service status
+interface ServiceStatus {
+  status: 'ready' | 'downloading' | 'error' | 'offline'
+}
 
 const props = defineProps<{
   currentSettings: AliceSettings
@@ -378,65 +352,125 @@ const emit = defineEmits<{
 }>()
 
 
-const modelStatus = ref<ModelDownloadStatus>({
-  stt: { installed: false, downloading: false },
-  tts: { installed: false, downloading: false },
-  embeddings: { installed: false, downloading: false }
+const serviceStatus = ref<{
+  stt: ServiceStatus
+  tts: ServiceStatus
+  embeddings: ServiceStatus
+}>({
+  stt: { status: 'offline' },
+  tts: { status: 'offline' },
+  embeddings: { status: 'offline' }
 })
 
-const backendOffline = ref(false)
-
-const showLocalModelsSection = computed(() => {
-  return props.currentSettings.sttProvider === 'transformers' ||
-         props.currentSettings.ttsProvider === 'local' ||
-         props.currentSettings.embeddingProvider === 'local'
-})
+const availableVoices = ref<Voice[]>([])
+const isRefreshingVoices = ref(false)
 
 let statusInterval: NodeJS.Timeout | null = null
 
-const updateModelStatus = async () => {
+const updateServiceStatus = async () => {
   try {
-    const status = await pythonApi.getModelDownloadStatus()
-    modelStatus.value = status
-    backendOffline.value = false
+    await backendApi.initialize()
+    
+    // Check each service status
+    const [sttReady, ttsReady, embeddingsReady] = await Promise.all([
+      backendApi.isSTTReady().catch(() => false),
+      backendApi.isTTSReady().catch(() => false),
+      backendApi.isEmbeddingsReady().catch(() => false)
+    ])
+    
+    serviceStatus.value = {
+      stt: { status: sttReady ? 'ready' : 'error' },
+      tts: { status: ttsReady ? 'ready' : 'error' },
+      embeddings: { status: embeddingsReady ? 'ready' : 'error' }
+    }
   } catch (error) {
-    console.warn('Failed to get model download status:', error)
-    backendOffline.value = true
-    modelStatus.value = {
-      stt: { installed: false, downloading: false },
-      tts: { installed: false, downloading: false },
-      embeddings: { installed: false, downloading: false }
+    console.warn('Failed to get service status:', error)
+    serviceStatus.value = {
+      stt: { status: 'offline' },
+      tts: { status: 'offline' },
+      embeddings: { status: 'offline' }
     }
   }
 }
 
-const downloadModel = async (service: 'stt' | 'tts' | 'embeddings') => {
-  try {
-    console.log(`Starting download for ${service} model...`)
+const getServiceStatusClass = (service: 'stt' | 'tts' | 'embeddings') => {
+  const status = serviceStatus.value[service].status
+  switch (status) {
+    case 'ready':
+      return 'bg-green-500'
+    case 'downloading':
+      return 'bg-yellow-500'
+    case 'error':
+      return 'bg-red-500'
+    case 'offline':
+    default:
+      return 'bg-gray-500'
+  }
+}
 
-    modelStatus.value[service].downloading = true
-    
-    const result = await pythonApi.downloadModel(service)
-    
-    if (result.success) {
-      console.log(`${service} model downloaded successfully`)
-      await updateModelStatus()
-    } else {
-      console.error(`Failed to download ${service} model:`, result.error || result.message)
-      alert(`Failed to download ${service} model: ${result.error || 'Unknown error'}`)
-    }
+const getServiceStatusText = (service: 'stt' | 'tts' | 'embeddings') => {
+  const status = serviceStatus.value[service].status
+  const serviceNames = {
+    stt: 'Speech-to-Text',
+    tts: 'Text-to-Speech', 
+    embeddings: 'Embeddings'
+  }
+  
+  switch (status) {
+    case 'ready':
+      return `${serviceNames[service]} service is ready`
+    case 'downloading':
+      return `${serviceNames[service]} model is downloading`
+    case 'error':
+      return `${serviceNames[service]} service has errors`
+    case 'offline':
+    default:
+      return `${serviceNames[service]} service is offline`
+  }
+}
+
+const refreshVoices = async () => {
+  if (isRefreshingVoices.value) return
+  
+  isRefreshingVoices.value = true
+  try {
+    await backendApi.initialize()
+    const voices = await backendApi.getAvailableVoices()
+    availableVoices.value = voices
+    console.log('Available voices loaded:', voices)
   } catch (error) {
-    console.error(`Error downloading ${service} model:`, error)
-    alert(`Error downloading ${service} model. Please check your internet connection.`)
+    console.warn('Failed to load voices:', error)
+    availableVoices.value = []
   } finally {
-    modelStatus.value[service].downloading = false
-    await updateModelStatus()
+    isRefreshingVoices.value = false
   }
 }
 
-onMounted(() => {
-  updateModelStatus()
-  statusInterval = setInterval(updateModelStatus, 5000)
+const onVoiceChange = async () => {
+  try {
+    await backendApi.initialize()
+    await backendApi.setDefaultVoice(props.currentSettings.localTtsVoice)
+    console.log('Default voice updated:', props.currentSettings.localTtsVoice)
+  } catch (error) {
+    console.warn('Failed to update default voice:', error)
+  }
+}
+
+onMounted(async () => {
+  updateServiceStatus()
+  statusInterval = setInterval(updateServiceStatus, 10000) // Check every 10 seconds
+  
+  // Load voices if local TTS is selected
+  if (props.currentSettings.ttsProvider === 'local') {
+    await refreshVoices()
+  }
+})
+
+// Watch for TTS provider changes to load voices
+watch(() => props.currentSettings.ttsProvider, async (newProvider) => {
+  if (newProvider === 'local') {
+    await refreshVoices()
+  }
 })
 
 onUnmounted(() => {

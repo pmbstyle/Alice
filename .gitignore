@@ -39,3 +39,7 @@ CLAUDE.md
 /resources/python/_internal
 resources/python/alice-ai-backend.exe
 /python/__pycache__
+/resources
+/backend/bin
+/bin
+/models

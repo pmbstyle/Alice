@@ -7,7 +7,7 @@ import Database from 'better-sqlite3'
 import { randomUUID } from 'node:crypto'
 
 const OPENAI_VECTOR_DIMENSION = 1536  // OpenAI embedding dimension
-const LOCAL_VECTOR_DIMENSION = 1024   // Qwen3 embedding dimension
+const LOCAL_VECTOR_DIMENSION = 384   // all-MiniLM-L6-v2 embedding dimension (Go backend)
 const MAX_ELEMENTS_HNSW = 10000
 const HNSW_OPENAI_INDEX_FILE_NAME = 'alice-thoughts-hnsw-openai.index'
 const HNSW_LOCAL_INDEX_FILE_NAME = 'alice-thoughts-hnsw-local.index'

@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import Groq from 'groq-sdk'
 import { useSettingsStore } from '../stores/settingsStore'
+import { backendApi } from './backendApi'
 
 let openaiClient: OpenAI | null = null
 let openrouterClient: OpenAI | null = null
@@ -183,7 +184,15 @@ export function reinitializeClients(): void {
   }
 }
 
-export function initializeClients(): void {
+export async function initializeClients(): Promise<void> {
   console.log('Initializing API clients...')
   reinitializeClients()
+  
+  // Initialize backend API and wait for it
+  try {
+    await backendApi.initialize()
+    console.log('Backend API initialized successfully')
+  } catch (error) {
+    console.error('Failed to initialize Backend API:', error)
+  }
 }

@@ -786,7 +786,7 @@ export const useConversationStore = defineStore('conversation', () => {
         const enableFallback =
           settingsStore.config.transformersEnableFallback &&
           !!settingsStore.config.VITE_OPENAI_API_KEY
-        return await api.transcribeWithPython(audioArrayBuffer, enableFallback)
+        return await api.transcribeWithBackend(audioArrayBuffer, enableFallback)
       } else {
         throw new Error(`Unknown STT provider: ${sttProvider}`)
       }

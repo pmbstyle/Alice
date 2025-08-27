@@ -37,27 +37,11 @@ jobs:
           node-version: 18
           cache: 'npm'
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
           cache-dependency-path: backend/go.sum
-
-      - name: Cache Python dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-            python/.venv
-          key: ${{ runner.os }}-python-${{ hashFiles('python/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-python-
 
       - name: Cache Go modules  
         uses: actions/cache@v4

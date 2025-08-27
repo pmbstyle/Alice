@@ -78,6 +78,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-go-
 
+      - name: Verify Go installation
+        run: |
+          which go
+          go version
+          
+      - name: Install Go Dependencies
+        working-directory: backend
+        run: go mod download
+
       - name: Install Dependencies
         run: npm install
         env:

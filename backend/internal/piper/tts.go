@@ -663,8 +663,8 @@ func (s *TTSService) downloadPiperBinary() error {
 	log.Printf("Downloading Piper binary from: %s", downloadURL)
 	archivePath := filepath.Join("bin", fileName)
 	
-	// Download the archive
-	if err := s.downloadFile(downloadURL, archivePath); err != nil {
+	// Download the archive with retry mechanism
+	if err := s.downloadFileWithRetry(downloadURL, archivePath, 3); err != nil {
 		return fmt.Errorf("failed to download archive: %w", err)
 	}
 
@@ -691,9 +691,11 @@ func (s *TTSService) downloadFile(url, filepath string) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	
-	// Add headers to appear as regular browser
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
-	req.Header.Set("Accept", "*/*")
+	// Add headers optimized for file downloads
+	req.Header.Set("User-Agent", "AliceElectron/1.0 (compatible; file downloader)")
+	req.Header.Set("Accept", "application/octet-stream, */*")
+	req.Header.Set("Accept-Encoding", "identity") // Disable compression for binary files
+	req.Header.Set("Connection", "keep-alive")
 	
 	resp, err := client.Do(req)
 	if err != nil {
@@ -701,8 +703,20 @@ func (s *TTSService) downloadFile(url, filepath string) error {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
+	// Handle response codes with better error reporting
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Success - continue with download
+	case http.StatusNotFound:
+		return fmt.Errorf("file not found (status: 404) - Piper release may have been moved")
+	case http.StatusTooManyRequests:
+		return fmt.Errorf("rate limited (status: 429) - GitHub is limiting downloads")
+	case http.StatusServiceUnavailable:
+		return fmt.Errorf("service unavailable (status: 503) - GitHub servers temporarily down")
+	default:
+		if resp.StatusCode >= 400 {
+			return fmt.Errorf("download failed (status: %d) - %s", resp.StatusCode, resp.Status)
+		}
 	}
 
 	out, err := os.Create(filepath)
@@ -718,6 +732,49 @@ func (s *TTSService) downloadFile(url, filepath string) error {
 
 	log.Printf("Downloaded file: %s (%d bytes)", filepath, resp.ContentLength)
 	return nil
+}
+
+// downloadFileWithRetry downloads a file with retry logic for robustness
+func (s *TTSService) downloadFileWithRetry(url, filepath string, maxRetries int) error {
+	var lastErr error
+	
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if attempt > 1 {
+			// Exponential backoff: wait 2, 4, 8 seconds between retries
+			waitTime := time.Duration(1<<uint(attempt-2)) * 2 * time.Second
+			log.Printf("Retrying download in %v (attempt %d/%d)", waitTime, attempt, maxRetries)
+			time.Sleep(waitTime)
+		}
+		
+		log.Printf("Download attempt %d/%d from: %s", attempt, maxRetries, url)
+		
+		if err := s.downloadFile(url, filepath); err != nil {
+			lastErr = err
+			log.Printf("Attempt %d failed: %v", attempt, err)
+			
+			// Clean up partial file on failure
+			if _, statErr := os.Stat(filepath); statErr == nil {
+				os.Remove(filepath)
+			}
+			
+			continue
+		}
+		
+		// Verify file was downloaded correctly
+		if info, err := os.Stat(filepath); err != nil {
+			lastErr = fmt.Errorf("downloaded file verification failed: %w", err)
+			continue
+		} else if info.Size() < 1000 { // Less than 1KB probably indicates error page
+			lastErr = fmt.Errorf("downloaded file too small (%d bytes), likely an error page", info.Size())
+			os.Remove(filepath)
+			continue
+		}
+		
+		log.Printf("Download successful on attempt %d", attempt)
+		return nil
+	}
+	
+	return fmt.Errorf("download failed after %d attempts: %w", maxRetries, lastErr)
 }
 
 // extractPiperBinary extracts the Piper binary from the downloaded archive
@@ -960,15 +1017,15 @@ func (s *TTSService) downloadVoiceModel(voiceName, modelDir string) error {
 	onnxFile := filepath.Join(modelDir, voiceName+".onnx")
 	jsonFile := filepath.Join(modelDir, voiceName+".onnx.json")
 	
-	// Download .onnx file
+	// Download .onnx file with retry
 	log.Printf("Downloading voice model: %s", onnxURL)
-	if err := s.downloadFile(onnxURL, onnxFile); err != nil {
+	if err := s.downloadFileWithRetry(onnxURL, onnxFile, 3); err != nil {
 		return fmt.Errorf("failed to download .onnx file: %w", err)
 	}
 	
-	// Download .onnx.json file
+	// Download .onnx.json file with retry
 	log.Printf("Downloading voice config: %s", jsonURL)
-	if err := s.downloadFile(jsonURL, jsonFile); err != nil {
+	if err := s.downloadFileWithRetry(jsonURL, jsonFile, 3); err != nil {
 		return fmt.Errorf("failed to download .onnx.json file: %w", err)
 	}
 	

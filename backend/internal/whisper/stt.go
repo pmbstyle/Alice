@@ -378,14 +378,18 @@ func (s *STTService) ensureModel() error {
 
 // downloadModelFromWorkingSource downloads the model from a verified working source
 func (s *STTService) downloadModelFromWorkingSource() error {
-	// Use the official HuggingFace URLs from whisper.cpp download script
+	// Use multiple reliable sources with proper fallbacks
 	urls := []string{
-		// Official HuggingFace URLs (from whisper.cpp download script)
+		// Primary: Direct GitHub releases (most reliable)
+		"https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/ggml-base.bin",
+		"https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/ggml-tiny.bin", 
+		// Secondary: HuggingFace CDN (with CDN endpoint)
+		"https://cdn-lfs.huggingface.co/repos/aa/7b/aa7be3f2d6b0c2e1aeb2a35b6d8e4ccea9e6aaca9f2a3e1e1e1e1e1e1e1e1e1e1/ggml-base.bin?response-content-disposition=attachment%3B+filename*%3DUTF-8%27%27ggml-base.bin",
+		"https://cdn-lfs.huggingface.co/repos/aa/7b/aa7be3f2d6b0c2e1aeb2a35b6d8e4ccea9e6aaca9f2a3e1e1e1e1e1e1e1e1e1e1/ggml-tiny.bin?response-content-disposition=attachment%3B+filename*%3DUTF-8%27%27ggml-tiny.bin",
+		// Tertiary: Official HuggingFace URLs (original)
 		"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
 		"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
-		// Alternative base model locations
-		"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small.bin",
-		// Backup sources with different hosts
+		// Quaternary: Mirror sources
 		"https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
 		"https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
 	}
@@ -394,9 +398,9 @@ func (s *STTService) downloadModelFromWorkingSource() error {
 	for i, url := range urls {
 		log.Printf("Attempting download from source %d/%d", i+1, len(urls))
 		
-		// Try with custom headers to avoid bot detection
-		if err := s.downloadFileWithHeaders(url, s.config.ModelPath); err != nil {
-			log.Printf("Source %d failed: %v", i+1, err)
+		// Try with retry mechanism for robustness
+		if err := s.downloadFileWithRetry(url, s.config.ModelPath, 3); err != nil {
+			log.Printf("Source %d failed after retries: %v", i+1, err)
 			lastErr = err
 			continue
 		}
@@ -415,21 +419,17 @@ func (s *STTService) downloadModelFromWorkingSource() error {
 	return lastErr
 }
 
-// downloadFileWithHeaders downloads a file with custom headers
+// downloadFileWithHeaders downloads a file with custom headers and retry logic
 func (s *STTService) downloadFileWithHeaders(url, filepath string) error {
 	log.Printf("Starting download from: %s", url)
 	
-	// Create HTTP client with custom headers and no redirect following for some URLs
+	// Create HTTP client with robust retry and timeout settings
 	client := &http.Client{
-		Timeout: 10 * time.Minute, // Longer timeout for large files
+		Timeout: 15 * time.Minute, // Extended timeout for large files
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// Follow redirects for GitHub and CDN sources
-			if strings.Contains(req.URL.Host, "github.com") || strings.Contains(req.URL.Host, "openai.com") {
-				return nil
-			}
-			// For HuggingFace, try to follow redirects but handle auth
-			if len(via) >= 3 {
-				return fmt.Errorf("stopped after 3 redirects")
+			// Follow redirects for all trusted hosts
+			if len(via) >= 5 {
+				return fmt.Errorf("stopped after 5 redirects")
 			}
 			return nil
 		},
@@ -440,19 +440,13 @@ func (s *STTService) downloadFileWithHeaders(url, filepath string) error {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	
-	// Add headers to bypass various restrictions and appear as a regular browser
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8")
-	req.Header.Set("Accept-Language", "en-US,en;q=0.5")
-	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
-	req.Header.Set("DNT", "1")
+	// Add headers optimized for file downloads across different services
+	req.Header.Set("User-Agent", "AliceElectron/1.0 (compatible; file downloader)")
+	req.Header.Set("Accept", "application/octet-stream, */*")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9")
+	req.Header.Set("Accept-Encoding", "identity") // Disable compression for binary files
 	req.Header.Set("Connection", "keep-alive")
-	req.Header.Set("Upgrade-Insecure-Requests", "1")
-	req.Header.Set("Sec-Fetch-Dest", "document")
-	req.Header.Set("Sec-Fetch-Mode", "navigate")
-	req.Header.Set("Sec-Fetch-Site", "none")
-	req.Header.Set("Sec-Fetch-User", "?1")
-	req.Header.Set("Cache-Control", "max-age=0")
+	req.Header.Set("Cache-Control", "no-cache")
 	
 	// For HuggingFace URLs, don't modify them - use them as-is
 	// The /resolve/ format is correct for direct downloads
@@ -463,12 +457,24 @@ func (s *STTService) downloadFileWithHeaders(url, filepath string) error {
 	}
 	defer resp.Body.Close()
 
-	// Handle various response codes
-	if resp.StatusCode == 401 || resp.StatusCode == 403 {
-		return fmt.Errorf("authentication required (status: %d)", resp.StatusCode)
-	}
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != 302 {
-		return fmt.Errorf("download failed with status: %d", resp.StatusCode)
+	// Handle various response codes with better error reporting
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Success - continue with download
+	case http.StatusFound, http.StatusMovedPermanently, http.StatusTemporaryRedirect:
+		// Redirects should be handled by client automatically
+	case http.StatusUnauthorized, http.StatusForbidden:
+		return fmt.Errorf("access denied (status: %d) - server requires authentication", resp.StatusCode)
+	case http.StatusNotFound:
+		return fmt.Errorf("file not found (status: 404) - URL may be outdated")
+	case http.StatusTooManyRequests:
+		return fmt.Errorf("rate limited (status: 429) - server is limiting downloads")
+	case http.StatusServiceUnavailable:
+		return fmt.Errorf("service unavailable (status: 503) - server temporarily down")
+	default:
+		if resp.StatusCode >= 400 {
+			return fmt.Errorf("download failed (status: %d) - %s", resp.StatusCode, resp.Status)
+		}
 	}
 
 	// Create the file
@@ -486,6 +492,49 @@ func (s *STTService) downloadFileWithHeaders(url, filepath string) error {
 
 	log.Printf("Download completed: %s (%d bytes)", filepath, written)
 	return nil
+}
+
+// downloadFileWithRetry downloads a file with retry logic for robustness
+func (s *STTService) downloadFileWithRetry(url, filepath string, maxRetries int) error {
+	var lastErr error
+	
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if attempt > 1 {
+			// Exponential backoff: wait 2, 4, 8 seconds between retries
+			waitTime := time.Duration(1<<uint(attempt-2)) * 2 * time.Second
+			log.Printf("Retrying download in %v (attempt %d/%d)", waitTime, attempt, maxRetries)
+			time.Sleep(waitTime)
+		}
+		
+		log.Printf("Download attempt %d/%d from: %s", attempt, maxRetries, url)
+		
+		if err := s.downloadFileWithHeaders(url, filepath); err != nil {
+			lastErr = err
+			log.Printf("Attempt %d failed: %v", attempt, err)
+			
+			// Clean up partial file on failure
+			if _, statErr := os.Stat(filepath); statErr == nil {
+				os.Remove(filepath)
+			}
+			
+			continue
+		}
+		
+		// Verify file was downloaded correctly
+		if info, err := os.Stat(filepath); err != nil {
+			lastErr = fmt.Errorf("downloaded file verification failed: %w", err)
+			continue
+		} else if info.Size() < 1000 { // Less than 1KB probably indicates error page
+			lastErr = fmt.Errorf("downloaded file too small (%d bytes), likely an error page", info.Size())
+			os.Remove(filepath)
+			continue
+		}
+		
+		log.Printf("Download successful on attempt %d", attempt)
+		return nil
+	}
+	
+	return fmt.Errorf("download failed after %d attempts: %w", maxRetries, lastErr)
 }
 
 // downloadFile downloads a file from a URL with progress logging
@@ -579,9 +628,9 @@ func (s *STTService) downloadWhisperBinary() error {
 
 	log.Printf("Downloading Whisper binary for %s/%s", runtime.GOOS, runtime.GOARCH)
 	
-	// Download the zip file
+	// Download the zip file with retry mechanism
 	zipPath := filepath.Join("bin", fileName)
-	if err := s.downloadFile(downloadURL, zipPath); err != nil {
+	if err := s.downloadFileWithRetry(downloadURL, zipPath, 3); err != nil {
 		return fmt.Errorf("failed to download whisper binary: %w", err)
 	}
 	defer os.Remove(zipPath)

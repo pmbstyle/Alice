@@ -37,6 +37,18 @@ jobs:
           node-version: 18
           cache: 'npm'
 
+      - name: Set up Python (for native modules)
+        uses: actions/setup-python@v5
+        id: setup_python
+        with:
+          python-version: '3.11'
+
+      - name: Install Python build tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          # Ensure distutils is available for node-gyp
+          python -c "import distutils; print('distutils available')"
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
@@ -64,6 +76,9 @@ jobs:
 
       - name: Install Node Dependencies
         run: npm install
+        env:
+          PYTHON: ${{ steps.setup_python.outputs.python-path }}
+          npm_config_python: ${{ steps.setup_python.outputs.python-path }}
 
       - name: Get app version from package.json
         id: get_version

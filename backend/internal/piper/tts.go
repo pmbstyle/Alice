@@ -630,51 +630,91 @@ func (s *TTSService) synthesizeWithPiper(ctx context.Context, text, voice string
 
 // downloadPiperBinary downloads the appropriate Piper binary for the current platform
 func (s *TTSService) downloadPiperBinary() error {
-	var downloadURL, fileName string
+	var downloadURLs []string
+	var fileName string
 	
-	// Determine platform and download URL
+	// Determine platform and download URLs with GitHub repo as primary source
 	switch runtime.GOOS {
 	case "windows":
-		downloadURL = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip"
+		downloadURLs = []string{
+			"https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip",
+		}
 		fileName = "piper_windows_amd64.zip"
 	case "darwin":
 		if runtime.GOARCH == "arm64" {
-			downloadURL = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_aarch64.tar.gz"
-			fileName = "piper_macos_aarch64.tar.gz"
+			downloadURLs = []string{
+				"https://raw.githubusercontent.com/pmbstyle/Alice/main/assets/binaries/piper-macos-arm64",
+				"https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_aarch64.tar.gz",
+			}
+			fileName = "piper-macos-arm64"
 		} else {
-			downloadURL = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz"
+			downloadURLs = []string{
+				"https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz",
+			}
 			fileName = "piper_macos_x64.tar.gz"
 		}
 	case "linux":
 		if runtime.GOARCH == "arm64" {
-			downloadURL = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz"
+			downloadURLs = []string{
+				"https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz",
+			}
 			fileName = "piper_linux_aarch64.tar.gz"
 		} else if runtime.GOARCH == "arm" {
-			downloadURL = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_armv7l.tar.gz"
+			downloadURLs = []string{
+				"https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_armv7l.tar.gz",
+			}
 			fileName = "piper_linux_armv7l.tar.gz"
 		} else {
-			downloadURL = "https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz"
+			downloadURLs = []string{
+				"https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz",
+			}
 			fileName = "piper_linux_x86_64.tar.gz"
 		}
 	default:
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
 
-	log.Printf("Downloading Piper binary from: %s", downloadURL)
-	archivePath := filepath.Join("bin", fileName)
+	log.Printf("Downloading Piper binary for %s/%s", runtime.GOOS, runtime.GOARCH)
+	downloadPath := filepath.Join("bin", fileName)
+	var lastErr error
 	
-	// Download the archive with retry mechanism
-	if err := s.downloadFileWithRetry(downloadURL, archivePath, 3); err != nil {
-		return fmt.Errorf("failed to download archive: %w", err)
+	// Try downloading from multiple URLs
+	for i, downloadURL := range downloadURLs {
+		log.Printf("Attempting Piper download from source %d/%d: %s", i+1, len(downloadURLs), downloadURL)
+		
+		if err := s.downloadFileWithRetry(downloadURL, downloadPath, 2); err != nil {
+			lastErr = err
+			log.Printf("Piper download source %d failed: %v", i+1, err)
+			continue
+		}
+		
+		log.Printf("Piper download successful from source %d", i+1)
+		break
+	}
+	
+	// Check if any download succeeded
+	if _, err := os.Stat(downloadPath); err != nil {
+		return fmt.Errorf("failed to download Piper binary from any source: %w", lastErr)
 	}
 
-	// Extract the binary
-	if err := s.extractPiperBinary(archivePath); err != nil {
-		return fmt.Errorf("failed to extract binary: %w", err)
+	// Handle different file types
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && fileName == "piper-macos-arm64" {
+		// Direct binary file - just make executable and rename
+		targetPath := filepath.Join("bin", "piper")
+		if err := os.Rename(downloadPath, targetPath); err != nil {
+			return fmt.Errorf("failed to move binary: %w", err)
+		}
+		if err := os.Chmod(targetPath, 0755); err != nil {
+			return fmt.Errorf("failed to make binary executable: %w", err)
+		}
+		log.Printf("Direct Piper binary installed: %s", targetPath)
+	} else {
+		// Archive file - extract as before
+		defer os.Remove(downloadPath)
+		if err := s.extractPiperBinary(downloadPath); err != nil {
+			return fmt.Errorf("failed to extract binary: %w", err)
+		}
 	}
-
-	// Cleanup archive
-	os.Remove(archivePath)
 	
 	log.Printf("Piper binary installed successfully")
 	return nil

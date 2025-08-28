@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# Whisper.cpp compatibility wrapper for macOS ARM64
+# Uses Python OpenAI Whisper as backend for reliable transcription
+# Compatible with whisper.cpp command-line interface
+
+set -euo pipefail
+
+# Configuration
+PYTHON_BIN_PATH="/usr/bin/python3"
+FALLBACK_PYTHON_PATHS=(
+    "/Users/$(whoami)/Library/Python/3.9/bin"
+    "/usr/local/bin"
+    "/opt/homebrew/bin"
+)
+
+# Function to find Python and whisper
+find_whisper() {
+    # Try system python first
+    if command -v whisper >/dev/null 2>&1; then
+        echo "whisper"
+        return 0
+    fi
+    
+    # Try user-specific Python paths
+    for path in "${FALLBACK_PYTHON_PATHS[@]}"; do
+        if [ -x "$path/whisper" ]; then
+            echo "$path/whisper"
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
+# Function to install whisper if needed
+install_whisper() {
+    echo "Whisper not found. Installing..." >&2
+    $PYTHON_BIN_PATH -m pip install --user openai-whisper >/dev/null 2>&1
+}
+
+# Parse arguments
+MODEL_PATH=""
+INPUT_FILE=""
+OUTPUT_PREFIX=""
+LANGUAGE=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -m)
+            MODEL_PATH="$2"
+            shift 2
+            ;;
+        -f)
+            INPUT_FILE="$2"
+            shift 2
+            ;;
+        -of)
+            OUTPUT_PREFIX="$2"
+            shift 2
+            ;;
+        -otxt)
+            shift
+            ;;
+        -l)
+            LANGUAGE="$2"
+            shift 2
+            ;;
+        *)
+            shift
+            ;;
+    esac
+done
+
+# Validate required arguments
+if [ -z "$INPUT_FILE" ] || [ -z "$OUTPUT_PREFIX" ]; then
+    echo "Error: Missing required arguments (-f input_file -of output_prefix)" >&2
+    exit 1
+fi
+
+# Find or install whisper
+WHISPER_CMD=$(find_whisper) || {
+    install_whisper
+    WHISPER_CMD=$(find_whisper) || {
+        echo "Error: Failed to install or find whisper" >&2
+        exit 1
+    }
+}
+
+# Determine model size
+if [[ "$MODEL_PATH" == *"base"* ]]; then
+    MODEL_NAME="base"
+elif [[ "$MODEL_PATH" == *"tiny"* ]]; then
+    MODEL_NAME="tiny"
+elif [[ "$MODEL_PATH" == *"small"* ]]; then
+    MODEL_NAME="small"
+elif [[ "$MODEL_PATH" == *"medium"* ]]; then
+    MODEL_NAME="medium"
+elif [[ "$MODEL_PATH" == *"large"* ]]; then
+    MODEL_NAME="large"
+else
+    MODEL_NAME="base"
+fi
+
+# Build command arguments
+ARGS=("--model" "$MODEL_NAME" "--output_format" "txt" "--output_dir" "$(dirname "$OUTPUT_PREFIX")")
+
+if [ -n "$LANGUAGE" ] && [ "$LANGUAGE" != "auto" ]; then
+    ARGS+=("--language" "$LANGUAGE")
+fi
+
+# Execute transcription
+$WHISPER_CMD "${ARGS[@]}" "$INPUT_FILE" >/dev/null 2>&1
+
+# Handle output file naming
+INPUT_BASENAME=$(basename "$INPUT_FILE" | sed 's/\.[^.]*$//')
+OUTPUT_FILE="$(dirname "$OUTPUT_PREFIX")/${INPUT_BASENAME}.txt"
+EXPECTED_FILE="${OUTPUT_PREFIX}.txt"
+
+if [ -f "$OUTPUT_FILE" ] && [ "$OUTPUT_FILE" != "$EXPECTED_FILE" ]; then
+    mv "$OUTPUT_FILE" "$EXPECTED_FILE"
+fi
+
+exit 0

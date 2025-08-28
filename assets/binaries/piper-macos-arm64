@@ -1,0 +1,129 @@
+#!/bin/bash
+
+# Piper TTS wrapper for macOS ARM64
+# Uses Python piper-tts as backend for reliable text-to-speech
+# Compatible with native Piper command-line interface
+
+set -euo pipefail
+
+# Configuration
+PYTHON_BIN_PATH="/usr/bin/python3"
+FALLBACK_PYTHON_PATHS=(
+    "/Users/$(whoami)/Library/Python/3.9/bin"
+    "/usr/local/bin"
+    "/opt/homebrew/bin"
+)
+
+# Function to find Python Piper
+find_piper() {
+    # Try system path first
+    if command -v piper >/dev/null 2>&1; then
+        echo "piper"
+        return 0
+    fi
+    
+    # Try user-specific Python paths
+    for path in "${FALLBACK_PYTHON_PATHS[@]}"; do
+        if [ -x "$path/piper" ]; then
+            echo "$path/piper"
+            return 0
+        fi
+    done
+    
+    return 1
+}
+
+# Function to install piper if needed
+install_piper() {
+    echo "Piper TTS not found. Installing..." >&2
+    $PYTHON_BIN_PATH -m pip install --user piper-tts >/dev/null 2>&1
+}
+
+# Parse arguments - Piper uses different argument format than whisper
+MODEL_PATH=""
+OUTPUT_FILE=""
+TEXT=""
+SPEAKER=""
+
+# Read from stdin or arguments
+if [ ! -t 0 ]; then
+    # Reading from stdin
+    TEXT=$(cat)
+fi
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -m|--model)
+            MODEL_PATH="$2"
+            shift 2
+            ;;
+        -f|--output-file|--output_file)
+            OUTPUT_FILE="$2"
+            shift 2
+            ;;
+        -s|--speaker)
+            SPEAKER="$2"
+            shift 2
+            ;;
+        --length_scale)
+            # Skip length scale for now - Python Piper handles this differently
+            shift 2
+            ;;
+        --*)
+            # Skip other options
+            shift 2 2>/dev/null || shift
+            ;;
+        *)
+            # If it's not an option, might be text
+            if [ -z "$TEXT" ]; then
+                TEXT="$1"
+            fi
+            shift
+            ;;
+    esac
+done
+
+# Read from arguments if no stdin
+if [ -z "$TEXT" ] && [ $# -eq 0 ]; then
+    # Try to read from last non-option argument
+    TEXT="$@"
+fi
+
+# Validate required arguments
+if [ -z "$MODEL_PATH" ]; then
+    echo "Error: Model path (-m) is required" >&2
+    exit 1
+fi
+
+if [ -z "$OUTPUT_FILE" ]; then
+    echo "Error: Output file (-f) is required" >&2
+    exit 1
+fi
+
+if [ -z "$TEXT" ]; then
+    echo "Error: No text provided (stdin or argument)" >&2
+    exit 1
+fi
+
+# Find or install piper
+PIPER_CMD=$(find_piper) || {
+    install_piper
+    PIPER_CMD=$(find_piper) || {
+        echo "Error: Failed to install or find piper" >&2
+        exit 1
+    }
+}
+
+# Build Python Piper command
+ARGS=("--model" "$MODEL_PATH" "--output-file" "$OUTPUT_FILE")
+
+# Add speaker if specified
+if [ -n "$SPEAKER" ]; then
+    ARGS+=("--speaker" "$SPEAKER")
+fi
+
+# Execute TTS
+echo "$TEXT" | $PIPER_CMD "${ARGS[@]}"
+
+exit 0

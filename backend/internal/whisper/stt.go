@@ -614,10 +614,10 @@ func (s *STTService) downloadWhisperBinary() error {
 	case "darwin":
 		if runtime.GOARCH == "arm64" {
 			downloadURLs = []string{
-				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-arm64.zip",
-				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.1/whisper-bin-arm64.zip", // fallback
+				"https://raw.githubusercontent.com/pmbstyle/Alice/main/assets/binaries/whisper-macos-arm64",
+				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-arm64.zip", // fallback
 			}
-			fileName = "whisper-bin-arm64.zip"
+			fileName = "whisper-macos-arm64"
 		} else {
 			downloadURLs = []string{
 				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip",
@@ -638,13 +638,13 @@ func (s *STTService) downloadWhisperBinary() error {
 	log.Printf("Downloading Whisper binary for %s/%s", runtime.GOOS, runtime.GOARCH)
 
 	// Try downloading from multiple URLs with retry mechanism
-	zipPath := filepath.Join("bin", fileName)
+	downloadPath := filepath.Join("bin", fileName)
 	var lastErr error
 
 	for i, downloadURL := range downloadURLs {
 		log.Printf("Attempting binary download from source %d/%d: %s", i+1, len(downloadURLs), downloadURL)
 
-		if err := s.downloadFileWithRetry(downloadURL, zipPath, 2); err != nil {
+		if err := s.downloadFileWithRetry(downloadURL, downloadPath, 2); err != nil {
 			lastErr = err
 			log.Printf("Binary download source %d failed: %v", i+1, err)
 			continue
@@ -656,15 +656,27 @@ func (s *STTService) downloadWhisperBinary() error {
 	}
 
 	// Check if any download succeeded
-	if _, err := os.Stat(zipPath); err != nil {
+	if _, err := os.Stat(downloadPath); err != nil {
 		return fmt.Errorf("failed to download whisper binary from any source: %w", lastErr)
 	}
 
-	defer os.Remove(zipPath)
-
-	// Extract the binary
-	if err := s.extractWhisperBinary(zipPath); err != nil {
-		return fmt.Errorf("failed to extract whisper binary: %w", err)
+	// Handle different file types
+	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && fileName == "whisper-macos-arm64" {
+		// Direct binary file - just make executable and rename
+		targetPath := filepath.Join("bin", "whisper")
+		if err := os.Rename(downloadPath, targetPath); err != nil {
+			return fmt.Errorf("failed to move binary: %w", err)
+		}
+		if err := os.Chmod(targetPath, 0755); err != nil {
+			return fmt.Errorf("failed to make binary executable: %w", err)
+		}
+		log.Printf("Direct binary installed: %s", targetPath)
+	} else {
+		// Zip archive - extract as before
+		defer os.Remove(downloadPath)
+		if err := s.extractWhisperBinary(downloadPath); err != nil {
+			return fmt.Errorf("failed to extract whisper binary: %w", err)
+		}
 	}
 
 	log.Printf("Whisper binary installed successfully")

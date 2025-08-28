@@ -62,6 +62,11 @@ Alice can now interact with your local system with user-approved permissions:
 * Image generation
 * MCP server support
 
+### 💬 Wake Word Support  
+With the local STT model, you can now set a **wake-up word** (like "Hey, Siri").  
+- Alice will always listen but only process request when the wake word is spoken.  
+- Default mode is **auto language detection**, but you can also select a specific language in settings. 
+
 ### 💻 Dedicated Chrome [Extension](https://github.com/pmbstyle/alice-chrome-extension)
 
 * Ask Alice about your active Chrome tab
@@ -164,4 +169,4 @@ Install the output from the `release/` directory.
 
 ## 🤝 Contributing
 
-Ideas, bug reports, feature requests — all welcome! Open an issue or PR, or just drop by to share your thoughts. Your input helps shape Alice into something wonderful 💚
+Ideas, bug reports, feature requests - all welcome! Open an issue or PR, or just drop by to share your thoughts. Your input helps shape Alice into something wonderful 💚

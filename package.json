@@ -22,13 +22,13 @@
   "scripts": {
     "dev": "vite",
     "prebuild": "mkdir -p resources/backend",
-    "build": "npm run build:go && vite build && electron-builder",
+    "build": "npm run build:go && vite build && npx electron-builder",
     "build:web": "vite build",
     "build:go": "cd backend && go build -ldflags=\"-s -w\" -o ../resources/backend/alice-backend$([ \"$OS\" = \"Windows_NT\" ] && echo .exe || echo \"\")",
     "build:go:win": "cd backend && set GOOS=windows&& set GOARCH=amd64&& go build -ldflags=\"-s -w\" -o ../resources/backend/alice-backend.exe",
     "build:go:mac": "cd backend && GOOS=darwin GOARCH=amd64 go build -ldflags=\"-s -w\" -o ../resources/backend/alice-backend",
     "build:go:linux": "cd backend && GOOS=linux GOARCH=amd64 go build -ldflags=\"-s -w\" -o ../resources/backend/alice-backend",
-    "rebuild": "electron-rebuild -f -w better-sqlite3,hnswlib-node",
+    "rebuild": "npx electron-rebuild -f -w better-sqlite3,hnswlib-node",
     "preview": "vite preview",
     "format": "prettier --write ."
   },

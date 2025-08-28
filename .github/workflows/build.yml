@@ -113,7 +113,7 @@ jobs:
         shell: bash
 
       - name: Build Release Files
-        run: npm run build:web && electron-builder --publish never
+        run: npm run build:web && npx electron-builder --publish never
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

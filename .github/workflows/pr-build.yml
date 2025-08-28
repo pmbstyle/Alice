@@ -123,7 +123,7 @@ jobs:
         run: npm run build:web
 
       - name: Build Electron App
-        run: electron-builder --publish never
+        run: npx electron-builder --publish never
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

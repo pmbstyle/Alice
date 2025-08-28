@@ -12,6 +12,12 @@ Alice brings together voice interaction, intelligent context awareness, powerful
 
 ## ✨ Key Features
 
+### 💻 Local and Cloud use
+
+Alice designed to work with Cloud(OpenAI/OpenRouter) and Local LLMs (Ollama/LM Studio).
+Has built-in speech-to-text, text-to-speech, and embedding services.
+While the OpenAI cloud API is preferred and provides the best user experience, Alice can go **fully local** (experimental).
+
 ### 🗣️ Voice Interaction
 
 * Fast, VAD-powered voice recognition (via `gpt-4o-transcribe` or `whisper-large-v3`)
@@ -68,7 +74,8 @@ Alice can now interact with your local system with user-approved permissions:
 
 Fully customizable settings interface:
 
-* LLM provider selection between OpenAI and OpenRouter
+* LLM provider selection between OpenAI, OpenRouter, Ollama, LM Studio
+* Cloud or local TTS, STT, Embeddings
 * Model choice & parameters (temperature, top\_p, history, etc)
 * Prompt and summarization tuning
 * Audio/mic toggles & hotkeys
@@ -91,8 +98,12 @@ Follow the [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs
 * **Desktop Shell:** [Electron](https://www.electronjs.org/)
 * **State Management:** [Pinia](https://pinia.vuejs.org/)
 * **AI APIs:** [OpenAI](https://platform.openai.com/), [OpenRouter](https://openrouter.ai/), [Groq](https://console.groq.com/)
-* **Embeddings:** [Hnswlib](https://github.com/nmslib/hnswlib)
-* **Voice:** [VAD (Web)](https://github.com/ricky0123/vad)
+* **Backend:** [Go](https://go.dev/)
+* **Vector search engine**: [hnswlib-node](https://github.com/nmslib/hnswlib)
+* **Local storage**: [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)
+* **Voice activity detection:** [VAD (Web)](https://github.com/ricky0123/vad)
+* **Local STT & TTS:** [whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp) & [Piper](https://github.com/rhasspy/piper)
+* **Local Embeddings:** [all-MiniLM-L6-v2](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2)
 * **Animation:** [Kling Pro](https://fal.ai/)
 
 Other tools:
@@ -117,7 +128,11 @@ $ npm install
 Follow [setup instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupInstructions.md) to obtain required API credentials.
 
 ```bash
-# 4. Run dev environment
+# 4. Compile backend
+npm run build:go
+# use build:go:mac or build:go:linux for OS support
+
+# 5. Run dev environment
 $ npm run dev
 ```
 

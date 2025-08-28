@@ -37,7 +37,7 @@
           >
             <option value="openai">OpenAI (gpt-4o-transcribe)</option>
             <option value="groq">Groq (whisper-large-v3)</option>
-            <option value="transformers">Local</option>
+            <option value="local">Local (Go Backend)</option>
           </select>
         </div>
         <div>
@@ -121,13 +121,13 @@
       </div>
     </fieldset>
 
-    <!-- STT Configuration Section -->
+    <!-- Local STT Configuration Section -->
     <fieldset
-      v-if="currentSettings.sttProvider === 'transformers'"
+      v-if="currentSettings.sttProvider === 'local'"
       class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
     >
       <legend class="fieldset-legend">
-        Speech-to-Text Configuration
+        Local Speech-to-Text Configuration (Go Backend)
         <span 
           class="w-2 h-2 rounded-full inline-block"
           :class="getServiceStatusClass('stt')"
@@ -137,14 +137,34 @@
       <div class="space-y-4 p-2">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
+            <label for="stt-model" class="block mb-1 text-sm"
+              >Whisper Model *</label
+            >
+            <select
+              id="stt-model"
+              v-model="currentSettings.localSttModel"
+              class="select select-bordered w-full focus:select-primary"
+              @change="e => $emit('update:setting', 'localSttModel', e.target.value)"
+            >
+              <option value="whisper-tiny.en">Tiny (English only, fastest)</option>
+              <option value="whisper-base">Base (multilingual)</option>
+              <option value="whisper-small">Small (better accuracy)</option>
+              <option value="whisper-medium">Medium (high accuracy)</option>
+              <option value="whisper-large">Large (best accuracy)</option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">
+              Larger models provide better accuracy but require more resources.
+            </p>
+          </div>
+          <div>
             <label for="stt-language" class="block mb-1 text-sm"
               >Language *</label
             >
             <select
               id="stt-language"
-              v-model="currentSettings.transformersLanguage"
+              v-model="currentSettings.localSttLanguage"
               class="select select-bordered w-full focus:select-primary"
-              @change="e => $emit('update:setting', 'transformersLanguage', e.target.value)"
+              @change="e => $emit('update:setting', 'localSttLanguage', e.target.value)"
             >
               <option value="auto">Auto-detect</option>
               <option value="en">English</option>
@@ -171,36 +191,20 @@
               Auto-detect works for most languages. Select a specific language for better accuracy.
             </p>
           </div>
-          <div v-if="currentSettings.transformersWakeWordEnabled">
-            <label for="wake-word" class="block mb-1 text-sm"
-              >Wake Word *</label
-            >
-            <input
-              id="wake-word"
-              type="text"
-              v-model="currentSettings.transformersWakeWord"
-              class="input input-bordered w-full focus:input-primary"
-              placeholder="Alice"
-              @input="e => $emit('update:setting', 'transformersWakeWord', e.target.value)"
-            />
-            <p class="text-xs text-gray-400 mt-1">
-              Say this word to activate voice recognition. Keep it simple and distinct.
-            </p>
-          </div>
         </div>
         
         <div class="form-control">
           <label class="cursor-pointer label justify-start gap-3">
             <input
               type="checkbox"
-              v-model="currentSettings.transformersWakeWordEnabled"
+              v-model="currentSettings.localSttEnabled"
               class="checkbox checkbox-primary"
-              @change="e => $emit('update:setting', 'transformersWakeWordEnabled', e.target.checked)"
+              @change="e => $emit('update:setting', 'localSttEnabled', e.target.checked)"
             />
             <div class="flex flex-col">
-              <span class="label-text font-medium">Enable Wake Word Detection</span>
+              <span class="label-text font-medium">Enable Local STT</span>
               <span class="label-text-alt text-gray-400">
-                Always listen for a specific wake word before starting transcription (like "Hey Siri" or "Alexa")
+                Use the built-in Go backend for speech-to-text processing. Provides privacy and offline capability.
               </span>
             </div>
           </label>
@@ -317,10 +321,10 @@
             class="select select-bordered w-full focus:select-primary"
           >
             <option value="openai">OpenAI (Cloud)</option>
-            <option value="local">Local (Qwen3)</option>
+            <option value="local">Local (all-MiniLM-L6-v2)</option>
           </select>
           <p class="text-xs text-gray-400 mt-1">
-            Choose between cloud-based OpenAI embeddings or local Qwen3 embeddings. Your existing data is preserved when switching.
+            Choose between cloud-based OpenAI embeddings or local all-MiniLM-L6-v2 embeddings. Your existing data is preserved when switching.
           </p>
         </div>
       </div>
@@ -331,7 +335,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import type { AliceSettings } from '../../stores/settingsStore'
 import { backendApi, type Voice } from '../../services/backendApi'
 

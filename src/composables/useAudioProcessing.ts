@@ -185,13 +185,13 @@ export function useAudioProcessing() {
   }
 
   const checkForWakeWord = (transcription: string): { hasWakeWord: boolean; command: string } => {
-    if (!settingsStore.config.transformersWakeWordEnabled || 
-        !settingsStore.config.transformersWakeWord ||
-        settingsStore.config.sttProvider !== 'transformers') {
+    if (!settingsStore.config.localSttEnabled || 
+        !settingsStore.config.localSttWakeWord ||
+        settingsStore.config.sttProvider !== 'local') {
       return { hasWakeWord: false, command: transcription }
     }
 
-    const wakeWord = settingsStore.config.transformersWakeWord.toLowerCase().trim()
+    const wakeWord = settingsStore.config.localSttWakeWord.toLowerCase().trim()
     const text = transcription.toLowerCase().trim()
     
     const patterns = [
@@ -233,8 +233,8 @@ export function useAudioProcessing() {
         await conversationStore.transcribeAudioMessage(wavBuffer)
 
       if (transcription && transcription.trim()) {
-        if (settingsStore.config.transformersWakeWordEnabled && 
-            settingsStore.config.sttProvider === 'transformers') {
+        if (settingsStore.config.localSttEnabled && 
+            settingsStore.config.sttProvider === 'local') {
           
           if (awaitingWakeWord.value) {
             const { hasWakeWord, command } = checkForWakeWord(transcription)
@@ -282,8 +282,8 @@ export function useAudioProcessing() {
       }
       if (audioState.value === 'IDLE' || audioState.value === 'CONFIG') {
         setAudioState('LISTENING')
-        if (settingsStore.config.transformersWakeWordEnabled && 
-            settingsStore.config.sttProvider === 'transformers') {
+        if (settingsStore.config.localSttEnabled && 
+            settingsStore.config.sttProvider === 'local') {
           awaitingWakeWord.value = true
           wakeWordDetected.value = false
         } else {

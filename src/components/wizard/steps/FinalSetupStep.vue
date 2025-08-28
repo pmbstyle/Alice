@@ -100,15 +100,15 @@
         <div v-else class="ml-8 space-y-2">
           <div class="flex justify-between text-sm">
             <span class="text-base-content/60">Speech-to-Text:</span>
-            <span>Whisper (Transformers)</span>
+            <span>Local Whisper (Go Backend)</span>
           </div>
           <div class="flex justify-between text-sm">
             <span class="text-base-content/60">Text-to-Speech:</span>
-            <span>Kokoro TTS</span>
+            <span>Local Piper TTS (Go Backend)</span>
           </div>
           <div class="flex justify-between text-sm">
             <span class="text-base-content/60">Embeddings:</span>
-            <span>Sentence Transformers</span>
+            <span>Local MiniLM (Go Backend)</span>
           </div>
         </div>
       </div>

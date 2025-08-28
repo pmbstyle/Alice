@@ -782,11 +782,8 @@ export const useConversationStore = defineStore('conversation', () => {
         return await api.transcribeWithOpenAI(audioArrayBuffer)
       } else if (sttProvider === 'groq') {
         return await api.transcribeWithGroq(audioArrayBuffer)
-      } else if (sttProvider === 'transformers') {
-        const enableFallback =
-          settingsStore.config.transformersEnableFallback &&
-          !!settingsStore.config.VITE_OPENAI_API_KEY
-        return await api.transcribeWithBackend(audioArrayBuffer, enableFallback)
+      } else if (sttProvider === 'local') {
+        return await api.transcribeWithBackend(audioArrayBuffer)
       } else {
         throw new Error(`Unknown STT provider: ${sttProvider}`)
       }
@@ -795,11 +792,11 @@ export const useConversationStore = defineStore('conversation', () => {
       console.error('Transcription service error:', error)
 
       if (
-        sttProvider === 'transformers' &&
+        sttProvider === 'local' &&
         error.message.includes('not initialized')
       ) {
         generalStore.statusMessage =
-          'Error: Please download an STT model in settings'
+          'Error: Local STT service not ready. Please check backend status.'
       }
 
       return ''

@@ -23,17 +23,14 @@ export interface AliceSettings {
   VITE_OPENAI_API_KEY: string
   VITE_OPENROUTER_API_KEY: string
   VITE_GROQ_API_KEY: string
-  sttProvider: 'openai' | 'groq' | 'transformers'
+  sttProvider: 'openai' | 'groq' | 'local'
   aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
 
-  // Python STT settings
-  transformersModel: string
-  transformersDevice: 'webgpu' | 'wasm'
-  transformersQuantization: 'fp32' | 'fp16' | 'q8' | 'q4'
-  transformersEnableFallback: boolean
-  transformersWakeWordEnabled: boolean
-  transformersWakeWord: string
-  transformersLanguage: string
+  // Local Go Backend STT settings
+  localSttModel: string
+  localSttLanguage: string
+  localSttEnabled: boolean
+  localSttWakeWord: string
 
   ollamaBaseUrl: string
   lmStudioBaseUrl: string
@@ -80,13 +77,10 @@ const defaultSettings: AliceSettings = {
   sttProvider: 'openai',
   aiProvider: 'openai',
 
-  transformersModel: 'whisper-base',
-  transformersDevice: 'wasm',
-  transformersQuantization: 'q8',
-  transformersEnableFallback: true,
-  transformersWakeWordEnabled: false,
-  transformersWakeWord: 'Alice',
-  transformersLanguage: 'auto',
+  localSttModel: 'whisper-base',
+  localSttLanguage: 'auto',
+  localSttEnabled: false,
+  localSttWakeWord: 'alice',
 
   ollamaBaseUrl: 'http://localhost:11434',
   lmStudioBaseUrl: 'http://localhost:1234',
@@ -139,14 +133,11 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   sttProvider: 'Speech-to-Text Provider',
   aiProvider: 'AI Provider',
 
-  // Python STT labels
-  transformersModel: 'Local STT Model',
-  transformersDevice: 'Processing Device',
-  transformersQuantization: 'Model Quantization',
-  transformersEnableFallback: 'Enable OpenAI Fallback',
-  transformersWakeWordEnabled: 'Enable Wake Word',
-  transformersWakeWord: 'Wake Word',
-  transformersLanguage: 'Language',
+  // Local Go Backend STT labels
+  localSttModel: 'Local STT Model',
+  localSttLanguage: 'Language',
+  localSttEnabled: 'Enable Local STT',
+  localSttWakeWord: 'Wake Word',
 
   ollamaBaseUrl: 'Ollama Base URL',
   lmStudioBaseUrl: 'LM Studio Base URL',
@@ -201,10 +192,37 @@ export const useSettingsStore = defineStore('settings', () => {
 
   const validateAndFixSettings = (
     loadedSettings: Partial<AliceSettings>
-  ): AliceSettings => {
+  ): { settings: AliceSettings; migrated: boolean } => {
     const validated = { ...defaultSettings, ...loadedSettings }
+    let migrated = false
 
-    const validSTTProviders = ['openai', 'groq', 'transformers'] as const
+    // Migration: Handle old 'transformers' provider
+    if ((validated.sttProvider as any) === 'transformers') {
+      console.log('🔄 Migrating settings: Converting old "transformers" provider to "local" (Go backend)')
+      validated.sttProvider = 'local'
+      migrated = true
+      
+      // Migrate old transformers settings to new local settings
+      if ((loadedSettings as any).transformersModel) {
+        validated.localSttModel = (loadedSettings as any).transformersModel
+        console.log(`📝 Migrated STT model: ${validated.localSttModel}`)
+      }
+      if ((loadedSettings as any).transformersLanguage) {
+        validated.localSttLanguage = (loadedSettings as any).transformersLanguage
+        console.log(`🌐 Migrated STT language: ${validated.localSttLanguage}`)
+      }
+      if ((loadedSettings as any).transformersWakeWordEnabled !== undefined) {
+        validated.localSttEnabled = (loadedSettings as any).transformersWakeWordEnabled
+        console.log(`🎤 Migrated STT enabled: ${validated.localSttEnabled}`)
+      }
+      if ((loadedSettings as any).transformersWakeWord) {
+        validated.localSttWakeWord = (loadedSettings as any).transformersWakeWord
+        console.log(`🎯 Migrated wake word: ${validated.localSttWakeWord}`)
+      }
+      console.log('✅ Settings migration completed successfully')
+    }
+
+    const validSTTProviders = ['openai', 'groq', 'local'] as const
     if (!validSTTProviders.includes(validated.sttProvider as any)) {
       validated.sttProvider = 'openai'
     }
@@ -219,7 +237,7 @@ export const useSettingsStore = defineStore('settings', () => {
       validated.aiProvider = 'openai'
     }
 
-    if (validated.sttProvider === 'transformers') {
+    if (validated.sttProvider === 'local') {
       const validModelIds = [
         'whisper-tiny.en',
         'whisper-base',
@@ -227,12 +245,12 @@ export const useSettingsStore = defineStore('settings', () => {
         'whisper-medium',
         'whisper-large',
       ]
-      if (!validModelIds.includes(validated.transformersModel)) {
-        validated.transformersModel = validModelIds[0] || 'whisper-tiny.en'
+      if (!validModelIds.includes(validated.localSttModel)) {
+        validated.localSttModel = validModelIds[1] || 'whisper-base'
       }
     }
 
-    return validated
+    return { settings: validated, migrated }
   }
 
   const isProduction = computed(() => import.meta.env.PROD)
@@ -263,8 +281,8 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('VITE_GROQ_API_KEY')
     }
 
-    if (settings.value.sttProvider === 'transformers') {
-      essentialKeys.push('transformersModel')
+    if (settings.value.sttProvider === 'local') {
+      essentialKeys.push('localSttModel')
     }
 
     return essentialKeys.every(key => {
@@ -362,18 +380,31 @@ export const useSettingsStore = defineStore('settings', () => {
       if (isProduction.value) {
         const loaded = await window.settingsAPI.loadSettings()
         if (loaded) {
-          settings.value = validateAndFixSettings(
+          const result = validateAndFixSettings(
             loaded as Partial<AliceSettings>
           )
+          settings.value = result.settings
+          
+          let needsSave = false
+          if (result.migrated) {
+            needsSave = true
+            console.log('💾 Automatically saving migrated settings to file')
+          }
+          
           if (
             !settings.value.onboardingCompleted &&
             settings.value.VITE_OPENAI_API_KEY?.trim()
           ) {
             settings.value.onboardingCompleted = true
+            needsSave = true
+          }
+          
+          if (needsSave) {
             await saveSettingsToFile()
           }
         } else {
-          settings.value = validateAndFixSettings({})
+          const result = validateAndFixSettings({})
+          settings.value = result.settings
         }
       } else {
         let devCombinedSettings: AliceSettings = { ...defaultSettings }
@@ -425,7 +456,13 @@ export const useSettingsStore = defineStore('settings', () => {
           }
         }
         try {
-          settings.value = validateAndFixSettings(devCombinedSettings)
+          const result = validateAndFixSettings(devCombinedSettings)
+          settings.value = result.settings
+          
+          if (result.migrated && window.settingsAPI) {
+            console.log('💾 Automatically saving migrated dev settings to file')
+            await saveSettingsToFile()
+          }
         } catch (error) {
           console.error(
             '[SettingsStore] Settings validation failed, using unvalidated settings:',
@@ -474,7 +511,7 @@ export const useSettingsStore = defineStore('settings', () => {
       ;(settings.value as any)[key] = String(value)
     }
     if (key === 'sttProvider') {
-      settings.value[key] = value as 'openai' | 'groq' | 'transformers'
+      settings.value[key] = value as 'openai' | 'groq' | 'local'
     }
     if (key === 'aiProvider') {
       settings.value[key] = value as
@@ -489,20 +526,14 @@ export const useSettingsStore = defineStore('settings', () => {
     if (key === 'assistantVerbosity') {
       settings.value[key] = value as 'low' | 'medium' | 'high'
     }
-    if (key === 'transformersDevice') {
-      settings.value[key] = value as 'webgpu' | 'wasm'
+    if (key === 'localSttModel') {
+      settings.value[key] = value as string
     }
-    if (key === 'transformersQuantization') {
-      settings.value[key] = value as 'fp32' | 'fp16' | 'q8' | 'q4'
+    if (key === 'localSttLanguage') {
+      settings.value[key] = value as string
     }
-    if (key === 'transformersWakeWordEnabled') {
+    if (key === 'localSttEnabled') {
       settings.value[key] = value as boolean
-    }
-    if (key === 'transformersWakeWord') {
-      settings.value[key] = value as string
-    }
-    if (key === 'transformersLanguage') {
-      settings.value[key] = value as string
     }
     if (key === 'ttsProvider') {
       settings.value[key] = value as 'openai' | 'local'
@@ -543,13 +574,10 @@ export const useSettingsStore = defineStore('settings', () => {
         sttProvider: settings.value.sttProvider,
         aiProvider: settings.value.aiProvider,
 
-        transformersModel: settings.value.transformersModel,
-        transformersDevice: settings.value.transformersDevice,
-        transformersQuantization: settings.value.transformersQuantization,
-        transformersEnableFallback: settings.value.transformersEnableFallback,
-        transformersWakeWordEnabled: settings.value.transformersWakeWordEnabled,
-        transformersWakeWord: settings.value.transformersWakeWord,
-        transformersLanguage: settings.value.transformersLanguage,
+        localSttModel: settings.value.localSttModel,
+        localSttLanguage: settings.value.localSttLanguage,
+        localSttEnabled: settings.value.localSttEnabled,
+        localSttWakeWord: settings.value.localSttWakeWord,
 
         ollamaBaseUrl: settings.value.ollamaBaseUrl,
         lmStudioBaseUrl: settings.value.lmStudioBaseUrl,
@@ -772,7 +800,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function completeOnboarding(onboardingData: {
     VITE_OPENAI_API_KEY: string
     VITE_OPENROUTER_API_KEY: string
-    sttProvider: 'openai' | 'groq' | 'transformers'
+    sttProvider: 'openai' | 'groq' | 'local'
     ttsProvider?: 'openai' | 'local'
     embeddingProvider?: 'openai' | 'local'
     aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'

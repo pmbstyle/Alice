@@ -85,7 +85,7 @@
                 </svg>
                 Speech-to-Text
               </span>
-              <span class="text-base-content/60">Whisper (Transformers)</span>
+              <span class="text-base-content/60">Local Whisper (Go Backend)</span>
             </div>
 
             <div
@@ -107,7 +107,7 @@
                 </svg>
                 Text-to-Speech
               </span>
-              <span class="text-base-content/60">Kokoro TTS</span>
+              <span class="text-base-content/60">Local Piper TTS (Go Backend)</span>
             </div>
 
             <div
@@ -129,7 +129,7 @@
                 </svg>
                 Embeddings
               </span>
-              <span class="text-base-content/60">Sentence Transformers</span>
+              <span class="text-base-content/60">Local MiniLM (Go Backend)</span>
             </div>
           </div>
         </div>

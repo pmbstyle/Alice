@@ -68,7 +68,7 @@ const formData = reactive({
   aiProvider: 'openai' as 'openai' | 'openrouter' | 'ollama' | 'lm-studio',
   assistantModel: 'gpt-4o-mini' as string,
   summarizationModel: 'gpt-4o-mini' as string,
-  sttProvider: 'openai' as 'openai' | 'groq' | 'transformers',
+  sttProvider: 'openai' as 'openai' | 'groq' | 'local',
   ttsProvider: 'openai' as 'openai' | 'local',
   embeddingProvider: 'openai' as 'openai' | 'local',
   VITE_GROQ_API_KEY: '',
@@ -141,7 +141,7 @@ watch(step, async () => {
 const toggleLocalModels = (useLocal: boolean) => {
   formData.useLocalModels = useLocal
   if (useLocal) {
-    formData.sttProvider = 'transformers'
+    formData.sttProvider = 'local'
     formData.ttsProvider = 'local'
     formData.embeddingProvider = 'local'
   } else {

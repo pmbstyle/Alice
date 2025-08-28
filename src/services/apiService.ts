@@ -1083,12 +1083,11 @@ export const transcribeWithGroq = async (
 
 export const transcribeWithBackend = async (
   audioBuffer: ArrayBuffer,
-  fallbackToOpenAI: boolean = false,
   language?: string
 ): Promise<string> => {
   try {
     const settingsStore = useSettingsStore()
-    const selectedLanguage = language || settingsStore.config.transformersLanguage || 'auto'
+    const selectedLanguage = language || settingsStore.config.localSttLanguage || 'auto'
     
     // Import the backend API
     const { backendApi } = await import('./backendApi')
@@ -1130,16 +1129,6 @@ export const transcribeWithBackend = async (
     
     return result.text
   } catch (error: any) {
-    if (fallbackToOpenAI) {
-      try {
-        return await transcribeWithOpenAI(audioBuffer)
-      } catch (fallbackError: any) {
-        throw new Error(
-          `Local STT failed: ${error.message}. Fallback to OpenAI also failed: ${fallbackError.message}`
-        )
-      }
-    }
-
     throw error
   }
 }

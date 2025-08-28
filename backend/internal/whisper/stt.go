@@ -55,16 +55,16 @@ func NewSTTService(config *Config) *STTService {
 	if config.VoiceThreshold == 0 {
 		config.VoiceThreshold = 0.02 // Default voice threshold
 	}
-	
+
 	// Create asset manager with current working directory as base
 	assetManager := embedded.NewAssetManager(".")
-	
+
 	return &STTService{
 		config:       config,
 		assetManager: assetManager,
 		info: &ServiceInfo{
 			Name:        "Whisper STT",
-			Version:     "1.0.0", 
+			Version:     "1.0.0",
 			Status:      "initializing",
 			Model:       "whisper.cpp",
 			Language:    config.Language,
@@ -148,24 +148,22 @@ func (s *STTService) TranscribeAudio(ctx context.Context, audioData []byte) (str
 		return "", nil // Empty audio
 	}
 
-
 	// Use actual Whisper transcription
 	text, err := s.transcribeWithWhisper(ctx, samples)
 	if err != nil {
 		log.Printf("Whisper transcription failed: %v", err)
-		
+
 		// Provide helpful message instead of error when setup is incomplete
 		if strings.Contains(err.Error(), "model not found") || strings.Contains(err.Error(), "binary not found") {
 			return "STT setup incomplete - please download Whisper model and binary for real transcription", nil
 		}
-		
+
 		// For other errors, return them
 		return "", fmt.Errorf("transcription failed: %w", err)
 	}
-	
+
 	return text, nil
 }
-
 
 // convertAudioToSamples converts byte audio data to float32 samples
 func (s *STTService) convertAudioToSamples(audioData []byte) ([]float32, error) {
@@ -187,7 +185,6 @@ func (s *STTService) convertAudioToSamples(audioData []byte) ([]float32, error) 
 	return samples, nil
 }
 
-
 // transcribeWithWhisper performs actual transcription using whisper.cpp binary
 func (s *STTService) transcribeWithWhisper(ctx context.Context, samples []float32) (string, error) {
 	// Check if model exists
@@ -197,7 +194,7 @@ func (s *STTService) transcribeWithWhisper(ctx context.Context, samples []float3
 
 	// Find whisper binary - try embedded first, then fallback to downloaded
 	var whisperPath string
-	
+
 	// First try embedded binary path
 	embeddedBinaryPath := s.assetManager.GetBinaryPath("whisper")
 	if s.assetManager.IsAssetAvailable(embeddedBinaryPath) {
@@ -207,19 +204,19 @@ func (s *STTService) transcribeWithWhisper(ctx context.Context, samples []float3
 		possiblePaths := []string{
 			"bin/whisper-cli.exe",     // New CLI binary
 			"bin/whisper-command.exe", // Alternative command binary
-			"bin/main.exe",           // Main binary from archive
-			"bin/whisper.exe",        // Deprecated binary (fallback)
+			"bin/main.exe",            // Main binary from archive
+			"bin/whisper.exe",         // Deprecated binary (fallback)
 		}
-		
+
 		if runtime.GOOS != "windows" {
 			possiblePaths = []string{
 				"bin/whisper-cli",
-				"bin/whisper-command", 
+				"bin/whisper-command",
 				"bin/main",
 				"bin/whisper",
 			}
 		}
-		
+
 		for _, path := range possiblePaths {
 			if _, err := os.Stat(path); err == nil {
 				whisperPath = path
@@ -227,7 +224,7 @@ func (s *STTService) transcribeWithWhisper(ctx context.Context, samples []float3
 			}
 		}
 	}
-	
+
 	if whisperPath == "" {
 		return "", fmt.Errorf("no whisper binary found - please install whisper.cpp")
 	}
@@ -236,7 +233,7 @@ func (s *STTService) transcribeWithWhisper(ctx context.Context, samples []float3
 	tmpDir := os.TempDir()
 	inputFile := filepath.Join(tmpDir, fmt.Sprintf("whisper_input_%d.wav", time.Now().UnixNano()))
 	outputFile := filepath.Join(tmpDir, fmt.Sprintf("whisper_output_%d.txt", time.Now().UnixNano()))
-	
+
 	defer os.Remove(inputFile)
 	defer os.Remove(outputFile)
 
@@ -294,36 +291,36 @@ func (s *STTService) writeWAVFile(filename string, samples []float32) error {
 	// WAV header
 	dataSize := len(samples) * 2 // 16-bit samples
 	fileSize := 36 + dataSize
-	
+
 	// RIFF header
 	file.WriteString("RIFF")
 	file.Write([]byte{byte(fileSize & 0xFF), byte((fileSize >> 8) & 0xFF), byte((fileSize >> 16) & 0xFF), byte((fileSize >> 24) & 0xFF)})
 	file.WriteString("WAVE")
-	
+
 	// fmt chunk
 	file.WriteString("fmt ")
-	file.Write([]byte{16, 0, 0, 0}) // chunk size
-	file.Write([]byte{1, 0})        // PCM format
+	file.Write([]byte{16, 0, 0, 0})       // chunk size
+	file.Write([]byte{1, 0})              // PCM format
 	file.Write([]byte{byte(channels), 0}) // channels
-	
+
 	// Sample rate (16000 as 4 bytes, little-endian)
 	file.Write([]byte{byte(sampleRate & 0xFF), byte((sampleRate >> 8) & 0xFF), byte((sampleRate >> 16) & 0xFF), byte((sampleRate >> 24) & 0xFF)})
-	
+
 	// Byte rate
 	byteRate := sampleRate * channels * bitsPerSample / 8
 	file.Write([]byte{byte(byteRate & 0xFF), byte((byteRate >> 8) & 0xFF), byte((byteRate >> 16) & 0xFF), byte((byteRate >> 24) & 0xFF)})
-	
+
 	// Block align
 	blockAlign := channels * bitsPerSample / 8
 	file.Write([]byte{byte(blockAlign), 0})
-	
+
 	// Bits per sample
 	file.Write([]byte{byte(bitsPerSample), 0})
-	
+
 	// data chunk
 	file.WriteString("data")
 	file.Write([]byte{byte(dataSize & 0xFF), byte((dataSize >> 8) & 0xFF), byte((dataSize >> 16) & 0xFF), byte((dataSize >> 24) & 0xFF)})
-	
+
 	// Convert float32 samples to 16-bit PCM and write
 	for _, sample := range samples {
 		// Clamp to [-1, 1] range
@@ -332,12 +329,12 @@ func (s *STTService) writeWAVFile(filename string, samples []float32) error {
 		} else if sample < -1.0 {
 			sample = -1.0
 		}
-		
+
 		// Convert to 16-bit signed integer
 		sample16 := int16(sample * 32767)
 		file.Write([]byte{byte(sample16), byte(sample16 >> 8)})
 	}
-	
+
 	return nil
 }
 
@@ -361,7 +358,7 @@ func (s *STTService) ensureModel() error {
 	}
 
 	log.Printf("Downloading Whisper model to: %s", s.config.ModelPath)
-	
+
 	// Use a working direct download approach
 	if err := s.downloadModelFromWorkingSource(); err != nil {
 		log.Printf("Automatic download failed: %v", err)
@@ -371,40 +368,36 @@ func (s *STTService) ensureModel() error {
 		log.Printf("3. Place it at: %s", s.config.ModelPath)
 		return fmt.Errorf("failed to download whisper model: %w", err)
 	}
-	
+
 	log.Printf("Whisper model downloaded successfully: %s", s.config.ModelPath)
 	return nil
 }
 
-// downloadModelFromWorkingSource downloads the model from a verified working source
 func (s *STTService) downloadModelFromWorkingSource() error {
-	// Use multiple reliable sources with proper fallbacks
+	// Use verified working sources in priority order
 	urls := []string{
-		// Primary: Direct GitHub releases (most reliable)
-		"https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/ggml-base.bin",
-		"https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/ggml-tiny.bin", 
-		// Secondary: HuggingFace CDN (with CDN endpoint)
-		"https://cdn-lfs.huggingface.co/repos/aa/7b/aa7be3f2d6b0c2e1aeb2a35b6d8e4ccea9e6aaca9f2a3e1e1e1e1e1e1e1e1e1e1/ggml-base.bin?response-content-disposition=attachment%3B+filename*%3DUTF-8%27%27ggml-base.bin",
-		"https://cdn-lfs.huggingface.co/repos/aa/7b/aa7be3f2d6b0c2e1aeb2a35b6d8e4ccea9e6aaca9f2a3e1e1e1e1e1e1e1e1e1e1/ggml-tiny.bin?response-content-disposition=attachment%3B+filename*%3DUTF-8%27%27ggml-tiny.bin",
-		// Tertiary: Official HuggingFace URLs (original)
+		// Primary: Official HuggingFace
 		"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
 		"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
-		// Quaternary: Mirror sources
+		// Secondary: HuggingFace mirror
 		"https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
 		"https://hf.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.bin",
+		// Tertiary: Alternative HuggingFace repository locations
+		"https://huggingface.co/openai/whisper-base/resolve/main/ggml-base.bin",
+		"https://huggingface.co/openai/whisper-tiny/resolve/main/ggml-tiny.bin",
 	}
-	
+
 	var lastErr error
 	for i, url := range urls {
 		log.Printf("Attempting download from source %d/%d", i+1, len(urls))
-		
+
 		// Try with retry mechanism for robustness
 		if err := s.downloadFileWithRetry(url, s.config.ModelPath, 3); err != nil {
 			log.Printf("Source %d failed after retries: %v", i+1, err)
 			lastErr = err
 			continue
 		}
-		
+
 		// Verify the downloaded file is valid (not empty, reasonable size)
 		if info, err := os.Stat(s.config.ModelPath); err == nil && info.Size() > 1000000 { // At least 1MB
 			log.Printf("Model downloaded successfully (%d MB)", info.Size()/(1024*1024))
@@ -415,14 +408,14 @@ func (s *STTService) downloadModelFromWorkingSource() error {
 			lastErr = fmt.Errorf("downloaded file is too small or corrupt")
 		}
 	}
-	
+
 	return lastErr
 }
 
 // downloadFileWithHeaders downloads a file with custom headers and retry logic
 func (s *STTService) downloadFileWithHeaders(url, filepath string) error {
 	log.Printf("Starting download from: %s", url)
-	
+
 	// Create HTTP client with robust retry and timeout settings
 	client := &http.Client{
 		Timeout: 15 * time.Minute, // Extended timeout for large files
@@ -434,12 +427,12 @@ func (s *STTService) downloadFileWithHeaders(url, filepath string) error {
 			return nil
 		},
 	}
-	
+
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
+
 	// Add headers optimized for file downloads across different services
 	req.Header.Set("User-Agent", "AliceElectron/1.0 (compatible; file downloader)")
 	req.Header.Set("Accept", "application/octet-stream, */*")
@@ -447,10 +440,10 @@ func (s *STTService) downloadFileWithHeaders(url, filepath string) error {
 	req.Header.Set("Accept-Encoding", "identity") // Disable compression for binary files
 	req.Header.Set("Connection", "keep-alive")
 	req.Header.Set("Cache-Control", "no-cache")
-	
+
 	// For HuggingFace URLs, don't modify them - use them as-is
 	// The /resolve/ format is correct for direct downloads
-	
+
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to start download: %w", err)
@@ -497,7 +490,7 @@ func (s *STTService) downloadFileWithHeaders(url, filepath string) error {
 // downloadFileWithRetry downloads a file with retry logic for robustness
 func (s *STTService) downloadFileWithRetry(url, filepath string, maxRetries int) error {
 	var lastErr error
-	
+
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if attempt > 1 {
 			// Exponential backoff: wait 2, 4, 8 seconds between retries
@@ -505,21 +498,21 @@ func (s *STTService) downloadFileWithRetry(url, filepath string, maxRetries int)
 			log.Printf("Retrying download in %v (attempt %d/%d)", waitTime, attempt, maxRetries)
 			time.Sleep(waitTime)
 		}
-		
+
 		log.Printf("Download attempt %d/%d from: %s", attempt, maxRetries, url)
-		
+
 		if err := s.downloadFileWithHeaders(url, filepath); err != nil {
 			lastErr = err
 			log.Printf("Attempt %d failed: %v", attempt, err)
-			
+
 			// Clean up partial file on failure
 			if _, statErr := os.Stat(filepath); statErr == nil {
 				os.Remove(filepath)
 			}
-			
+
 			continue
 		}
-		
+
 		// Verify file was downloaded correctly
 		if info, err := os.Stat(filepath); err != nil {
 			lastErr = fmt.Errorf("downloaded file verification failed: %w", err)
@@ -529,18 +522,18 @@ func (s *STTService) downloadFileWithRetry(url, filepath string, maxRetries int)
 			os.Remove(filepath)
 			continue
 		}
-		
+
 		log.Printf("Download successful on attempt %d", attempt)
 		return nil
 	}
-	
+
 	return fmt.Errorf("download failed after %d attempts: %w", maxRetries, lastErr)
 }
 
 // downloadFile downloads a file from a URL with progress logging
 func (s *STTService) downloadFile(url, filepath string) error {
 	log.Printf("Starting download from: %s", url)
-	
+
 	// Create HTTP request
 	resp, err := http.Get(url)
 	if err != nil {
@@ -575,7 +568,7 @@ func (s *STTService) ensureWhisperBinary() error {
 	if runtime.GOOS == "windows" {
 		whisperPath = "bin/whisper.exe"
 	}
-	
+
 	// Check if binary already exists
 	if _, err := os.Stat(whisperPath); err == nil {
 		log.Printf("Whisper binary already exists: %s", whisperPath)
@@ -599,40 +592,74 @@ func (s *STTService) ensureWhisperBinary() error {
 
 // downloadWhisperBinary downloads the appropriate whisper.cpp binary for the current platform
 func (s *STTService) downloadWhisperBinary() error {
-	var downloadURL, fileName string
-	
-	// Determine platform and download URL (using latest v1.7.6 from ggml-org)
+	var downloadURLs []string
+	var fileName string
+
+	// Determine platform and download URLs (using latest v1.7.6 from ggml-org with fallbacks)
 	switch runtime.GOOS {
 	case "windows":
 		if runtime.GOARCH == "amd64" || runtime.GOARCH == "x86_64" {
-			downloadURL = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip"
+			downloadURLs = []string{
+				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip",
+				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.1/whisper-bin-x64.zip", // fallback
+			}
 			fileName = "whisper-bin-x64.zip"
 		} else {
-			downloadURL = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-Win32.zip"
+			downloadURLs = []string{
+				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-Win32.zip",
+				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.1/whisper-bin-Win32.zip", // fallback
+			}
 			fileName = "whisper-bin-Win32.zip"
 		}
 	case "darwin":
 		if runtime.GOARCH == "arm64" {
-			downloadURL = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-arm64.zip"
+			downloadURLs = []string{
+				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-arm64.zip",
+				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.1/whisper-bin-arm64.zip", // fallback
+			}
 			fileName = "whisper-bin-arm64.zip"
 		} else {
-			downloadURL = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip"
+			downloadURLs = []string{
+				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-x64.zip",
+				"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.1/whisper-bin-x64.zip", // fallback
+			}
 			fileName = "whisper-bin-x64.zip"
 		}
 	case "linux":
-		downloadURL = "https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-Linux.zip"
+		downloadURLs = []string{
+			"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.6/whisper-bin-Linux.zip",
+			"https://github.com/ggml-org/whisper.cpp/releases/download/v1.7.1/whisper-bin-Linux.zip", // fallback
+		}
 		fileName = "whisper-bin-Linux.zip"
 	default:
 		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
 	}
 
 	log.Printf("Downloading Whisper binary for %s/%s", runtime.GOOS, runtime.GOARCH)
-	
-	// Download the zip file with retry mechanism
+
+	// Try downloading from multiple URLs with retry mechanism
 	zipPath := filepath.Join("bin", fileName)
-	if err := s.downloadFileWithRetry(downloadURL, zipPath, 3); err != nil {
-		return fmt.Errorf("failed to download whisper binary: %w", err)
+	var lastErr error
+
+	for i, downloadURL := range downloadURLs {
+		log.Printf("Attempting binary download from source %d/%d: %s", i+1, len(downloadURLs), downloadURL)
+
+		if err := s.downloadFileWithRetry(downloadURL, zipPath, 2); err != nil {
+			lastErr = err
+			log.Printf("Binary download source %d failed: %v", i+1, err)
+			continue
+		}
+
+		// Success - break out of loop
+		log.Printf("Binary download successful from source %d", i+1)
+		break
 	}
+
+	// Check if any download succeeded
+	if _, err := os.Stat(zipPath); err != nil {
+		return fmt.Errorf("failed to download whisper binary from any source: %w", lastErr)
+	}
+
 	defer os.Remove(zipPath)
 
 	// Extract the binary
@@ -653,25 +680,24 @@ func (s *STTService) extractWhisperBinary(zipPath string) error {
 	defer reader.Close()
 
 	log.Printf("Extracting whisper binary from: %s", zipPath)
-	
 
 	// Extract multiple useful whisper binaries and required DLLs
 	extractedCount := 0
 	whisperBinaries := []string{"whisper-cli.exe", "whisper-command.exe", "main.exe", "whisper.exe"}
 	requiredDLLs := []string{"ggml-base.dll", "ggml-cpu.dll", "ggml.dll", "whisper.dll", "SDL2.dll"}
-	
+
 	if runtime.GOOS != "windows" {
 		whisperBinaries = []string{"whisper-cli", "whisper-command", "main", "whisper"}
 		requiredDLLs = []string{} // No DLLs needed on Unix
 	}
-	
+
 	for _, file := range reader.File {
 		if file.FileInfo().IsDir() {
 			continue
 		}
-		
+
 		fileName := strings.ToLower(filepath.Base(file.Name))
-		
+
 		// Check if this is one of the binaries we want
 		for _, wantedBinary := range whisperBinaries {
 			if fileName == strings.ToLower(wantedBinary) {
@@ -684,7 +710,7 @@ func (s *STTService) extractWhisperBinary(zipPath string) error {
 				break
 			}
 		}
-		
+
 		// Check if this is one of the DLLs we need
 		for _, wantedDLL := range requiredDLLs {
 			if fileName == strings.ToLower(wantedDLL) {
@@ -698,7 +724,7 @@ func (s *STTService) extractWhisperBinary(zipPath string) error {
 			}
 		}
 	}
-	
+
 	if extractedCount == 0 {
 		return fmt.Errorf("no suitable whisper binary found in archive")
 	}
@@ -741,8 +767,6 @@ func (s *STTService) extractSingleFile(file *zip.File, outputPath string) error 
 func (s *STTService) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-
-	// Model cleanup will be added when whisper integration is complete
 
 	s.ready = false
 	s.info.Status = "stopped"

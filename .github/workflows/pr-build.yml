@@ -44,29 +44,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 18
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        id: setup_python
-        with:
-          python-version: '3.11'
-          cache: 'pip'
+          cache: 'npm'
 
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
           cache-dependency-path: backend/go.sum
-
-      - name: Cache Python dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-            python/.venv
-          key: ${{ runner.os }}-python-${{ hashFiles('python/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-python-
 
       - name: Cache Go modules
         uses: actions/cache@v4
@@ -87,22 +71,13 @@ jobs:
         working-directory: backend
         run: go mod download
 
-      - name: Install Dependencies
+      - name: Install Node Dependencies
         run: npm install
-        env:
-          PYTHON: ${{ steps.setup_python.outputs.python-path }}
-
-      - name: Verify Python backend can build (skip heavy AI deps for PR)
-        run: |
-          cd python
-          pip install --upgrade pip pyinstaller
-          echo "Python backend build verification completed for PR"
 
       - name: Rebuild native modules for Electron
         run: npm run rebuild
         env:
           DEBUG: 'electron-rebuild'
-          PYTHON: ${{ steps.setup_python.outputs.python-path }}
 
       - name: Create dummy app-config.json
         shell: bash
@@ -113,15 +88,25 @@ jobs:
           }" > app-config.json
           echo "Dummy app-config.json created for PR build."
 
-      - name: Build Release Files (skip Python backend for PR)
-        run: npm run build:web && electron-builder --publish never
-        continue-on-error: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create resources directory
+        run: mkdir -p resources/backend
+        shell: bash
 
-      - name: Build with Python backend (if previous step failed)
-        if: failure()
-        run: npm run build
+      - name: Build Go Backend
+        working-directory: backend
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            go build -ldflags="-s -w" -o ../resources/backend/alice-backend.exe
+          else
+            go build -ldflags="-s -w" -o ../resources/backend/alice-backend
+          fi
+        shell: bash
+
+      - name: Build Frontend
+        run: npm run build:web
+
+      - name: Build Electron App
+        run: electron-builder --publish never
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

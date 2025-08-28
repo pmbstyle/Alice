@@ -37,27 +37,11 @@ jobs:
           node-version: 18
           cache: 'npm'
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.23'
           cache-dependency-path: backend/go.sum
-
-      - name: Cache Python dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/pip
-            python/.venv
-          key: ${{ runner.os }}-python-${{ hashFiles('python/requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-python-
 
       - name: Cache Go modules  
         uses: actions/cache@v4
@@ -78,7 +62,7 @@ jobs:
         working-directory: backend
         run: go mod download
 
-      - name: Install Dependencies
+      - name: Install Node Dependencies
         run: npm install
 
       - name: Get app version from package.json
@@ -97,8 +81,24 @@ jobs:
           VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
           VITE_GOOGLE_CLIENT_SECRET: ${{ secrets.VITE_GOOGLE_CLIENT_SECRET }}
 
+      - name: Create resources directory
+        run: mkdir -p resources/backend
+        shell: bash
+
+      - name: Build Go Backend (Cross-platform)
+        working-directory: backend
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            go build -ldflags="-s -w" -o ../resources/backend/alice-backend.exe
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            go build -ldflags="-s -w" -o ../resources/backend/alice-backend
+          else
+            go build -ldflags="-s -w" -o ../resources/backend/alice-backend
+          fi
+        shell: bash
+
       - name: Build Release Files
-        run: npm run build -- --publish never
+        run: npm run build:web && electron-builder --publish never
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

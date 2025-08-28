@@ -590,7 +590,7 @@ export const useConversationStore = defineStore('conversation', () => {
 
     let resultString: string
     try {
-      resultString = await executeFunction(functionName, functionArgs)
+      resultString = await executeFunction(functionName, functionArgs, settingsStore.config)
     } catch (error) {
       console.error('Tool execution failed:', error)
       resultString = `Error: Tool execution failed - ${error.message || 'Unknown error'}`

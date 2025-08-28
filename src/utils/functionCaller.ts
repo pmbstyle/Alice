@@ -508,10 +508,10 @@ async function browser_context(
  * Performs a web search using the Tavily API.
  */
 async function perform_web_search(
-  args: WebSearchArgs
+  args: WebSearchArgs,
+  settings?: any
 ): Promise<FunctionResult> {
-  const settings = useSettingsStore().config
-  const TAVILY_API_KEY = settings.VITE_TAVILY_API_KEY
+  const TAVILY_API_KEY = settings?.VITE_TAVILY_API_KEY
   if (!TAVILY_API_KEY) {
     return { success: false, error: 'Tavily API key is not configured.' }
   }
@@ -613,7 +613,8 @@ const functionSchemas = {
  */
 export async function executeFunction(
   name: string,
-  argsString: any
+  argsString: any,
+  settings?: any
 ): Promise<string> {
   const func = functionRegistry[name]
   const schema = functionSchemas[name as keyof typeof functionSchemas]
@@ -655,7 +656,12 @@ export async function executeFunction(
       }
     }
 
-    const result: FunctionResult = await func(args)
+    let result: FunctionResult
+    if (name === 'perform_web_search') {
+      result = await func(args, settings)
+    } else {
+      result = await func(args)
+    }
 
 
     if (

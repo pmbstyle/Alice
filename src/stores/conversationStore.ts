@@ -116,10 +116,7 @@ export const useConversationStore = defineStore('conversation', () => {
       return false
     }
 
-    if (
-      availableModels.value.length === 0 &&
-      settingsStore.config.VITE_OPENAI_API_KEY
-    ) {
+    if (availableModels.value.length === 0) {
       await fetchModels()
     }
     isInitialized.value = true
@@ -783,26 +780,64 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       if (sttProvider === 'openai') {
         return await api.transcribeWithOpenAI(audioArrayBuffer)
-      } else {
+      } else if (sttProvider === 'groq') {
         return await api.transcribeWithGroq(audioArrayBuffer)
+      } else if (sttProvider === 'local') {
+        return await api.transcribeWithBackend(audioArrayBuffer)
+      } else {
+        throw new Error(`Unknown STT provider: ${sttProvider}`)
       }
     } catch (error: any) {
       generalStore.statusMessage = 'Error: Transcription failed'
       console.error('Transcription service error:', error)
+
+      if (
+        sttProvider === 'local' &&
+        error.message.includes('not initialized')
+      ) {
+        generalStore.statusMessage =
+          'Error: Local STT service not ready. Please check backend status.'
+      }
+
       return ''
     }
   }
 
   async function fetchModels() {
-    if (!settingsStore.config.VITE_OPENAI_API_KEY) {
+    const provider = settingsStore.config.aiProvider
+
+    if (provider === 'openai' && !settingsStore.config.VITE_OPENAI_API_KEY) {
       console.warn('Cannot fetch models: OpenAI API Key is missing.')
       return
+    } else if (
+      provider === 'openrouter' &&
+      !settingsStore.config.VITE_OPENROUTER_API_KEY
+    ) {
+      console.warn('Cannot fetch models: OpenRouter API Key is missing.')
+      return
+    } else if (provider === 'ollama' && !settingsStore.config.ollamaBaseUrl) {
+      console.warn('Cannot fetch models: Ollama Base URL is missing.')
+      return
+    } else if (
+      provider === 'lm-studio' &&
+      !settingsStore.config.lmStudioBaseUrl
+    ) {
+      console.warn('Cannot fetch models: LM Studio Base URL is missing.')
+      return
     }
+
     try {
       availableModels.value = await api.fetchOpenAIModels()
     } catch (error: any) {
       console.error('Failed to fetch models:', error.message)
-      generalStore.statusMessage = `Error: Could not fetch AI models.`
+      const providerNameMap = {
+        openai: 'OpenAI',
+        openrouter: 'OpenRouter',
+        ollama: 'Ollama',
+        'lm-studio': 'LM Studio',
+      }
+      const providerName = providerNameMap[provider] || provider
+      generalStore.statusMessage = `Error: Could not fetch ${providerName} models.`
       availableModels.value = []
     }
   }

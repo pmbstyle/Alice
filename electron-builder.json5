@@ -21,6 +21,11 @@
       from: './app-config.json',
       to: 'app-config.json',
     },
+    {
+      from: 'resources/backend',
+      to: 'backend',
+      filter: ['**/*']
+    },
   ],
   mac: {
     target: ['dmg'],
@@ -40,8 +45,9 @@
     oneClick: true,
     perMachine: false,
     allowToChangeInstallationDirectory: false,
-    deleteAppDataOnUninstall: false,
+    deleteAppDataOnUninstall: false
   },
+  compression: 'store',
   linux: {
     target: ['AppImage'],
     category: 'Utility',

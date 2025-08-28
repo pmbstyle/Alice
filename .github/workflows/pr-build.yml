@@ -29,7 +29,7 @@ jobs:
 
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha || github.ref }}
 
@@ -41,26 +41,60 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
+          cache: 'npm'
 
-      - name: Set up Python
-        uses: actions/setup-python@v4
+      - name: Set up Python (for native modules)
+        uses: actions/setup-python@v5
         id: setup_python
         with:
           python-version: '3.11'
 
-      - name: Install Dependencies
+      - name: Install Python build tools
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          # Ensure distutils is available for node-gyp
+          python -c "import distutils; print('distutils available')"
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/go.sum
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('backend/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Verify Go installation
+        run: |
+          which go
+          go version
+          
+      - name: Install Go Dependencies
+        working-directory: backend
+        run: go mod download
+
+      - name: Install Node Dependencies
         run: npm install
         env:
           PYTHON: ${{ steps.setup_python.outputs.python-path }}
+          npm_config_python: ${{ steps.setup_python.outputs.python-path }}
 
       - name: Rebuild native modules for Electron
         run: npm run rebuild
         env:
           DEBUG: 'electron-rebuild'
           PYTHON: ${{ steps.setup_python.outputs.python-path }}
+          npm_config_python: ${{ steps.setup_python.outputs.python-path }}
 
       - name: Create dummy app-config.json
         shell: bash
@@ -71,8 +105,25 @@ jobs:
           }" > app-config.json
           echo "Dummy app-config.json created for PR build."
 
-      - name: Build Release Files
-        run: npm run build
+      - name: Create resources directory
+        run: mkdir -p resources/backend
+        shell: bash
+
+      - name: Build Go Backend
+        working-directory: backend
+        run: |
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            go build -ldflags="-s -w" -o ../resources/backend/alice-backend.exe
+          else
+            go build -ldflags="-s -w" -o ../resources/backend/alice-backend
+          fi
+        shell: bash
+
+      - name: Build Frontend
+        run: npm run build:web
+
+      - name: Build Electron App
+        run: npx electron-builder --publish never
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -61,9 +61,15 @@ export function initializeUpdater(): void {
   setupUpdaterIPCHandlers()
 }
 
+let autoUpdaterEventsRegistered = false
+
 function setupAutoUpdaterEvents(): void {
+  if (autoUpdaterEventsRegistered) {
+    return
+  }
+  autoUpdaterEventsRegistered = true
+
   autoUpdater.on('checking-for-update', () => {
-    console.log('[AutoUpdater] Checking for update...')
     log.info('[AutoUpdater] Update check initiated')
   })
 
@@ -79,7 +85,6 @@ function setupAutoUpdaterEvents(): void {
     const downloadTimeout = setTimeout(
       () => {
         log.error('[AutoUpdater] Download timeout - no progress for 5 minutes')
-        console.error('[AutoUpdater] Download appears to be stuck')
       },
       5 * 60 * 1000
     )
@@ -92,20 +97,17 @@ function setupAutoUpdaterEvents(): void {
       })
       .catch(err => {
         clearTimeout(downloadTimeout)
-        console.error('[AutoUpdater] Error during download:', err)
         log.error('[AutoUpdater] Download error:', err)
       })
   })
 
   autoUpdater.on('update-not-available', info => {
-    console.log('[AutoUpdater] Update not available.')
     log.info(
       '[AutoUpdater] No update available. Current version is up to date.'
     )
   })
 
   autoUpdater.on('error', err => {
-    console.error('[AutoUpdater] Error:', err)
     log.error('[AutoUpdater] Error details:', err)
     const win = getMainWindow()
     win?.webContents.send('update-error', {
@@ -133,7 +135,14 @@ function setupAutoUpdaterEvents(): void {
   })
 }
 
+let updaterIPCHandlersRegistered = false
+
 function setupUpdaterIPCHandlers(): void {
+  if (updaterIPCHandlersRegistered) {
+    return
+  }
+  updaterIPCHandlersRegistered = true
+
   ipcMain.on('restart-and-install-update', () => {
     console.log('[AutoUpdater] Quitting and installing update...')
     autoUpdater.quitAndInstall()

@@ -1,6 +1,6 @@
 {
   "name": "alice-ai-app",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "main": "dist-electron/main/index.js",
   "description": "Alice AI assistant app",
   "author": "pmbstyle",
@@ -21,9 +21,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && electron-builder",
+    "prebuild": "mkdir -p resources/backend",
+    "build": "npm run build:go && vite build && npx electron-builder",
     "build:web": "vite build",
-    "rebuild": "electron-rebuild -f -w better-sqlite3,hnswlib-node",
+    "build:go": "cd backend && go build -ldflags=\"-s -w\" -o ../resources/backend/alice-backend$([ \"$OS\" = \"Windows_NT\" ] && echo .exe || echo \"\")",
+    "build:go:win": "cd backend && set GOOS=windows&& set GOARCH=amd64&& go build -ldflags=\"-s -w\" -o ../resources/backend/alice-backend.exe",
+    "build:go:mac": "cd backend && GOOS=darwin GOARCH=amd64 go build -ldflags=\"-s -w\" -o ../resources/backend/alice-backend",
+    "build:go:linux": "cd backend && GOOS=linux GOARCH=amd64 go build -ldflags=\"-s -w\" -o ../resources/backend/alice-backend",
+    "rebuild": "npx electron-rebuild -f -w better-sqlite3,hnswlib-node",
     "preview": "vite preview",
     "format": "prettier --write ."
   },
@@ -35,7 +40,7 @@
     "dotenv": "^16.4.5",
     "electron": "30.1.0",
     "electron-builder": "^24.13.3",
-    "electron-rebuild": "^3.2.9",
+    "@electron/rebuild": "^3.6.2",
     "openai": "^5.0.1",
     "pinia": "^3.0.3",
     "postcss": "^8.5.6",

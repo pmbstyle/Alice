@@ -23,8 +23,17 @@ export interface AliceSettings {
   VITE_OPENAI_API_KEY: string
   VITE_OPENROUTER_API_KEY: string
   VITE_GROQ_API_KEY: string
-  sttProvider: 'openai' | 'groq'
-  aiProvider: 'openai' | 'openrouter'
+  sttProvider: 'openai' | 'groq' | 'local'
+  aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
+
+  // Local Go Backend STT settings
+  localSttModel: string
+  localSttLanguage: string
+  localSttEnabled: boolean
+  localSttWakeWord: string
+
+  ollamaBaseUrl: string
+  lmStudioBaseUrl: string
 
   assistantModel: string
   assistantSystemPrompt: string
@@ -38,7 +47,10 @@ export interface AliceSettings {
   SUMMARIZATION_MESSAGE_COUNT: number
   SUMMARIZATION_MODEL: string
   SUMMARIZATION_SYSTEM_PROMPT: string
+  ttsProvider: 'openai' | 'local'
   ttsVoice: 'alloy' | 'echo' | 'fable' | 'nova' | 'onyx' | 'shimmer'
+  localTtsVoice: string
+  embeddingProvider: 'openai' | 'local'
 
   microphoneToggleHotkey: string
   mutePlaybackHotkey: string
@@ -49,6 +61,8 @@ export interface AliceSettings {
   VITE_QB_URL: string
   VITE_QB_USERNAME: string
   VITE_QB_PASSWORD: string
+
+  VITE_TAVILY_API_KEY: string
 
   websocketPort: number
 
@@ -62,6 +76,14 @@ const defaultSettings: AliceSettings = {
   VITE_GROQ_API_KEY: '',
   sttProvider: 'openai',
   aiProvider: 'openai',
+
+  localSttModel: 'whisper-base',
+  localSttLanguage: 'auto',
+  localSttEnabled: false,
+  localSttWakeWord: 'alice',
+
+  ollamaBaseUrl: 'http://localhost:11434',
+  lmStudioBaseUrl: 'http://localhost:1234',
 
   assistantModel: 'gpt-4.1-mini',
   assistantSystemPrompt: defaultSystemPromptFromMD,
@@ -81,7 +103,10 @@ const defaultSettings: AliceSettings = {
   SUMMARIZATION_MESSAGE_COUNT: 20,
   SUMMARIZATION_MODEL: 'gpt-4.1-nano',
   SUMMARIZATION_SYSTEM_PROMPT: DEFAULT_SUMMARIZATION_SYSTEM_PROMPT,
+  ttsProvider: 'openai',
   ttsVoice: 'nova',
+  localTtsVoice: 'en_US-amy-medium',
+  embeddingProvider: 'openai',
 
   microphoneToggleHotkey: 'Alt+M',
   mutePlaybackHotkey: 'Alt+S',
@@ -92,6 +117,8 @@ const defaultSettings: AliceSettings = {
   VITE_QB_URL: '',
   VITE_QB_USERNAME: '',
   VITE_QB_PASSWORD: '',
+
+  VITE_TAVILY_API_KEY: '',
 
   websocketPort: 5421,
 
@@ -106,6 +133,15 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   sttProvider: 'Speech-to-Text Provider',
   aiProvider: 'AI Provider',
 
+  // Local Go Backend STT labels
+  localSttModel: 'Local STT Model',
+  localSttLanguage: 'Language',
+  localSttEnabled: 'Enable Local STT',
+  localSttWakeWord: 'Wake Word',
+
+  ollamaBaseUrl: 'Ollama Base URL',
+  lmStudioBaseUrl: 'LM Studio Base URL',
+
   assistantModel: 'Assistant Model',
   assistantSystemPrompt: 'Assistant System Prompt',
   assistantTemperature: 'Assistant Temperature',
@@ -117,7 +153,10 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   SUMMARIZATION_MESSAGE_COUNT: 'Summarization Message Count',
   SUMMARIZATION_MODEL: 'Summarization Model',
   SUMMARIZATION_SYSTEM_PROMPT: 'Summarization System Prompt',
-  ttsVoice: 'Text-to-Speech Voice',
+  ttsProvider: 'Text-to-Speech Provider',
+  ttsVoice: 'OpenAI TTS Voice',
+  localTtsVoice: 'Local TTS Voice',
+  embeddingProvider: 'Embedding Provider',
   microphoneToggleHotkey: 'Microphone Toggle Hotkey',
   mutePlaybackHotkey: 'Mute Playback Hotkey',
   takeScreenshotHotkey: 'Take Screenshot Hotkey',
@@ -127,6 +166,9 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_QB_URL: 'qBittorrent URL',
   VITE_QB_USERNAME: 'qBittorrent Username',
   VITE_QB_PASSWORD: 'qBittorrent Password',
+
+  VITE_TAVILY_API_KEY: 'Tavily API Key (Web Search)',
+
   websocketPort: 'WebSocket Port',
   mcpServersConfig: 'MCP Servers JSON Configuration',
   approvedCommands: 'Approved Commands',
@@ -148,6 +190,69 @@ export const useSettingsStore = defineStore('settings', () => {
   const coreOpenAISettingsValid = ref(false)
   const sessionApprovedCommands = ref<string[]>([])
 
+  const validateAndFixSettings = (
+    loadedSettings: Partial<AliceSettings>
+  ): { settings: AliceSettings; migrated: boolean } => {
+    const validated = { ...defaultSettings, ...loadedSettings }
+    let migrated = false
+
+    // Migration: Handle old 'transformers' provider
+    if ((validated.sttProvider as any) === 'transformers') {
+      console.log('🔄 Migrating settings: Converting old "transformers" provider to "local" (Go backend)')
+      validated.sttProvider = 'local'
+      migrated = true
+      
+      // Migrate old transformers settings to new local settings
+      if ((loadedSettings as any).transformersModel) {
+        validated.localSttModel = (loadedSettings as any).transformersModel
+        console.log(`📝 Migrated STT model: ${validated.localSttModel}`)
+      }
+      if ((loadedSettings as any).transformersLanguage) {
+        validated.localSttLanguage = (loadedSettings as any).transformersLanguage
+        console.log(`🌐 Migrated STT language: ${validated.localSttLanguage}`)
+      }
+      if ((loadedSettings as any).transformersWakeWordEnabled !== undefined) {
+        validated.localSttEnabled = (loadedSettings as any).transformersWakeWordEnabled
+        console.log(`🎤 Migrated STT enabled: ${validated.localSttEnabled}`)
+      }
+      if ((loadedSettings as any).transformersWakeWord) {
+        validated.localSttWakeWord = (loadedSettings as any).transformersWakeWord
+        console.log(`🎯 Migrated wake word: ${validated.localSttWakeWord}`)
+      }
+      console.log('✅ Settings migration completed successfully')
+    }
+
+    const validSTTProviders = ['openai', 'groq', 'local'] as const
+    if (!validSTTProviders.includes(validated.sttProvider as any)) {
+      validated.sttProvider = 'openai'
+    }
+
+    const validAIProviders = [
+      'openai',
+      'openrouter',
+      'ollama',
+      'lm-studio',
+    ] as const
+    if (!validAIProviders.includes(validated.aiProvider as any)) {
+      validated.aiProvider = 'openai'
+    }
+
+    if (validated.sttProvider === 'local') {
+      const validModelIds = [
+        'whisper-tiny.en',
+        'whisper-base',
+        'whisper-small',
+        'whisper-medium',
+        'whisper-large',
+      ]
+      if (!validModelIds.includes(validated.localSttModel)) {
+        validated.localSttModel = validModelIds[1] || 'whisper-base'
+      }
+    }
+
+    return { settings: validated, migrated }
+  }
+
   const isProduction = computed(() => import.meta.env.PROD)
 
   const areEssentialSettingsProvided = computed(() => {
@@ -157,14 +262,27 @@ export const useSettingsStore = defineStore('settings', () => {
       'SUMMARIZATION_MODEL',
     ]
 
-    essentialKeys.push('VITE_OPENAI_API_KEY')
-
-    if (settings.value.aiProvider === 'openrouter') {
+    // API keys requirements based on provider
+    if (settings.value.aiProvider === 'openai') {
+      essentialKeys.push('VITE_OPENAI_API_KEY')
+    } else if (settings.value.aiProvider === 'openrouter') {
       essentialKeys.push('VITE_OPENROUTER_API_KEY')
+    } else if (settings.value.aiProvider === 'ollama') {
+      essentialKeys.push('ollamaBaseUrl')
+    } else if (settings.value.aiProvider === 'lm-studio') {
+      essentialKeys.push('lmStudioBaseUrl')
+    }
+
+    if (settings.value.aiProvider !== 'openai') {
+      essentialKeys.push('VITE_OPENAI_API_KEY')
     }
 
     if (settings.value.sttProvider === 'groq') {
       essentialKeys.push('VITE_GROQ_API_KEY')
+    }
+
+    if (settings.value.sttProvider === 'local') {
+      essentialKeys.push('localSttModel')
     }
 
     return essentialKeys.every(key => {
@@ -179,12 +297,25 @@ export const useSettingsStore = defineStore('settings', () => {
   const areCoreApiKeysSufficientForTesting = computed(() => {
     if (!isProduction.value) return true
 
-    if (!settings.value.VITE_OPENAI_API_KEY?.trim()) {
+    const needsOpenAI =
+      settings.value.aiProvider === 'openai' ||
+      settings.value.aiProvider === 'openrouter' ||
+      settings.value.sttProvider === 'openai'
+
+    if (needsOpenAI && !settings.value.VITE_OPENAI_API_KEY?.trim()) {
       return false
     }
 
     if (settings.value.aiProvider === 'openrouter') {
       return !!settings.value.VITE_OPENROUTER_API_KEY?.trim()
+    }
+
+    if (settings.value.aiProvider === 'ollama') {
+      return !!settings.value.ollamaBaseUrl?.trim()
+    }
+
+    if (settings.value.aiProvider === 'lm-studio') {
+      return !!settings.value.lmStudioBaseUrl?.trim()
     }
 
     return true
@@ -236,42 +367,46 @@ export const useSettingsStore = defineStore('settings', () => {
   })
 
   async function loadSettings() {
-    if (initialLoadAttempted.value && isProduction.value) {
+    if (initialLoadAttempted.value) {
       return
     }
 
+    initialLoadAttempted.value = true
     isLoading.value = true
     error.value = null
     successMessage.value = null
     coreOpenAISettingsValid.value = false
     try {
       if (isProduction.value) {
-        console.log(
-          '[SettingsStore] Production: Loading settings from main process...'
-        )
         const loaded = await window.settingsAPI.loadSettings()
         if (loaded) {
-          settings.value = {
-            ...defaultSettings,
-            ...(loaded as Partial<AliceSettings>),
+          const result = validateAndFixSettings(
+            loaded as Partial<AliceSettings>
+          )
+          settings.value = result.settings
+          
+          let needsSave = false
+          if (result.migrated) {
+            needsSave = true
+            console.log('💾 Automatically saving migrated settings to file')
           }
+          
           if (
             !settings.value.onboardingCompleted &&
             settings.value.VITE_OPENAI_API_KEY?.trim()
           ) {
-            console.log(
-              '[SettingsStore] Existing user with API key found, auto-completing onboarding'
-            )
             settings.value.onboardingCompleted = true
+            needsSave = true
+          }
+          
+          if (needsSave) {
             await saveSettingsToFile()
           }
         } else {
-          settings.value = { ...defaultSettings }
+          const result = validateAndFixSettings({})
+          settings.value = result.settings
         }
       } else {
-        console.log(
-          '[SettingsStore] Development: Populating with defaults, persisted dev settings, then .env.'
-        )
         let devCombinedSettings: AliceSettings = { ...defaultSettings }
         if (window.settingsAPI) {
           const loadedDevSettings = await window.settingsAPI.loadSettings()
@@ -280,11 +415,22 @@ export const useSettingsStore = defineStore('settings', () => {
               ...devCombinedSettings,
               ...(loadedDevSettings as Partial<AliceSettings>),
             }
+
+            if (
+              !devCombinedSettings.onboardingCompleted &&
+              (loadedDevSettings as any).VITE_OPENAI_API_KEY?.trim()
+            ) {
+              devCombinedSettings.onboardingCompleted = true
+            }
           }
         }
         for (const key of Object.keys(defaultSettings) as Array<
           keyof AliceSettings
         >) {
+          if (key === 'onboardingCompleted') {
+            continue
+          }
+
           if (import.meta.env[key]) {
             const envValue = import.meta.env[key]
             if (
@@ -309,19 +455,20 @@ export const useSettingsStore = defineStore('settings', () => {
             }
           }
         }
-        settings.value = devCombinedSettings
-
-        if (
-          !settings.value.onboardingCompleted &&
-          settings.value.VITE_OPENAI_API_KEY?.trim()
-        ) {
-          console.log(
-            '[SettingsStore] Dev: Existing user with API key found, auto-completing onboarding'
-          )
-          settings.value.onboardingCompleted = true
-          if (window.settingsAPI?.saveSettings) {
+        try {
+          const result = validateAndFixSettings(devCombinedSettings)
+          settings.value = result.settings
+          
+          if (result.migrated && window.settingsAPI) {
+            console.log('💾 Automatically saving migrated dev settings to file')
             await saveSettingsToFile()
           }
+        } catch (error) {
+          console.error(
+            '[SettingsStore] Settings validation failed, using unvalidated settings:',
+            error
+          )
+          settings.value = devCombinedSettings as AliceSettings
         }
       }
 
@@ -330,9 +477,6 @@ export const useSettingsStore = defineStore('settings', () => {
           const conversationStore = useConversationStore()
           await conversationStore.fetchModels()
           coreOpenAISettingsValid.value = true
-          console.log(
-            '[SettingsStore] Core OpenAI API key validated on load via fetchModels.'
-          )
         } catch (e: any) {
           console.warn(
             `[SettingsStore] Core OpenAI API key validation failed on load: ${e.message}`
@@ -346,7 +490,6 @@ export const useSettingsStore = defineStore('settings', () => {
       coreOpenAISettingsValid.value = false
     } finally {
       isLoading.value = false
-      initialLoadAttempted.value = true
     }
   }
 
@@ -368,10 +511,14 @@ export const useSettingsStore = defineStore('settings', () => {
       ;(settings.value as any)[key] = String(value)
     }
     if (key === 'sttProvider') {
-      settings.value[key] = value as 'openai' | 'groq'
+      settings.value[key] = value as 'openai' | 'groq' | 'local'
     }
     if (key === 'aiProvider') {
-      settings.value[key] = value as 'openai' | 'openrouter'
+      settings.value[key] = value as
+        | 'openai'
+        | 'openrouter'
+        | 'ollama'
+        | 'lm-studio'
     }
     if (key === 'assistantReasoningEffort') {
       settings.value[key] = value as 'minimal' | 'low' | 'medium' | 'high'
@@ -379,12 +526,32 @@ export const useSettingsStore = defineStore('settings', () => {
     if (key === 'assistantVerbosity') {
       settings.value[key] = value as 'low' | 'medium' | 'high'
     }
+    if (key === 'localSttModel') {
+      settings.value[key] = value as string
+    }
+    if (key === 'localSttLanguage') {
+      settings.value[key] = value as string
+    }
+    if (key === 'localSttEnabled') {
+      settings.value[key] = value as boolean
+    }
+    if (key === 'ttsProvider') {
+      settings.value[key] = value as 'openai' | 'local'
+    }
+    if (key === 'localTtsVoice') {
+      settings.value[key] = value as string
+    }
+    if (key === 'embeddingProvider') {
+      settings.value[key] = value as 'openai' | 'local'
+    }
 
     successMessage.value = null
     error.value = null
     if (
       key === 'VITE_OPENAI_API_KEY' ||
       key === 'VITE_OPENROUTER_API_KEY' ||
+      key === 'ollamaBaseUrl' ||
+      key === 'lmStudioBaseUrl' ||
       key === 'aiProvider'
     ) {
       coreOpenAISettingsValid.value = false
@@ -393,9 +560,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function saveSettingsToFile(): Promise<boolean> {
     if (!isProduction.value && !window.settingsAPI?.saveSettings) {
-      console.log(
-        '[SettingsStore] Dev mode (or no IPC): Skipping saveSettingsToFile.'
-      )
       successMessage.value =
         'Settings updated (Dev Mode - Not saved to file unless IPC available)'
       return true
@@ -409,6 +573,14 @@ export const useSettingsStore = defineStore('settings', () => {
         VITE_GROQ_API_KEY: settings.value.VITE_GROQ_API_KEY,
         sttProvider: settings.value.sttProvider,
         aiProvider: settings.value.aiProvider,
+
+        localSttModel: settings.value.localSttModel,
+        localSttLanguage: settings.value.localSttLanguage,
+        localSttEnabled: settings.value.localSttEnabled,
+        localSttWakeWord: settings.value.localSttWakeWord,
+
+        ollamaBaseUrl: settings.value.ollamaBaseUrl,
+        lmStudioBaseUrl: settings.value.lmStudioBaseUrl,
         assistantModel: settings.value.assistantModel,
         assistantSystemPrompt: settings.value.assistantSystemPrompt,
         assistantTemperature: settings.value.assistantTemperature,
@@ -422,7 +594,10 @@ export const useSettingsStore = defineStore('settings', () => {
         SUMMARIZATION_MESSAGE_COUNT: settings.value.SUMMARIZATION_MESSAGE_COUNT,
         SUMMARIZATION_MODEL: settings.value.SUMMARIZATION_MODEL,
         SUMMARIZATION_SYSTEM_PROMPT: settings.value.SUMMARIZATION_SYSTEM_PROMPT,
+        ttsProvider: settings.value.ttsProvider,
         ttsVoice: settings.value.ttsVoice,
+        localTtsVoice: settings.value.localTtsVoice,
+        embeddingProvider: settings.value.embeddingProvider,
         microphoneToggleHotkey: settings.value.microphoneToggleHotkey,
         mutePlaybackHotkey: settings.value.mutePlaybackHotkey,
         takeScreenshotHotkey: settings.value.takeScreenshotHotkey,
@@ -431,6 +606,7 @@ export const useSettingsStore = defineStore('settings', () => {
         VITE_QB_URL: settings.value.VITE_QB_URL,
         VITE_QB_USERNAME: settings.value.VITE_QB_USERNAME,
         VITE_QB_PASSWORD: settings.value.VITE_QB_PASSWORD,
+        VITE_TAVILY_API_KEY: settings.value.VITE_TAVILY_API_KEY,
         websocketPort: settings.value.websocketPort,
         approvedCommands: Array.from(settings.value.approvedCommands || []),
         onboardingCompleted: settings.value.onboardingCompleted,
@@ -439,7 +615,6 @@ export const useSettingsStore = defineStore('settings', () => {
       const saveResult = await window.settingsAPI.saveSettings(plainSettings)
 
       if (saveResult.success) {
-        console.log('[SettingsStore] Settings saved to file successfully.')
         isSaving.value = false
         return true
       } else {
@@ -471,22 +646,55 @@ export const useSettingsStore = defineStore('settings', () => {
 
     const currentConfigForTest = config.value
 
-    if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
-      error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing. Required for TTS/STT/embeddings.`
-      generalStore.statusMessage =
-        'OpenAI API Key is required for TTS/STT/embeddings.'
-      isSaving.value = false
-      return
-    }
-
-    if (
-      currentConfigForTest.aiProvider === 'openrouter' &&
-      !currentConfigForTest.VITE_OPENROUTER_API_KEY?.trim()
-    ) {
-      error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENROUTER_API_KEY}' is missing.`
-      generalStore.statusMessage = 'OpenRouter API Key is required.'
-      isSaving.value = false
-      return
+    if (currentConfigForTest.aiProvider === 'openai') {
+      if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing.`
+        generalStore.statusMessage = 'OpenAI API Key is required.'
+        isSaving.value = false
+        return
+      }
+    } else if (currentConfigForTest.aiProvider === 'openrouter') {
+      if (!currentConfigForTest.VITE_OPENROUTER_API_KEY?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENROUTER_API_KEY}' is missing.`
+        generalStore.statusMessage = 'OpenRouter API Key is required.'
+        isSaving.value = false
+        return
+      }
+      if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing. Required for TTS/STT/embeddings.`
+        generalStore.statusMessage =
+          'OpenAI API Key is required for TTS/STT/embeddings.'
+        isSaving.value = false
+        return
+      }
+    } else if (currentConfigForTest.aiProvider === 'ollama') {
+      if (!currentConfigForTest.ollamaBaseUrl?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.ollamaBaseUrl}' is missing.`
+        generalStore.statusMessage = 'Ollama Base URL is required.'
+        isSaving.value = false
+        return
+      }
+      if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing. Required for TTS/STT/embeddings.`
+        generalStore.statusMessage =
+          'OpenAI API Key is required for TTS/STT/embeddings.'
+        isSaving.value = false
+        return
+      }
+    } else if (currentConfigForTest.aiProvider === 'lm-studio') {
+      if (!currentConfigForTest.lmStudioBaseUrl?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.lmStudioBaseUrl}' is missing.`
+        generalStore.statusMessage = 'LM Studio Base URL is required.'
+        isSaving.value = false
+        return
+      }
+      if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing. Required for TTS/STT/embeddings.`
+        generalStore.statusMessage =
+          'OpenAI API Key is required for TTS/STT/embeddings.'
+        isSaving.value = false
+        return
+      }
     }
 
     if (
@@ -512,33 +720,51 @@ export const useSettingsStore = defineStore('settings', () => {
       await conversationStore.fetchModels()
       openAIServiceTestSuccess = true
       coreOpenAISettingsValid.value = true
-      console.log(
-        `[SettingsStore] ${currentConfigForTest.aiProvider} API connection test successful (fetchModels).`
-      )
     } catch (e: any) {
+      const providerNameMap = {
+        openai: 'OpenAI',
+        openrouter: 'OpenRouter',
+        ollama: 'Ollama',
+        'lm-studio': 'LM Studio',
+      }
       const providerName =
-        currentConfigForTest.aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'
-      error.value = `${providerName} API connection test failed: ${e.message}. Check your ${providerName} API Key.`
+        providerNameMap[currentConfigForTest.aiProvider] ||
+        currentConfigForTest.aiProvider
+      error.value = `${providerName} API connection test failed: ${e.message}. Check your ${providerName} configuration.`
       coreOpenAISettingsValid.value = false
       openAIServiceTestSuccess = false
     }
 
     if (openAIServiceTestSuccess) {
       if (!currentConfigForTest.assistantModel?.trim()) {
+        const providerNameMap = {
+          openai: 'OpenAI',
+          openrouter: 'OpenRouter',
+          ollama: 'Ollama',
+          'lm-studio': 'LM Studio',
+        }
         const providerName =
-          currentConfigForTest.aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'
-        error.value = `${providerName} API Key is valid. Please select an '${settingKeyToLabelMap.assistantModel}'.`
+          providerNameMap[currentConfigForTest.aiProvider] ||
+          currentConfigForTest.aiProvider
+        error.value = `${providerName} connection is valid. Please select an '${settingKeyToLabelMap.assistantModel}'.`
         generalStore.statusMessage = 'Assistant model not selected.'
-        successMessage.value = `${providerName} API Key is valid. Models loaded. Please complete model selections.`
+        successMessage.value = `${providerName} connection is valid. Models loaded. Please complete model selections.`
         isSaving.value = false
         return
       }
       if (!currentConfigForTest.SUMMARIZATION_MODEL?.trim()) {
+        const providerNameMap = {
+          openai: 'OpenAI',
+          openrouter: 'OpenRouter',
+          ollama: 'Ollama',
+          'lm-studio': 'LM Studio',
+        }
         const providerName =
-          currentConfigForTest.aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'
-        error.value = `${providerName} API Key is valid. Please select a '${settingKeyToLabelMap.SUMMARIZATION_MODEL}'.`
+          providerNameMap[currentConfigForTest.aiProvider] ||
+          currentConfigForTest.aiProvider
+        error.value = `${providerName} connection is valid. Please select a '${settingKeyToLabelMap.SUMMARIZATION_MODEL}'.`
         generalStore.statusMessage = 'Summarization model not selected.'
-        successMessage.value = `${providerName} API Key is valid. Models loaded. Please complete model selections.`
+        successMessage.value = `${providerName} connection is valid. Models loaded. Please complete model selections.`
         isSaving.value = false
         return
       }
@@ -574,12 +800,17 @@ export const useSettingsStore = defineStore('settings', () => {
   async function completeOnboarding(onboardingData: {
     VITE_OPENAI_API_KEY: string
     VITE_OPENROUTER_API_KEY: string
-    sttProvider: 'openai' | 'groq'
-    aiProvider: 'openai' | 'openrouter'
+    sttProvider: 'openai' | 'groq' | 'local'
+    ttsProvider?: 'openai' | 'local'
+    embeddingProvider?: 'openai' | 'local'
+    aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
+    assistantModel?: string
+    summarizationModel?: string
     VITE_GROQ_API_KEY: string
+    ollamaBaseUrl?: string
+    lmStudioBaseUrl?: string
+    useLocalModels?: boolean
   }) {
-    console.log('[SettingsStore] Completing onboarding...')
-
     settings.value.VITE_OPENAI_API_KEY = onboardingData.VITE_OPENAI_API_KEY
     settings.value.VITE_OPENROUTER_API_KEY =
       onboardingData.VITE_OPENROUTER_API_KEY
@@ -587,13 +818,34 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value.aiProvider = onboardingData.aiProvider
     settings.value.VITE_GROQ_API_KEY = onboardingData.VITE_GROQ_API_KEY
 
+    // Set models if provided
+    if (onboardingData.assistantModel) {
+      settings.value.assistantModel = onboardingData.assistantModel
+    }
+    if (onboardingData.summarizationModel) {
+      settings.value.SUMMARIZATION_MODEL = onboardingData.summarizationModel
+    }
+
+    // Set TTS and embedding providers based on local models preference
+    if (onboardingData.useLocalModels) {
+      settings.value.ttsProvider = 'local'
+      settings.value.embeddingProvider = 'local'
+    } else {
+      settings.value.ttsProvider = 'openai'
+      settings.value.embeddingProvider = 'openai'
+    }
+
+    if (onboardingData.ollamaBaseUrl) {
+      settings.value.ollamaBaseUrl = onboardingData.ollamaBaseUrl
+    }
+    if (onboardingData.lmStudioBaseUrl) {
+      settings.value.lmStudioBaseUrl = onboardingData.lmStudioBaseUrl
+    }
+
     settings.value.onboardingCompleted = true
 
     const success = await saveSettingsToFile()
     if (success) {
-      console.log(
-        '[SettingsStore] Onboarding settings saved. Re-initializing clients.'
-      )
       reinitializeClients()
       const conversationStore = useConversationStore()
       await conversationStore.initialize()

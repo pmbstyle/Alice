@@ -58,6 +58,8 @@ export async function createMainWindow(): Promise<BrowserWindow> {
     hasShadow: false,
     webPreferences: {
       preload: getPreloadPath(),
+      offscreen: false,
+      backgroundThrottling: false,
     },
   })
 
@@ -103,6 +105,8 @@ export async function createOverlayWindow(): Promise<BrowserWindow> {
     backgroundColor: '#00000000',
     webPreferences: {
       preload: getPreloadPath(),
+      offscreen: false,
+      backgroundThrottling: false,
     },
   })
 

@@ -3,14 +3,16 @@ import * as vad from '@ricky0123/vad-web'
 import { float32ArrayToWav } from '../utils/audioProcess'
 import { useGeneralStore } from '../stores/generalStore'
 import { useConversationStore } from '../stores/conversationStore'
+import { useSettingsStore } from '../stores/settingsStore'
 import { storeToRefs } from 'pinia'
 import eventBus from '../utils/eventBus'
 
 export function useAudioProcessing() {
   const generalStore = useGeneralStore()
   const conversationStore = useConversationStore()
+  const settingsStore = useSettingsStore()
 
-  const { audioState, isRecordingRequested } = storeToRefs(generalStore)
+  const { audioState, isRecordingRequested, awaitingWakeWord, wakeWordDetected } = storeToRefs(generalStore)
   const { setAudioState } = generalStore
 
   const myvad = ref<vad.MicVAD | null>(null)
@@ -182,6 +184,38 @@ export function useAudioProcessing() {
     }
   }
 
+  const checkForWakeWord = (transcription: string): { hasWakeWord: boolean; command: string } => {
+    if (!settingsStore.config.localSttEnabled || 
+        !settingsStore.config.localSttWakeWord ||
+        settingsStore.config.sttProvider !== 'local') {
+      return { hasWakeWord: false, command: transcription }
+    }
+
+    const wakeWord = settingsStore.config.localSttWakeWord.toLowerCase().trim()
+    const text = transcription.toLowerCase().trim()
+    
+    const patterns = [
+      `hey ${wakeWord}`,
+      `ok ${wakeWord}`,
+      `${wakeWord}`
+    ]
+    
+    for (const pattern of patterns) {
+      if (text.includes(pattern)) {
+        const index = text.indexOf(pattern)
+        const afterWakeWord = transcription.slice(index + pattern.length).trim()
+        const command = afterWakeWord.replace(/^[,.\s]+/, '').trim()
+        
+        return { 
+          hasWakeWord: true, 
+          command: command || transcription
+        }
+      }
+    }
+    
+    return { hasWakeWord: false, command: transcription }
+  }
+
   const processAudioRecording = async (audio: Float32Array) => {
     if (audioState.value !== 'LISTENING' || !audio || audio.length === 0) {
       console.warn(
@@ -191,23 +225,42 @@ export function useAudioProcessing() {
       return
     }
 
-    console.log('[Audio Processing] Starting audio processing...')
     setAudioState('PROCESSING_AUDIO')
 
     try {
       const wavBuffer = float32ArrayToWav(audio, 16000)
-      console.log(
-        '[Audio Processing] Converted to WAV, sending for transcription...'
-      )
       const transcription =
         await conversationStore.transcribeAudioMessage(wavBuffer)
-      console.log('[Audio Processing] Received transcription:', transcription)
 
       if (transcription && transcription.trim()) {
-        generalStore.recognizedText = transcription
-        eventBus.emit('processing-complete', transcription)
+        if (settingsStore.config.localSttEnabled && 
+            settingsStore.config.sttProvider === 'local') {
+          
+          if (awaitingWakeWord.value) {
+            const { hasWakeWord, command } = checkForWakeWord(transcription)
+            
+            if (hasWakeWord) {
+              awaitingWakeWord.value = true
+              wakeWordDetected.value = false
+              
+              if (command && command.trim()) {
+                generalStore.recognizedText = command
+                eventBus.emit('processing-complete', command)
+              } else {
+                generalStore.recognizedText = transcription
+                setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+                isSpeechDetected.value = false
+              }
+            } else {
+              setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+              isSpeechDetected.value = false
+            }
+          }
+        } else {
+          generalStore.recognizedText = transcription
+          eventBus.emit('processing-complete', transcription)
+        }
       } else {
-        console.log('[Audio Processing] No speech detected in transcription.')
         setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
         isSpeechDetected.value = false
       }
@@ -229,6 +282,14 @@ export function useAudioProcessing() {
       }
       if (audioState.value === 'IDLE' || audioState.value === 'CONFIG') {
         setAudioState('LISTENING')
+        if (settingsStore.config.localSttEnabled && 
+            settingsStore.config.sttProvider === 'local') {
+          awaitingWakeWord.value = true
+          wakeWordDetected.value = false
+        } else {
+          awaitingWakeWord.value = false
+          wakeWordDetected.value = false
+        }
       }
     } else {
       destroyVAD()
@@ -246,7 +307,6 @@ export function useAudioProcessing() {
   }
 
   onUnmounted(() => {
-    console.log('[Audio Processing] Component unmounted, ensuring VAD cleanup.')
     destroyVAD()
     if (window.ipcRenderer) {
       window.ipcRenderer.off('global-hotkey-mic-toggle', handleGlobalMicToggle)

@@ -54,6 +54,8 @@ export const useGeneralStore = defineStore('general', () => {
   const audioQueue = ref<Response[]>([])
   const sideBarView = ref<string>('chat')
   const attachedFile = ref<File | null>(null)
+  const awaitingWakeWord = ref<boolean>(false)
+  const wakeWordDetected = ref<boolean>(false)
 
   const setAudioState = (newState: AudioState) => {
     if (audioState.value === newState) return
@@ -65,7 +67,7 @@ export const useGeneralStore = defineStore('general', () => {
           : 'Stand by'
         break
       case 'LISTENING':
-        statusMessage.value = 'Listening...'
+        statusMessage.value = awaitingWakeWord.value ? 'Waiting for wake word...' : 'Listening...'
         break
       case 'PROCESSING_AUDIO':
         statusMessage.value = 'Processing audio...'
@@ -385,6 +387,8 @@ export const useGeneralStore = defineStore('general', () => {
     audioQueue,
     sideBarView,
     attachedFile,
+    awaitingWakeWord,
+    wakeWordDetected,
     setAudioState,
     queueAudioForPlayback,
     addMessageToHistory,

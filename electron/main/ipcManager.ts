@@ -45,6 +45,7 @@ import {
   registerMutePlaybackHotkey,
   registerTakeScreenshotHotkey,
 } from './hotkeyManager'
+import { backendManager } from './backendManager'
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_DIR_NAME = 'generated_images'
@@ -55,7 +56,14 @@ const GENERATED_IMAGES_FULL_PATH = path.join(
 
 let screenshotDataURL: string | null = null
 
+let ipcHandlersRegistered = false
+
 export function registerIPCHandlers(): void {
+  if (ipcHandlersRegistered) {
+    return
+  }
+  ipcHandlersRegistered = true
+
   // Window management
   ipcMain.on('resize', (event, arg) => {
     if (
@@ -95,7 +103,9 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
-        await addThoughtVector(conversationId, role, textContent, embedding)
+        const provider: 'openai' | 'local' = embedding.length === 384 ? 'local' : 'openai'
+        
+        await addThoughtVector(conversationId, role, textContent, embedding, provider)
         return { success: true }
       } catch (error) {
         console.error('IPC thoughtVector:add error:', error)
@@ -117,9 +127,14 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
+        const provider: 'openai' | 'local' | 'both' = 
+          queryEmbedding.length === 384 ? 'local' :
+          queryEmbedding.length === 1536 ? 'openai' : 'both'
+        
         const thoughtsMetadatas = await searchSimilarThoughts(
           queryEmbedding,
-          topK
+          topK,
+          provider
         )
         const thoughtTexts = thoughtsMetadatas.map(t => t.textContent)
         return { success: true, data: thoughtTexts }
@@ -360,6 +375,7 @@ export function registerIPCHandlers(): void {
   ipcMain.handle('focus-main-window', () => {
     return focusMainWindow()
   })
+
 
   // Settings management
   ipcMain.handle('settings:load', async () => {
@@ -665,9 +681,67 @@ export function registerIPCHandlers(): void {
       }
     }
   )
+
+  // Go Backend Management
+  ipcMain.handle('backend:start', async () => {
+    try {
+      const success = await backendManager.start()
+      return { success }
+    } catch (error: any) {
+      console.error('[IPC backend:start] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('backend:stop', async () => {
+    try {
+      await backendManager.stop()
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC backend:stop] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('backend:health', async () => {
+    try {
+      const isHealthy = await backendManager.isHealthy()
+      return { success: true, healthy: isHealthy }
+    } catch (error: any) {
+      console.error('[IPC backend:health] Error:', error)
+      return { success: false, error: error.message, healthy: false }
+    }
+  })
+
+  ipcMain.handle('backend:service-status', async () => {
+    try {
+      const serviceStatus = await backendManager.getServiceStatus()
+      return { success: true, data: serviceStatus }
+    } catch (error: any) {
+      console.error('[IPC backend:service-status] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Backend API URL endpoint - frontend will communicate directly with Go backend
+  ipcMain.handle('backend:get-api-url', async () => {
+    try {
+      const apiUrl = backendManager.getApiUrl()
+      return { success: true, data: { apiUrl } }
+    } catch (error: any) {
+      console.error('[IPC backend:get-api-url] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
 }
 
+let googleIPCHandlersRegistered = false
+
 export function registerGoogleIPCHandlers(): void {
+  if (googleIPCHandlersRegistered) {
+    return
+  }
+  googleIPCHandlersRegistered = true
   async function withAuthenticatedClient<T>(
     operation: (authClient: any) => Promise<T>,
     serviceName: string
@@ -943,4 +1017,5 @@ export function registerGoogleIPCHandlers(): void {
       }
     }
   })
+
 }

@@ -1,10 +1,13 @@
 import OpenAI from 'openai'
 import Groq from 'groq-sdk'
 import { useSettingsStore } from '../stores/settingsStore'
+import { backendApi } from './backendApi'
 
 let openaiClient: OpenAI | null = null
 let openrouterClient: OpenAI | null = null
 let groqClient: Groq | null = null
+let ollamaClient: OpenAI | null = null
+let lmStudioClient: OpenAI | null = null
 
 export function getOpenAIClient(): OpenAI {
   if (!openaiClient) {
@@ -34,6 +37,26 @@ export function getGroqClient(): Groq {
     throw new Error('Groq client could not be initialized')
   }
   return groqClient
+}
+
+export function getOllamaClient(): OpenAI {
+  if (!ollamaClient) {
+    initializeOllamaClient()
+  }
+  if (!ollamaClient) {
+    throw new Error('Ollama client could not be initialized')
+  }
+  return ollamaClient
+}
+
+export function getLMStudioClient(): OpenAI {
+  if (!lmStudioClient) {
+    initializeLMStudioClient()
+  }
+  if (!lmStudioClient) {
+    throw new Error('LM Studio client could not be initialized')
+  }
+  return lmStudioClient
 }
 
 function initializeOpenAIClient(): void {
@@ -85,6 +108,38 @@ function initializeGroqClient(): void {
   })
 }
 
+function initializeOllamaClient(): void {
+  const settings = useSettingsStore().config
+  if (!settings.ollamaBaseUrl) {
+    console.error('Ollama Base URL is not configured.')
+    throw new Error('Ollama Base URL is not configured.')
+  }
+
+  ollamaClient = new OpenAI({
+    apiKey: 'ollama',
+    baseURL: `${settings.ollamaBaseUrl}/v1`,
+    dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
+  })
+}
+
+function initializeLMStudioClient(): void {
+  const settings = useSettingsStore().config
+  if (!settings.lmStudioBaseUrl) {
+    console.error('LM Studio Base URL is not configured.')
+    throw new Error('LM Studio Base URL is not configured.')
+  }
+
+  lmStudioClient = new OpenAI({
+    apiKey: 'lm-studio',
+    baseURL: `${settings.lmStudioBaseUrl}/v1`,
+    dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
+  })
+}
+
 export function reinitializeClients(): void {
   console.log('Reinitializing API clients with updated settings...')
 
@@ -111,9 +166,33 @@ export function reinitializeClients(): void {
     console.error('Failed to reinitialize Groq client:', error)
     groqClient = null
   }
+
+  try {
+    initializeOllamaClient()
+    console.log('Ollama client reinitialized successfully')
+  } catch (error) {
+    console.error('Failed to reinitialize Ollama client:', error)
+    ollamaClient = null
+  }
+
+  try {
+    initializeLMStudioClient()
+    console.log('LM Studio client reinitialized successfully')
+  } catch (error) {
+    console.error('Failed to reinitialize LM Studio client:', error)
+    lmStudioClient = null
+  }
 }
 
-export function initializeClients(): void {
+export async function initializeClients(): Promise<void> {
   console.log('Initializing API clients...')
   reinitializeClients()
+  
+  // Initialize backend API and wait for it
+  try {
+    await backendApi.initialize()
+    console.log('Backend API initialized successfully')
+  } catch (error) {
+    console.error('Failed to initialize Backend API:', error)
+  }
 }

@@ -135,7 +135,6 @@ Follow [setup instructions](https://github.com/pmbstyle/Alice/blob/main/docs/set
 ```bash
 # 4. Compile backend
 npm run build:go
-# use build:go:mac or build:go:linux for OS support
 
 # 5. Run dev environment
 $ npm run dev

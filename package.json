@@ -1,6 +1,6 @@
 {
   "name": "alice-ai-app",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "main": "dist-electron/main/index.js",
   "description": "Alice AI assistant app",
   "author": "pmbstyle",
@@ -21,7 +21,6 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "mkdir -p resources/backend",
     "build": "npm run build:go && vite build && npx electron-builder",
     "build:web": "vite build",
     "build:go": "node scripts/build-go.js",

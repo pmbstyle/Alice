@@ -63,8 +63,9 @@ type ServiceInfo struct {
 
 // NewTTSService creates a new TTS service
 func NewTTSService(config *Config) *TTSService {
-	// Create asset manager with current working directory as base
-	assetManager := embedded.NewAssetManager(".")
+	// Determine the base directory for assets
+	baseDir := embedded.GetProductionBaseDirectory()
+	assetManager := embedded.NewAssetManager(baseDir)
 	
 	return &TTSService{
 		config:       config,

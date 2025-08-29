@@ -1,3 +1,5 @@
+github.com/ggerganov/whisper.cpp/bindings/go v0.0.0-20250824163423-7745fcf32846 h1:aaLWbfqU+D/FQdUS/RvXB6AI0CIToj47pBVaLQE3pVs=
+github.com/ggerganov/whisper.cpp/bindings/go v0.0.0-20250824163423-7745fcf32846/go.mod h1:qyHjS/50ORo01H0NsuEEGsQR9VCtOcEye0gUl2sx1s8=
 github.com/gorilla/mux v1.8.1 h1:TuBL49tXwgrFYWhqrNgrUNEY92u81SPhu7sTdzQEiWY=
 github.com/gorilla/mux v1.8.1/go.mod h1:AKf9I4AEqPTmMytcMc0KkNouC66V3BtZ4qD5fmWSiMQ=
 github.com/rs/cors v1.11.0 h1:0B9GE/r9Bc2UxRMMtymBkHTenPkHDv0CW4Y98GBY+po=

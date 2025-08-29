@@ -107,7 +107,10 @@
                 </svg>
                 Text-to-Speech
               </span>
-              <span class="text-base-content/60">Local Piper TTS (Go Backend)</span>
+              <div class="text-right">
+                <div class="text-base-content/90 font-medium">Local Piper TTS (Go Backend)</div>
+                <div class="text-xs text-base-content/60">30+ voices, 20+ languages</div>
+              </div>
             </div>
 
             <div
@@ -134,6 +137,54 @@
           </div>
         </div>
 
+        <!-- Voice Languages Showcase -->
+        <div class="bg-base-200 p-4 rounded-lg space-y-3">
+          <h3 class="font-medium text-base-content/90 flex items-center gap-2">
+            <span>🌍</span> Available Voice Languages
+          </h3>
+          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 text-xs">
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇺🇸</span> English (US)
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇬🇧</span> English (UK)
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇪🇸</span> Spanish
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇫🇷</span> French
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇩🇪</span> German
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇮🇹</span> Italian
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇧🇷</span> Portuguese
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇷🇺</span> Russian
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇨🇳</span> Chinese
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇯🇵</span> Japanese
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇳🇱</span> Dutch
+            </div>
+            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
+              <span>🇳🇴</span> Nordic
+            </div>
+          </div>
+          <p class="text-xs text-base-content/60 mt-2">
+            <strong>+8 more languages</strong> including Hindi, Arabic, Polish, Ukrainian, Finnish and more!
+          </p>
+        </div>
+
         <div class="alert alert-info text-sm">
           <svg
             xmlns="http://www.w3.org/2000/svg"
@@ -149,8 +200,7 @@
             ></path>
           </svg>
           <span
-            >Models will be downloaded automatically when first used. This may
-            take a few minutes depending on your connection.</span
+            >Voice models will be downloaded automatically when first used. You can preview and select different voices in Settings.</span
           >
         </div>
       </div>

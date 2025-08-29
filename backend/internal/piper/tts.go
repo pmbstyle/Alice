@@ -120,8 +120,9 @@ func (s *TTSService) Initialize(ctx context.Context) error {
 
 // loadVoices loads available TTS voices
 func (s *TTSService) loadVoices() {
-	// Real Piper voices that can be downloaded
+	// Piper TTS voices - includes popular models across multiple languages
 	voices := []*Voice{
+		// English US voices
 		{
 			Name:        "en_US-amy-medium",
 			Language:    "en-US",
@@ -131,20 +132,190 @@ func (s *TTSService) loadVoices() {
 			Description: "Amy - English US female voice (Piper)",
 		},
 		{
-			Name:        "en_US-hfc_female-medium", 
+			Name:        "en_US-lessac-medium",
 			Language:    "en-US",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Lessac - English US female voice (Piper)",
+		},
+		
+		// English GB voices
+		{
+			Name:        "en_GB-alba-medium",
+			Language:    "en-GB",
 			Gender:      "female",
 			Quality:     "medium",
 			SampleRate:  22050,
-			Description: "HFC Female - English US female voice (Piper)",
+			Description: "Alba - English GB female voice (Piper)",
+		},
+		
+		// Spanish voices
+		{
+			Name:        "es_ES-carme-medium",
+			Language:    "es-ES",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Carme - Spanish ES female voice (Piper)",
 		},
 		{
-			Name:        "en_US-kristin-medium",
-			Language:    "en-US", 
+			Name:        "es_MX-teresa-medium",
+			Language:    "es-MX",
 			Gender:      "female",
 			Quality:     "medium",
 			SampleRate:  22050,
-			Description: "Kristin - English US female voice (Piper)",
+			Description: "Teresa - Spanish MX female voice (Piper)",
+		},
+		
+		// French voices
+		{
+			Name:        "fr_FR-siwis-medium",
+			Language:    "fr-FR",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Siwis - French female voice (Piper)",
+		},
+		
+		// German voices
+		{
+			Name:        "de_DE-eva_k-x_low",
+			Language:    "de-DE",
+			Gender:      "female",
+			Quality:     "x_low",
+			SampleRate:  16000,
+			Description: "Eva K - German female voice (Piper)",
+		},
+		
+		// Italian voices
+		{
+			Name:        "it_IT-paola-medium",
+			Language:    "it-IT",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Paola - Italian female voice (Piper)",
+		},
+		
+		// Portuguese voices
+		{
+			Name:        "pt_BR-lais-medium",
+			Language:    "pt-BR",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Lais - Portuguese BR female voice (Piper)",
+		},
+		
+		// Russian voices
+		{
+			Name:        "ru_RU-irina-medium",
+			Language:    "ru-RU",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Irina - Russian female voice (Piper)",
+		},
+		
+		// Chinese voice
+		{
+			Name:        "zh_CN-huayan-medium",
+			Language:    "zh-CN",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Huayan - Chinese female voice (Piper)",
+		},
+		
+		// Japanese voice
+		{
+			Name:        "ja_JP-qmu_amaryllis-medium",
+			Language:    "ja-JP",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Amaryllis - Japanese female voice (Piper)",
+		},
+		
+		// Dutch voices
+		{
+			Name:        "nl_NL-mls_5809-low",
+			Language:    "nl-NL",
+			Gender:      "female",
+			Quality:     "low",
+			SampleRate:  16000,
+			Description: "MLS 5809 - Dutch female voice (Piper)",
+		},
+		
+		// Nordic voices
+		{
+			Name:        "no_NO-talesyntese-medium",
+			Language:    "no-NO",
+			Gender:      "multi",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Talesyntese - Norwegian voice (Piper)",
+		},
+		{
+			Name:        "sv_SE-nst-medium",
+			Language:    "sv-SE",
+			Gender:      "multi",
+			Quality:     "medium", 
+			SampleRate:  22050,
+			Description: "NST - Swedish voice (Piper)",
+		},
+		{
+			Name:        "da_DK-talesyntese-medium",
+			Language:    "da-DK",
+			Gender:      "multi",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Talesyntese - Danish voice (Piper)",
+		},
+		
+		// Other European languages
+		{
+			Name:        "fi_FI-anna-medium",
+			Language:    "fi-FI", 
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Anna - Finnish female voice (Piper)",
+		},
+		{
+			Name:        "pl_PL-mls_6892-low",
+			Language:    "pl-PL",
+			Gender:      "female",
+			Quality:     "low",
+			SampleRate:  16000,
+			Description: "MLS 6892 - Polish female voice (Piper)",
+		},
+		{
+			Name:        "uk_UA-ukrainian_tts-medium",
+			Language:    "uk-UA",
+			Gender:      "multi",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Ukrainian TTS - Ukrainian voice (Piper)",
+		},
+		
+		// Other languages
+		{
+			Name:        "hi_IN-female-medium",
+			Language:    "hi-IN",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Female - Hindi voice (Piper)",
+		},
+		{
+			Name:        "ar_JO-amina-medium",
+			Language:    "ar-JO",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Amina - Arabic female voice (Piper)",
 		},
 	}
 

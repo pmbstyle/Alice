@@ -191,6 +191,22 @@
               Auto-detect works for most languages. Select a specific language for better accuracy.
             </p>
           </div>
+          <div>
+            <label for="stt-wakeword" class="block mb-1 text-sm"
+              >Wake Word *</label
+            >
+            <input
+              id="stt-wakeword"
+              type="text"
+              v-model="currentSettings.localSttWakeWord"
+              class="input input-bordered w-full focus:input-primary"
+              @change="e => $emit('update:setting', 'localSttWakeWord', e.target.value)"
+              placeholder="alice"
+            />
+            <p class="text-xs text-gray-400 mt-1">
+              The word that will activate voice recording. Use simple, common words for better recognition.
+            </p>
+          </div>
         </div>
         
         <div class="form-control">
@@ -262,38 +278,78 @@
           <label for="local-tts-voice" class="block mb-1 text-sm"
             >Local TTS Voice</label
           >
-          <div class="flex gap-2 items-center">
-            <select
-              id="local-tts-voice"
-              v-model="currentSettings.localTtsVoice"
-              class="select select-bordered flex-1 focus:select-primary"
-              @change="onVoiceChange"
-            >
-              <option v-if="availableVoices.length === 0" disabled value="">
-                {{ isRefreshingVoices ? 'Loading voices...' : 'No voices available' }}
-              </option>
-              <option 
-                v-for="voice in availableVoices" 
-                :key="voice.name" 
-                :value="voice.name"
+          <div class="space-y-3">
+            <div class="flex gap-2 items-center">
+              <select
+                id="local-tts-voice"
+                v-model="currentSettings.localTtsVoice"
+                class="select select-bordered flex-1 focus:select-primary"
+                @change="onVoiceChange"
               >
-                {{ voice.description || voice.name }}
-              </option>
-            </select>
-            <button
-              type="button"
-              @click="refreshVoices"
-              :disabled="isRefreshingVoices"
-              class="btn btn-square btn-sm"
-              title="Refresh voices"
-            >
-              <span v-if="isRefreshingVoices" class="loading loading-spinner loading-xs"></span>
-              <span v-else>🔄</span>
-            </button>
+                <option v-if="availableVoices.length === 0" disabled value="">
+                  {{ isRefreshingVoices ? 'Loading voices...' : 'No voices available' }}
+                </option>
+                <optgroup 
+                  v-for="(voices, language) in groupedVoices" 
+                  :key="language"
+                  :label="getLanguageDisplayName(language)"
+                >
+                  <option 
+                    v-for="voice in voices" 
+                    :key="voice.name" 
+                    :value="voice.name"
+                    :title="`${voice.description} | Quality: ${getVoiceQuality(voice.name)} | Gender: ${voice.gender || 'Unknown'}`"
+                  >
+                    {{ getVoiceDisplayName(voice) }}
+                  </option>
+                </optgroup>
+              </select>
+              <button
+                type="button"
+                @click="refreshVoices"
+                :disabled="isRefreshingVoices"
+                class="btn btn-square btn-sm"
+                title="Refresh voices"
+              >
+                <span v-if="isRefreshingVoices" class="loading loading-spinner loading-xs"></span>
+                <span v-else>🔄</span>
+              </button>
+              <button
+                type="button"
+                @click="previewVoice"
+                :disabled="!currentSettings.localTtsVoice || isPreviewingVoice"
+                class="btn btn-square btn-sm"
+                title="Preview selected voice"
+              >
+                <span v-if="isPreviewingVoice" class="loading loading-spinner loading-xs"></span>
+                <span v-else>🎵</span>
+              </button>
+            </div>
+            
+            <div class="flex items-center justify-between text-xs text-gray-400">
+              <span>
+                {{ availableVoices.filter(v => v.gender !== 'male').length }} voice{{ availableVoices.filter(v => v.gender !== 'male').length !== 1 ? 's' : '' }} across {{ Object.keys(groupedVoices).length }} languages
+              </span>
+              <span class="text-blue-400 cursor-pointer hover:underline" @click="showVoiceHelp = !showVoiceHelp">
+                {{ showVoiceHelp ? 'Hide Help' : 'Voice Help' }}
+              </span>
+            </div>
+            
+            <!-- Voice Help Section -->
+            <div v-if="showVoiceHelp" class="bg-base-300 p-3 rounded-lg text-xs space-y-2">
+              <h5 class="font-medium text-sm">Voice Quality Levels:</h5>
+              <div class="grid grid-cols-2 gap-2">
+                <div><span class="badge badge-xs badge-outline mr-1">x_low</span> 16kHz, Smallest</div>
+                <div><span class="badge badge-xs badge-outline mr-1">low</span> 16kHz, Fast</div>
+                <div><span class="badge badge-xs badge-outline mr-1">medium</span> 22kHz, High Quality</div>
+                <div><span class="badge badge-xs badge-outline mr-1">high</span> 22kHz, Best Quality</div>
+              </div>
+              <p class="text-base-content/60 mt-2">
+                💡 <strong>Tip:</strong> Voice models are downloaded automatically when first used. 
+                Higher quality voices provide better audio but require more storage space.
+              </p>
+            </div>
           </div>
-          <p class="text-xs text-gray-400 mt-1">
-            {{ availableVoices.length }} voice{{ availableVoices.length !== 1 ? 's' : '' }} available. Voice models are downloaded automatically.
-          </p>
         </div>
       </div>
     </fieldset>
@@ -335,7 +391,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import type { AliceSettings } from '../../stores/settingsStore'
 import { backendApi, type Voice } from '../../services/backendApi'
 
@@ -368,6 +424,8 @@ const serviceStatus = ref<{
 
 const availableVoices = ref<Voice[]>([])
 const isRefreshingVoices = ref(false)
+const isPreviewingVoice = ref(false)
+const showVoiceHelp = ref(false)
 
 let statusInterval: NodeJS.Timeout | null = null
 
@@ -430,6 +488,147 @@ const getServiceStatusText = (service: 'stt' | 'tts' | 'embeddings') => {
     case 'offline':
     default:
       return `${serviceNames[service]} service is offline`
+  }
+}
+
+// Voice management computed properties and functions
+const groupedVoices = computed(() => {
+  const groups: Record<string, Voice[]> = {}
+  // Filter out male voices
+  const femaleVoices = availableVoices.value.filter(voice => voice.gender !== 'male')
+  femaleVoices.forEach(voice => {
+    const lang = voice.language || 'unknown'
+    if (!groups[lang]) groups[lang] = []
+    groups[lang].push(voice)
+  })
+  
+  // Sort voices within each language group by name
+  Object.keys(groups).forEach(lang => {
+    groups[lang].sort((a, b) => a.name.localeCompare(b.name))
+  })
+  
+  return groups
+})
+
+const getLanguageDisplayName = (langCode: string): string => {
+  const languageMap: Record<string, string> = {
+    'en-US': 'English (US)',
+    'en-GB': 'English (UK)',
+    'es-ES': 'Spanish (Spain)',
+    'es-MX': 'Spanish (Mexico)',
+    'fr-FR': 'French',
+    'de-DE': 'German',
+    'it-IT': 'Italian',
+    'pt-BR': 'Portuguese (Brazil)',
+    'ru-RU': 'Russian',
+    'zh-CN': 'Chinese (Mandarin)',
+    'ja-JP': 'Japanese',
+    'nl-NL': 'Dutch',
+    'no-NO': 'Norwegian',
+    'sv-SE': 'Swedish',
+    'da-DK': 'Danish',
+    'fi-FI': 'Finnish',
+    'pl-PL': 'Polish',
+    'uk-UA': 'Ukrainian',
+    'hi-IN': 'Hindi',
+    'ar-JO': 'Arabic'
+  }
+  return languageMap[langCode] || langCode
+}
+
+const getLanguageFlag = (langCode: string): string => {
+  const flagMap: Record<string, string> = {
+    'en-US': '🇺🇸',
+    'en-GB': '🇬🇧',
+    'es-ES': '🇪🇸',
+    'es-MX': '🇲🇽',
+    'fr-FR': '🇫🇷',
+    'de-DE': '🇩🇪',
+    'it-IT': '🇮🇹',
+    'pt-BR': '🇧🇷',
+    'ru-RU': '🇷🇺',
+    'zh-CN': '🇨🇳',
+    'ja-JP': '🇯🇵',
+    'nl-NL': '🇳🇱',
+    'no-NO': '🇳🇴',
+    'sv-SE': '🇸🇪',
+    'da-DK': '🇩🇰',
+    'fi-FI': '🇫🇮',
+    'pl-PL': '🇵🇱',
+    'uk-UA': '🇺🇦',
+    'hi-IN': '🇮🇳',
+    'ar-JO': '🇯🇴'
+  }
+  return flagMap[langCode] || '🌍'
+}
+
+const getVoiceDisplayName = (voice: Voice): string => {
+  const quality = getVoiceQuality(voice.name)
+  const genderIcon = voice.gender === 'male' ? '👨' : voice.gender === 'female' ? '👩' : '👥'
+  return `${genderIcon} ${voice.description || voice.name} (${quality})`
+}
+
+const getVoiceQuality = (voiceName: string): string => {
+  if (voiceName.includes('-x_low')) return 'x_low'
+  if (voiceName.includes('-low')) return 'low'
+  if (voiceName.includes('-medium')) return 'medium'
+  if (voiceName.includes('-high')) return 'high'
+  return 'unknown'
+}
+
+const previewVoice = async () => {
+  if (!props.currentSettings.localTtsVoice || isPreviewingVoice.value) return
+  
+  isPreviewingVoice.value = true
+  try {
+    await backendApi.initialize()
+    
+    // Get sample text based on language
+    const selectedVoice = availableVoices.value.find(v => v.name === props.currentSettings.localTtsVoice)
+    const sampleTexts: Record<string, string> = {
+      'en-US': 'Hello! This is a preview of the Amy voice.',
+      'en-GB': 'Good day! This is a preview of this British voice.',
+      'es-ES': 'Hola, este es un ejemplo de esta voz en español.',
+      'es-MX': 'Hola, este es un ejemplo de esta voz mexicana.',
+      'fr-FR': 'Bonjour, ceci est un exemple de cette voix française.',
+      'de-DE': 'Hallo, das ist ein Beispiel dieser deutschen Stimme.',
+      'it-IT': 'Ciao, questo è un esempio di questa voce italiana.',
+      'pt-BR': 'Olá, este é um exemplo desta voz brasileira.',
+      'ru-RU': 'Привет, это пример этого русского голоса.',
+      'zh-CN': '你好，这是这个中文声音的示例。',
+      'ja-JP': 'こんにちは、これはこの日本語の音声のサンプルです。',
+      'nl-NL': 'Hallo, dit is een voorbeeld van deze Nederlandse stem.',
+      'no-NO': 'Hei, dette er et eksempel på denne norske stemmen.',
+      'sv-SE': 'Hej, det här är ett exempel på denna svenska röst.',
+      'da-DK': 'Hej, dette er et eksempel på denne danske stemme.',
+      'fi-FI': 'Hei, tämä on esimerkki tästä suomalaisesta äänestä.',
+      'pl-PL': 'Cześć, to jest przykład tego polskiego głosu.',
+      'uk-UA': 'Привіт, це приклад цього українського голосу.',
+      'hi-IN': 'नमस्ते, यह इस हिंदी आवाज़ का उदाहरण है।',
+      'ar-JO': 'مرحبا، هذا مثال على هذا الصوت العربي.'
+    }
+    
+    const sampleText = sampleTexts[selectedVoice?.language || 'en-US'] || 'Hello, this is a voice preview.'
+    
+    const result = await backendApi.synthesizeSpeech(sampleText, props.currentSettings.localTtsVoice)
+    
+    // Play the audio
+    const audioData = new Uint8Array(result.audio)
+    const blob = new Blob([audioData], { type: 'audio/wav' })
+    const audioUrl = URL.createObjectURL(blob)
+    const audio = new Audio(audioUrl)
+    
+    audio.play().catch(console.error)
+    
+    // Clean up URL after playing
+    audio.addEventListener('ended', () => {
+      URL.revokeObjectURL(audioUrl)
+    })
+    
+  } catch (error) {
+    console.warn('Failed to preview voice:', error)
+  } finally {
+    isPreviewingVoice.value = false
   }
 }
 

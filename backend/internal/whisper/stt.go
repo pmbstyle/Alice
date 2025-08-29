@@ -3,13 +3,17 @@ package whisper
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
+	"archive/zip"
 
 	"alice-backend/internal/embedded"
 )
@@ -208,7 +212,7 @@ func (s *STTService) writeWAVFile(filename string, samples []float32) error {
 	return nil
 }
 
-// transcribeDirectly performs direct transcription using Python whisper
+// transcribeDirectly performs direct transcription using whisper.cpp binary
 func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) (string, error) {
 	log.Printf("Direct transcription: processing %d audio samples", len(samples))
 	
@@ -216,12 +220,23 @@ func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) 
 		return "", nil
 	}
 	
-	whisperPath := "/Users/pmb/Library/Python/3.9/bin/whisper"
+	// Get platform-appropriate whisper binary path
+	whisperPath := s.assetManager.GetBinaryPath("whisper")
+	
+	// Check if whisper binary exists, if not try to ensure assets
 	if _, err := os.Stat(whisperPath); err != nil {
-		if _, err := exec.LookPath("whisper"); err != nil {
-			return "", fmt.Errorf("python whisper not found: %w", err)
+		log.Printf("Whisper binary not found at %s, attempting to ensure assets", whisperPath)
+		if err := s.assetManager.EnsureAssets(ctx); err != nil {
+			log.Printf("Failed to ensure assets: %v", err)
 		}
-		whisperPath = "whisper"
+		
+		// Check again after ensuring assets
+		if _, err := os.Stat(whisperPath); err != nil {
+			// Try downloading if embedded assets failed
+			if downloadErr := s.downloadWhisperBinary(ctx); downloadErr != nil {
+				return "", fmt.Errorf("whisper binary not found and download failed: %w (original error: %v)", downloadErr, err)
+			}
+		}
 	}
 	
 	tmpDir := os.TempDir()
@@ -235,16 +250,19 @@ func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) 
 		return "", fmt.Errorf("failed to write WAV file: %w", err)
 	}
 	
-	outputDir := filepath.Dir(outputFile)
+	// Get model path
+	modelPath := s.assetManager.GetModelPath("whisper")
+	
+	// whisper.cpp command arguments
 	args := []string{
-		"--model", "base",
-		"--output_format", "txt",
-		"--output_dir", outputDir,
-		inputFile,
+		"-m", modelPath,
+		"-f", inputFile,
+		"-otxt",
+		"-of", strings.TrimSuffix(outputFile, ".txt"),
 	}
 	
 	if s.config.Language != "" && s.config.Language != "auto" {
-		args = append(args, "--language", s.config.Language)
+		args = append(args, "-l", s.config.Language)
 	}
 	
 	log.Printf("Executing whisper: %s %v", whisperPath, args)
@@ -260,8 +278,8 @@ func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) 
 	
 	time.Sleep(100 * time.Millisecond)
 	
-	inputBaseName := strings.TrimSuffix(filepath.Base(inputFile), filepath.Ext(inputFile))
-	actualOutputFile := filepath.Join(outputDir, inputBaseName + ".txt")
+	// The output file should be created by whisper.cpp with the specified name
+	actualOutputFile := outputFile
 	
 	if _, err := os.Stat(actualOutputFile); os.IsNotExist(err) {
 		return "", fmt.Errorf("whisper output file not created: %s (command output: %s)", actualOutputFile, string(output))
@@ -278,6 +296,173 @@ func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) 
 	log.Printf("Direct transcription completed: '%s'", text)
 	
 	return text, nil
+}
+
+// downloadWhisperBinary downloads the whisper.cpp binary for the current platform
+func (s *STTService) downloadWhisperBinary(ctx context.Context) error {
+	platform := runtime.GOOS
+	arch := runtime.GOARCH
+	
+	var downloadURL string
+	var binaryName string
+	
+	switch platform {
+	case "windows":
+		binaryName = "whisper-cli.exe"
+		if arch == "amd64" {
+			downloadURL = "https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/whisper-1.5.4-win-x64.zip"
+		} else {
+			return fmt.Errorf("unsupported Windows architecture: %s", arch)
+		}
+	case "darwin":
+		binaryName = "whisper-cli"
+		if arch == "amd64" {
+			downloadURL = "https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/whisper-1.5.4-macos-x64.zip"
+		} else if arch == "arm64" {
+			downloadURL = "https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/whisper-1.5.4-macos-arm64.zip"
+		} else {
+			return fmt.Errorf("unsupported macOS architecture: %s", arch)
+		}
+	case "linux":
+		binaryName = "whisper-cli"
+		if arch == "amd64" {
+			downloadURL = "https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/whisper-1.5.4-linux-x64.zip"
+		} else {
+			return fmt.Errorf("unsupported Linux architecture: %s", arch)
+		}
+	default:
+		return fmt.Errorf("unsupported platform: %s", platform)
+	}
+	
+	log.Printf("Downloading whisper binary for %s/%s from %s", platform, arch, downloadURL)
+	
+	binDir := filepath.Dir(s.assetManager.GetBinaryPath("whisper"))
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		return fmt.Errorf("failed to create bin directory: %w", err)
+	}
+	
+	// Download the archive
+	resp, err := http.Get(downloadURL)
+	if err != nil {
+		return fmt.Errorf("failed to download whisper binary: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download whisper binary: HTTP %d", resp.StatusCode)
+	}
+	
+	// Create temporary file for the archive
+	tmpFile := filepath.Join(binDir, "whisper_download.zip")
+	defer os.Remove(tmpFile)
+	
+	outFile, err := os.Create(tmpFile)
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	defer outFile.Close()
+	
+	_, err = io.Copy(outFile, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to save downloaded file: %w", err)
+	}
+	outFile.Close()
+	
+	// Extract the binary from the ZIP
+	if err := s.extractWhisperFromZip(tmpFile, binDir, binaryName); err != nil {
+		return fmt.Errorf("failed to extract whisper binary: %w", err)
+	}
+	
+	// Download base model if needed
+	modelPath := s.assetManager.GetModelPath("whisper")
+	if _, err := os.Stat(modelPath); os.IsNotExist(err) {
+		if err := s.downloadWhisperModel(ctx, modelPath); err != nil {
+			log.Printf("Warning: Failed to download whisper model: %v", err)
+		}
+	}
+	
+	log.Printf("Successfully downloaded and extracted whisper binary")
+	return nil
+}
+
+// extractWhisperFromZip extracts the whisper binary from a ZIP archive
+func (s *STTService) extractWhisperFromZip(zipPath, targetDir, binaryName string) error {
+	reader, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("failed to open ZIP file: %w", err)
+	}
+	defer reader.Close()
+	
+	for _, file := range reader.File {
+		// Look for the main whisper binary (usually just called "main" in whisper.cpp releases)
+		if strings.Contains(file.Name, "main") && !strings.Contains(file.Name, "/") {
+			rc, err := file.Open()
+			if err != nil {
+				return fmt.Errorf("failed to open file in ZIP: %w", err)
+			}
+			defer rc.Close()
+			
+			targetPath := filepath.Join(targetDir, binaryName)
+			outFile, err := os.Create(targetPath)
+			if err != nil {
+				return fmt.Errorf("failed to create target file: %w", err)
+			}
+			defer outFile.Close()
+			
+			_, err = io.Copy(outFile, rc)
+			if err != nil {
+				return fmt.Errorf("failed to copy binary: %w", err)
+			}
+			
+			// Make executable on Unix systems
+			if runtime.GOOS != "windows" {
+				err = os.Chmod(targetPath, 0755)
+				if err != nil {
+					log.Printf("Warning: Failed to make binary executable: %v", err)
+				}
+			}
+			
+			log.Printf("Extracted whisper binary to: %s", targetPath)
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("whisper binary not found in ZIP archive")
+}
+
+// downloadWhisperModel downloads the base Whisper model
+func (s *STTService) downloadWhisperModel(ctx context.Context, modelPath string) error {
+	modelURL := "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
+	
+	log.Printf("Downloading whisper model from %s", modelURL)
+	
+	if err := os.MkdirAll(filepath.Dir(modelPath), 0755); err != nil {
+		return fmt.Errorf("failed to create models directory: %w", err)
+	}
+	
+	resp, err := http.Get(modelURL)
+	if err != nil {
+		return fmt.Errorf("failed to download model: %w", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to download model: HTTP %d", resp.StatusCode)
+	}
+	
+	outFile, err := os.Create(modelPath)
+	if err != nil {
+		return fmt.Errorf("failed to create model file: %w", err)
+	}
+	defer outFile.Close()
+	
+	_, err = io.Copy(outFile, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to save model: %w", err)
+	}
+	
+	log.Printf("Successfully downloaded whisper model to: %s", modelPath)
+	return nil
 }
 
 // Shutdown gracefully shuts down the STT service

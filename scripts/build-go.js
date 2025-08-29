@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 // FFmpeg download URLs for different platforms
 const FFMPEG_URLS = {
   'win32': 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip',
-  'darwin': 'https://evermeet.cx/pub/ffmpeg-latest.zip',  // Direct download link
+  'darwin': 'https://evermeet.cx/ffmpeg/ffmpeg-8.0.zip',  // Use available release version
   'linux': 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz'
 };
 

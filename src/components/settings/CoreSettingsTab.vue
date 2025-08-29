@@ -192,6 +192,20 @@
             </p>
           </div>
           <div>
+            <label for="stt-wake-enable" class="block mb-1 text-sm"
+              >Enable Wake Word</label
+            >
+            <select
+              id="stt-wake-enable"
+              v-model="currentSettings.localSttEnabled"
+              class="select select-bordered w-full focus:select-primary"
+              @change="e => $emit('update:setting', 'localSttEnabled', e.target.value === 'true')"
+            >
+              <option value="true">Enable</option>
+              <option value="false">Disable</option>
+            </select>
+          </div>
+          <div v-show="currentSettings.localSttEnabled">
             <label for="stt-wakeword" class="block mb-1 text-sm"
               >Wake Word *</label
             >
@@ -207,23 +221,6 @@
               The word that will activate voice recording. Use simple, common words for better recognition.
             </p>
           </div>
-        </div>
-        
-        <div class="form-control">
-          <label class="cursor-pointer label justify-start gap-3">
-            <input
-              type="checkbox"
-              v-model="currentSettings.localSttEnabled"
-              class="checkbox checkbox-primary"
-              @change="e => $emit('update:setting', 'localSttEnabled', e.target.checked)"
-            />
-            <div class="flex flex-col">
-              <span class="label-text font-medium">Enable Local STT</span>
-              <span class="label-text-alt text-gray-400">
-                Use the built-in Go backend for speech-to-text processing. Provides privacy and offline capability.
-              </span>
-            </div>
-          </label>
         </div>
       </div>
     </fieldset>

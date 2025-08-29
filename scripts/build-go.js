@@ -13,7 +13,7 @@ const __dirname = path.dirname(__filename);
 // FFmpeg download URLs for different platforms
 const FFMPEG_URLS = {
   'win32': 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip',
-  'darwin': 'https://evermeet.cx/ffmpeg/getrelease/zip',
+  'darwin': 'https://evermeet.cx/pub/ffmpeg-latest.zip',  // Direct download link
   'linux': 'https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz'
 };
 
@@ -54,7 +54,16 @@ function downloadFile(url, outputPath) {
       if (response.statusCode === 302 || response.statusCode === 301) {
         file.close();
         fs.unlinkSync(outputPath);
-        return downloadFile(response.headers.location, outputPath)
+        
+        let redirectUrl = response.headers.location;
+        // Handle relative redirects
+        if (redirectUrl.startsWith('/')) {
+          const urlObj = new URL(url);
+          redirectUrl = `${urlObj.protocol}//${urlObj.host}${redirectUrl}`;
+        }
+        
+        console.log(`Redirecting to: ${redirectUrl}`);
+        return downloadFile(redirectUrl, outputPath)
           .then(resolve)
           .catch(reject);
       }
@@ -204,7 +213,9 @@ function extractWhisper(archivePath, outputDir) {
           'whisper-cli.exe', 'whisper-cli',
           'whisper-main.exe', 'whisper-main', 
           'main.exe', 'main',
-          'whisper.exe', 'whisper'
+          'whisper.exe', 'whisper',
+          'whisper-macos-arm64', 'whisper-macos-x64',  // macOS specific names
+          'whisper-linux-x64', 'whisper-linux-arm64'   // Linux specific names
         ];
         
         for (const item of items) {

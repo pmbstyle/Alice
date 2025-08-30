@@ -31,15 +31,16 @@ const WHISPER_URLS = {
   },
 }
 
-// Piper TTS download URLs for different platforms (using aliceai.ca hosting for reliability)
+// Piper TTS download URLs for different platforms (matching Go backend URLs)
 const PIPER_URLS = {
-  win32: 'https://aliceai.ca/app_assets/piper/piper-windows.zip',
+  win32: 'https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_windows_amd64.zip',
   darwin: {
-    x64: 'https://aliceai.ca/app_assets/piper/piper-macos-x64.zip',
-    arm64: 'https://aliceai.ca/app_assets/piper/piper-macos-arm64.zip',
+    x64: 'https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_macos_x64.tar.gz',
+    arm64: 'https://raw.githubusercontent.com/pmbstyle/Alice/main/assets/binaries/piper-macos-arm64',
   },
   linux: {
-    x64: 'https://aliceai.ca/app_assets/piper/piper-linux-x64.zip',
+    x64: 'https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz',
+    arm64: 'https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_aarch64.tar.gz',
   },
 }
 
@@ -390,8 +391,11 @@ function extractPiper(archivePath, outputDir) {
         const normalizedArchivePath = archivePath.replace(/\//g, '\\')
         const normalizedTempDir = tempDir.replace(/\//g, '\\')
         extractCmd = `powershell -command "Expand-Archive -Path '${normalizedArchivePath}' -DestinationPath '${normalizedTempDir}' -Force"`
+      } else if (archivePath.endsWith('.tar.gz')) {
+        // Extract tar.gz file on macOS/Linux
+        extractCmd = `cd "${tempDir}" && tar -xzf "${archivePath}"`
       } else {
-        // Extract ZIP file on macOS/Linux
+        // Extract ZIP file on macOS/Linux (fallback)
         extractCmd = `cd "${tempDir}" && unzip -o "${archivePath}"`
       }
 
@@ -559,11 +563,29 @@ async function ensurePiper() {
   try {
     console.log(`📥 Downloading piper for ${platform}/${arch}...`)
 
-    const archivePath = path.join(backendBinDir, 'piper-download.zip')
+    // Determine correct file extension based on URL
+    let archiveExt = '.zip'
+    if (downloadUrl.includes('.tar.gz')) {
+      archiveExt = '.tar.gz'
+    } else if (downloadUrl.includes('piper-macos-arm64')) {
+      archiveExt = '' // Direct binary
+    }
+    
+    const archivePath = path.join(backendBinDir, `piper-download${archiveExt}`)
 
     // Download the archive
     await downloadFile(downloadUrl, archivePath)
     console.log('✅ Piper download completed')
+
+    // Handle direct binary for macOS ARM64
+    if (platform === 'darwin' && arch === 'arm64' && !archivePath.includes('.')) {
+      // Direct binary file
+      const targetPath = path.join(backendBinDir, 'piper')
+      fs.copyFileSync(archivePath, targetPath)
+      fs.chmodSync(targetPath, '755')
+      console.log(`✅ Direct Piper binary installed: ${targetPath}`)
+      return true
+    }
 
     // Extract piper binary
     console.log('📦 Extracting piper binary...')
@@ -732,67 +754,81 @@ async function setupPiper() {
   try {
     console.log('📥 Installing Piper TTS binary...')
 
-    // Try to install piper-tts via pip and copy the binary
-    try {
-      console.log('Installing piper-tts via pip...')
-      execSync('python3 -m pip install --user piper-tts', { stdio: 'pipe' })
-
-      // Find the installed piper binary
-      const homeDir = os.homedir()
-      const possiblePaths = [
-        path.join(homeDir, 'Library', 'Python', '3.9', 'bin', 'piper'), // macOS
-        path.join(homeDir, '.local', 'bin', 'piper'), // Linux
-        path.join(
-          homeDir,
-          'AppData',
-          'Roaming',
-          'Python',
-          'Scripts',
-          'piper.exe'
-        ), // Windows
-      ]
-
-      let sourcePiper = null
-      for (const possiblePath of possiblePaths) {
-        if (fs.existsSync(possiblePath)) {
-          sourcePiper = possiblePath
-          break
-        }
-      }
-
-      if (!sourcePiper) {
-        // Try to find piper in PATH
-        try {
-          const whichResult = execSync(
-            platform === 'win32' ? 'where piper' : 'which piper',
-            { stdio: 'pipe' }
-          )
-          sourcePiper = whichResult.toString().trim()
-        } catch (e) {
-          throw new Error('Piper binary not found after pip installation')
-        }
-      }
-
-      // Copy the working piper binary
-      fs.copyFileSync(sourcePiper, piperPath)
-      if (platform !== 'win32') {
-        fs.chmodSync(piperPath, '755')
-      }
-
+    // Use the same reliable download method as ensurePiper()
+    const piperSuccess = await ensurePiper()
+    if (piperSuccess) {
       console.log(`✅ Piper TTS setup completed: ${piperPath}`)
-
       // Download required voice models
       await downloadRequiredVoiceModels()
-
       return true
-    } catch (pipError) {
-      console.log('⚠️  pip installation failed, trying fallback method...')
-      console.log('Note: Piper TTS will be downloaded at runtime')
+    } else if (platform === 'darwin') {
+      // On macOS, try pip installation as fallback
+      console.log('🔄 Binary download failed, trying pip installation on macOS...')
+      return await tryPipInstallation(piperPath)
+    } else {
+      console.log('⚠️  Piper binary download failed, will fallback to runtime download')
       return false
     }
   } catch (error) {
+    if (platform === 'darwin') {
+      console.log('🔄 Error occurred, trying pip installation as fallback on macOS...')
+      return await tryPipInstallation(piperPath)
+    }
     console.error('❌ Failed to setup Piper TTS:', error.message)
     console.log('Note: Piper will try to download at runtime')
+    return false
+  }
+}
+
+/**
+ * Try pip installation of Piper TTS (macOS fallback)
+ */
+async function tryPipInstallation(piperPath) {
+  try {
+    console.log('Installing piper-tts via pip...')
+    execSync('python3 -m pip install --user piper-tts', { stdio: 'pipe' })
+
+    // Find the installed piper binary
+    const homeDir = os.homedir()
+    const possiblePaths = [
+      path.join(homeDir, 'Library', 'Python', '3.9', 'bin', 'piper'), // macOS Python 3.9
+      path.join(homeDir, 'Library', 'Python', '3.10', 'bin', 'piper'), // macOS Python 3.10
+      path.join(homeDir, 'Library', 'Python', '3.11', 'bin', 'piper'), // macOS Python 3.11
+      path.join(homeDir, 'Library', 'Python', '3.12', 'bin', 'piper'), // macOS Python 3.12
+      path.join(homeDir, '.local', 'bin', 'piper'), // Alternative location
+    ]
+
+    let sourcePiper = null
+    for (const possiblePath of possiblePaths) {
+      if (fs.existsSync(possiblePath)) {
+        sourcePiper = possiblePath
+        break
+      }
+    }
+
+    if (!sourcePiper) {
+      // Try to find piper in PATH
+      try {
+        const whichResult = execSync('which piper', { stdio: 'pipe' })
+        sourcePiper = whichResult.toString().trim()
+      } catch (e) {
+        throw new Error('Piper binary not found after pip installation')
+      }
+    }
+
+    // Copy the working piper binary
+    fs.copyFileSync(sourcePiper, piperPath)
+    fs.chmodSync(piperPath, '755')
+
+    console.log(`✅ Piper TTS installed via pip: ${piperPath}`)
+
+    // Download required voice models
+    await downloadRequiredVoiceModels()
+
+    return true
+  } catch (pipError) {
+    console.error('❌ pip installation also failed:', pipError.message)
+    console.log('Note: Piper TTS will be downloaded at runtime')
     return false
   }
 }

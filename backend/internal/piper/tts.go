@@ -140,6 +140,22 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Lessac - English US female voice (Piper)",
 		},
+		{
+			Name:        "en_US-hfc_female-medium",
+			Language:    "en-US",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "HFC Female - English US female voice (Piper)",
+		},
+		{
+			Name:        "en_US-kristin-medium",
+			Language:    "en-US",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Kristin - English US female voice (Piper)",
+		},
 		
 		// English GB voices
 		{
@@ -1201,30 +1217,85 @@ func (s *TTSService) extractSingleFileFromTar(tarReader *tar.Reader, outputPath 
 
 // downloadVoiceModel downloads a voice model from HuggingFace
 func (s *TTSService) downloadVoiceModel(voiceName, modelDir string) error {
-	// HuggingFace URLs for Piper voice models
-	baseURL := "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US"
+	// HuggingFace base URL for Piper voice models
+	baseURL := "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 	
-	// Map voice names to their paths
-	voicePaths := map[string]string{
-		"en_US-amy-medium":        "amy/medium",
-		"en_US-hfc_female-medium": "hfc_female/medium",
-		"en_US-kristin-medium":    "kristin/medium",
+	// Map voice names to their language/voice/quality paths on HuggingFace
+	voiceMapping := map[string]struct {
+		lang     string
+		voice    string
+		quality  string
+	}{
+		// English US voices
+		"en_US-amy-medium":        {"en/en_US", "amy", "medium"},
+		"en_US-lessac-medium":     {"en/en_US", "lessac", "medium"},
+		"en_US-hfc_female-medium": {"en/en_US", "hfc_female", "medium"},
+		"en_US-kristin-medium":    {"en/en_US", "kristin", "medium"},
+		
+		// English GB voices
+		"en_GB-alba-medium": {"en/en_GB", "alba", "medium"},
+		
+		// Spanish voices
+		"es_ES-carme-medium":  {"es/es_ES", "carme", "medium"},
+		"es_MX-teresa-medium": {"es/es_MX", "teresa", "medium"},
+		
+		// French voices
+		"fr_FR-siwis-medium": {"fr/fr_FR", "siwis", "medium"},
+		
+		// German voices
+		"de_DE-eva_k-x_low": {"de/de_DE", "eva_k", "x_low"},
+		
+		// Italian voices
+		"it_IT-paola-medium": {"it/it_IT", "paola", "medium"},
+		
+		// Portuguese voices
+		"pt_BR-lais-medium": {"pt/pt_BR", "lais", "medium"},
+		
+		// Russian voices
+		"ru_RU-irina-medium": {"ru/ru_RU", "irina", "medium"},
+		
+		// Chinese voices
+		"zh_CN-huayan-medium": {"zh/zh_CN", "huayan", "medium"},
+		
+		// Japanese voices
+		"ja_JP-qmu_amaryllis-medium": {"ja/ja_JP", "qmu_amaryllis", "medium"},
+		
+		// Dutch voices
+		"nl_NL-mls_5809-low": {"nl/nl_NL", "mls_5809", "low"},
+		
+		// Norwegian voices
+		"no_NO-talesyntese-medium": {"no/no_NO", "talesyntese", "medium"},
+		
+		// Swedish voices
+		"sv_SE-nst-medium": {"sv/sv_SE", "nst", "medium"},
+		
+		// Danish voices
+		"da_DK-talesyntese-medium": {"da/da_DK", "talesyntese", "medium"},
+		
+		// Finnish voices
+		"fi_FI-anna-medium": {"fi/fi_FI", "anna", "medium"},
+		
+		// Polish voices
+		"pl_PL-mls_6892-low": {"pl/pl_PL", "mls_6892", "low"},
+		
+		// Ukrainian voices
+		"uk_UA-ukrainian_tts-medium": {"uk/uk_UA", "ukrainian_tts", "medium"},
+		
+		// Hindi voices
+		"hi_IN-female-medium": {"hi/hi_IN", "female", "medium"},
+		
+		// Arabic voices
+		"ar_JO-amina-medium": {"ar/ar_JO", "amina", "medium"},
 	}
 	
-	voicePath, exists := voicePaths[voiceName]
+	voiceInfo, exists := voiceMapping[voiceName]
 	if !exists {
 		return fmt.Errorf("unknown voice: %s", voiceName)
 	}
 	
-	// Special handling for en_GB voices
-	voiceURL := baseURL
-	if strings.HasPrefix(voiceName, "en_GB") {
-		voiceURL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_GB"
-	}
-	
-	// Download both .onnx and .onnx.json files
-	onnxURL := fmt.Sprintf("%s/%s/%s.onnx", voiceURL, voicePath, voiceName)
-	jsonURL := fmt.Sprintf("%s/%s/%s.onnx.json", voiceURL, voicePath, voiceName)
+	// Build download URLs
+	onnxURL := fmt.Sprintf("%s/%s/%s/%s/%s.onnx", baseURL, voiceInfo.lang, voiceInfo.voice, voiceInfo.quality, voiceName)
+	jsonURL := fmt.Sprintf("%s/%s/%s/%s/%s.onnx.json", baseURL, voiceInfo.lang, voiceInfo.voice, voiceInfo.quality, voiceName)
 	
 	onnxFile := filepath.Join(modelDir, voiceName+".onnx")
 	jsonFile := filepath.Join(modelDir, voiceName+".onnx.json")

@@ -645,6 +645,8 @@ async function setupPiper() {
       const testCmd = execSync(`"${piperPath}" --help`, { stdio: 'pipe', timeout: 5000 });
       if (testCmd.toString().includes('--model')) {
         console.log(`✅ Piper already available: ${piperPath}`);
+        // Still download voice models if they're missing
+        await downloadRequiredVoiceModels();
         return true;
       }
     } catch (error) {
@@ -698,6 +700,10 @@ async function setupPiper() {
       }
       
       console.log(`✅ Piper TTS setup completed: ${piperPath}`);
+      
+      // Download required voice models
+      await downloadRequiredVoiceModels();
+      
       return true;
       
     } catch (pipError) {
@@ -711,6 +717,72 @@ async function setupPiper() {
     console.log('Note: Piper will try to download at runtime');
     return false;
   }
+}
+
+/**
+ * Download required voice models for Piper TTS
+ */
+async function downloadRequiredVoiceModels() {
+  const modelsDir = path.join(process.cwd(), 'resources', 'backend', 'models', 'piper');
+  
+  // Ensure models directory exists
+  if (!fs.existsSync(modelsDir)) {
+    fs.mkdirSync(modelsDir, { recursive: true });
+  }
+  
+  // Required voice models (as defined in backend Go code)
+  const requiredVoices = [
+    {
+      name: 'en_US-amy-medium',
+      modelUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx',
+      configUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json'
+    },
+    {
+      name: 'en_US-hfc_female-medium',
+      modelUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx',
+      configUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx.json'
+    },
+    {
+      name: 'en_US-kristin-medium',
+      modelUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kristin/medium/en_US-kristin-medium.onnx',
+      configUrl: 'https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/kristin/medium/en_US-kristin-medium.onnx.json'
+    }
+  ];
+  
+  console.log('📥 Downloading required voice models for out-of-box TTS...');
+  
+  for (const voice of requiredVoices) {
+    const modelPath = path.join(modelsDir, `${voice.name}.onnx`);
+    const configPath = path.join(modelsDir, `${voice.name}.onnx.json`);
+    
+    try {
+      // Check if model already exists
+      if (fs.existsSync(modelPath) && fs.existsSync(configPath)) {
+        console.log(`✅ Voice model already available: ${voice.name}`);
+        continue;
+      }
+      
+      console.log(`📥 Downloading ${voice.name}...`);
+      
+      // Download model file (.onnx)
+      if (!fs.existsSync(modelPath)) {
+        await downloadFile(voice.modelUrl, modelPath);
+        console.log(`✅ Downloaded model: ${voice.name}.onnx`);
+      }
+      
+      // Download config file (.onnx.json)  
+      if (!fs.existsSync(configPath)) {
+        await downloadFile(voice.configUrl, configPath);
+        console.log(`✅ Downloaded config: ${voice.name}.onnx.json`);
+      }
+      
+    } catch (error) {
+      console.warn(`⚠️  Failed to download voice model ${voice.name}: ${error.message}`);
+      console.log(`Note: ${voice.name} will be downloaded at runtime if needed`);
+    }
+  }
+  
+  console.log('✅ Voice model setup completed');
 }
 
 /**

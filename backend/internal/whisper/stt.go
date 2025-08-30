@@ -111,8 +111,13 @@ func (s *STTService) GetInfo() *ServiceInfo {
 	return &info
 }
 
-// TranscribeAudio performs actual speech transcription using Python whisper
+// TranscribeAudio performs speech transcription using whisper.cpp
 func (s *STTService) TranscribeAudio(ctx context.Context, audioData []byte) (string, error) {
+	return s.TranscribeAudioWithLanguage(ctx, audioData, "")
+}
+
+// TranscribeAudioWithLanguage performs speech transcription with optional language override
+func (s *STTService) TranscribeAudioWithLanguage(ctx context.Context, audioData []byte, language string) (string, error) {
 	if !s.IsReady() {
 		return "", fmt.Errorf("Whisper STT service is not ready")
 	}
@@ -130,13 +135,7 @@ func (s *STTService) TranscribeAudio(ctx context.Context, audioData []byte) (str
 		return "", nil
 	}
 
-	text, err := s.transcribeDirectly(ctx, samples)
-	if err != nil {
-		log.Printf("Transcription failed: %v", err)
-		return "", fmt.Errorf("transcription failed: %w", err)
-	}
-
-	return text, nil
+	return s.transcribeDirectlyWithLanguage(ctx, samples, language)
 }
 
 // convertAudioToSamples converts byte audio data to float32 samples
@@ -215,28 +214,24 @@ func (s *STTService) writeWAVFile(filename string, samples []float32) error {
 	return nil
 }
 
-// transcribeDirectly performs direct transcription using whisper.cpp binary
-func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) (string, error) {
+// transcribeDirectlyWithLanguage performs direct transcription using whisper.cpp binary
+func (s *STTService) transcribeDirectlyWithLanguage(ctx context.Context, samples []float32, language string) (string, error) {
 	log.Printf("Direct transcription: processing %d audio samples", len(samples))
 	
 	if len(samples) == 0 {
 		return "", nil
 	}
 	
-	// Find whisper binary - try multiple possible locations and names
 	var whisperPath string
-
-	// First try embedded binary path
 	embeddedBinaryPath := s.assetManager.GetBinaryPath("whisper")
 	if s.assetManager.IsAssetAvailable(embeddedBinaryPath) {
 		whisperPath = embeddedBinaryPath
 	} else {
-		// Fallback to downloaded binaries - try multiple binary names
 		possiblePaths := []string{
-			"bin/whisper-cli.exe",     // New CLI binary
-			"bin/whisper-command.exe", // Alternative command binary
-			"bin/main.exe",            // Main binary from archive
-			"bin/whisper.exe",         // Deprecated binary (fallback)
+			"bin/whisper-cli.exe",
+			"bin/whisper-command.exe",
+			"bin/main.exe",
+			"bin/whisper.exe",
 		}
 
 		if runtime.GOOS != "windows" {
@@ -257,17 +252,15 @@ func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) 
 	}
 
 	if whisperPath == "" {
-		// Try downloading if no binary found
 		if downloadErr := s.downloadWhisperBinary(ctx); downloadErr != nil {
 			return "", fmt.Errorf("no whisper binary found and download failed: %w", downloadErr)
 		}
 		
-		// Try again after download
 		possiblePaths := []string{
-			"bin/whisper-cli.exe",     // New CLI binary
-			"bin/whisper-command.exe", // Alternative command binary
-			"bin/main.exe",            // Main binary from archive
-			"bin/whisper.exe",         // Deprecated binary (fallback)
+			"bin/whisper-cli.exe",
+			"bin/whisper-command.exe", 
+			"bin/main.exe",
+			"bin/whisper.exe",
 		}
 
 		if runtime.GOOS != "windows" {
@@ -322,8 +315,14 @@ func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) 
 	
 	args = append(args, "-of", strings.TrimSuffix(outputFile, ".txt"))
 	
-	if s.config.Language != "" && s.config.Language != "auto" {
-		args = append(args, "-l", s.config.Language)
+	langToUse := language
+	if langToUse == "" {
+		langToUse = s.config.Language
+	}
+	
+	if langToUse != "" && langToUse != "auto" {
+		args = append(args, "-l", langToUse)
+		log.Printf("Using language parameter: %s", langToUse)
 	}
 	
 	log.Printf("Executing whisper: %s %v", whisperPath, args)
@@ -359,12 +358,11 @@ func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) 
 	return text, nil
 }
 
-// downloadWhisperBinary downloads the appropriate whisper.cpp binary for the current platform
+// downloadWhisperBinary downloads the whisper.cpp binary for the current platform
 func (s *STTService) downloadWhisperBinary(ctx context.Context) error {
 	var downloadURLs []string
 	var fileName string
 
-	// Determine platform and download URLs using reliable aliceai.ca hosting
 	switch runtime.GOOS {
 	case "windows":
 		if runtime.GOARCH == "amd64" || runtime.GOARCH == "x86_64" {
@@ -406,8 +404,6 @@ func (s *STTService) downloadWhisperBinary(ctx context.Context) error {
 	if err := os.MkdirAll("bin", 0755); err != nil {
 		return fmt.Errorf("failed to create bin directory: %w", err)
 	}
-
-	// Try downloading from multiple URLs with retry mechanism
 	downloadPath := filepath.Join("bin", fileName)
 	var lastErr error
 
@@ -424,8 +420,6 @@ func (s *STTService) downloadWhisperBinary(ctx context.Context) error {
 		log.Printf("Binary download successful from source %d", i+1)
 		break
 	}
-
-	// Check if any download succeeded
 	if _, err := os.Stat(downloadPath); err != nil {
 		return fmt.Errorf("failed to download whisper binary from any source: %w", lastErr)
 	}
@@ -442,7 +436,6 @@ func (s *STTService) downloadWhisperBinary(ctx context.Context) error {
 		}
 		log.Printf("Direct binary installed: %s", targetPath)
 	} else {
-		// Zip archive - extract multiple binaries
 		defer os.Remove(downloadPath)
 		if err := s.extractWhisperBinary(downloadPath); err != nil {
 			return fmt.Errorf("failed to extract whisper binary: %w", err)
@@ -570,7 +563,7 @@ func (s *STTService) extractSingleFile(file *zip.File, outputPath string) error 
 	return nil
 }
 
-// downloadFileWithRetry downloads a file with retry logic for robustness
+// downloadFileWithRetry downloads a file with retry logic
 func (s *STTService) downloadFileWithRetry(url, filepath string, maxRetries int) error {
 	var lastErr error
 
@@ -595,12 +588,10 @@ func (s *STTService) downloadFileWithRetry(url, filepath string, maxRetries int)
 
 			continue
 		}
-
-		// Verify file was downloaded correctly
 		if info, err := os.Stat(filepath); err != nil {
 			lastErr = fmt.Errorf("downloaded file verification failed: %w", err)
 			continue
-		} else if info.Size() < 1000 { // Less than 1KB probably indicates error page
+		} else if info.Size() < 1000 {
 			lastErr = fmt.Errorf("downloaded file too small (%d bytes), likely an error page", info.Size())
 			os.Remove(filepath)
 			continue
@@ -613,21 +604,18 @@ func (s *STTService) downloadFileWithRetry(url, filepath string, maxRetries int)
 	return fmt.Errorf("download failed after %d attempts: %w", maxRetries, lastErr)
 }
 
-// downloadFileWithHeaders downloads a file with custom headers and retry logic
+// downloadFileWithHeaders downloads a file with custom headers
 func (s *STTService) downloadFileWithHeaders(url, filepath string) error {
 	log.Printf("Starting download from: %s", url)
 
-	// Create HTTP client with robust retry and timeout settings
 	client := &http.Client{
-		Timeout: 15 * time.Minute, // Extended timeout for large files
+		Timeout: 15 * time.Minute,
 	}
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-
-	// Add headers optimized for file downloads
 	req.Header.Set("User-Agent", "AliceElectron/1.0 (compatible; file downloader)")
 	req.Header.Set("Accept", "application/octet-stream, */*")
 

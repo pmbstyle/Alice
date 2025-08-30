@@ -63,14 +63,13 @@ type ServiceInfo struct {
 
 // NewTTSService creates a new TTS service
 func NewTTSService(config *Config) *TTSService {
-	// Determine the base directory for assets
 	baseDir := embedded.GetProductionBaseDirectory()
 	assetManager := embedded.NewAssetManager(baseDir)
 	
 	return &TTSService{
 		config:       config,
 		voices:       make(map[string]*Voice),
-		defaultVoice: "en_US-amy-medium", // Set default to young woman voice
+		defaultVoice: "en_US-amy-medium",
 		assetManager: assetManager,
 		info: &ServiceInfo{
 			Name:        "Piper TTS",
@@ -84,31 +83,25 @@ func NewTTSService(config *Config) *TTSService {
 	}
 }
 
-// Initialize initializes the TTS service
 func (s *TTSService) Initialize(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	log.Println("Initializing Piper TTS service...")
 
-	// First, try to extract embedded assets
 	if err := s.assetManager.EnsureAssets(ctx); err != nil {
 		log.Printf("Warning: Failed to extract embedded assets: %v", err)
 		log.Println("Falling back to download-based approach...")
 	} else {
 		log.Println("Successfully extracted embedded Piper assets")
-		// Update config to use embedded binary path
 		s.config.PiperPath = s.assetManager.GetBinaryPath("piper")
 		s.config.ModelPath = s.assetManager.GetModelPath("piper")
 	}
 
-	// Ensure Piper binary exists (don't fail initialization if missing)
 	if err := s.ensurePiper(ctx); err != nil {
 		log.Printf("Warning: %v - TTS will use fallback audio", err)
-		// Continue initialization with placeholder functionality
 	}
 
-	// Load available voices
 	s.loadVoices()
 
 	s.ready = true
@@ -119,11 +112,8 @@ func (s *TTSService) Initialize(ctx context.Context) error {
 	return nil
 }
 
-// loadVoices loads available TTS voices
 func (s *TTSService) loadVoices() {
-	// Piper TTS voices - includes popular models across multiple languages
 	voices := []*Voice{
-		// English US voices
 		{
 			Name:        "en_US-amy-medium",
 			Language:    "en-US",
@@ -156,8 +146,6 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Kristin - English US female voice (Piper)",
 		},
-		
-		// English GB voices
 		{
 			Name:        "en_GB-alba-medium",
 			Language:    "en-GB",
@@ -166,8 +154,6 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Alba - English GB female voice (Piper)",
 		},
-		
-		// Spanish voices
 		{
 			Name:        "es_ES-carme-medium",
 			Language:    "es-ES",
@@ -184,8 +170,6 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Teresa - Spanish MX female voice (Piper)",
 		},
-		
-		// French voices
 		{
 			Name:        "fr_FR-siwis-medium",
 			Language:    "fr-FR",
@@ -194,8 +178,7 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Siwis - French female voice (Piper)",
 		},
-		
-		// German voices
+
 		{
 			Name:        "de_DE-eva_k-x_low",
 			Language:    "de-DE",
@@ -204,8 +187,7 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  16000,
 			Description: "Eva K - German female voice (Piper)",
 		},
-		
-		// Italian voices
+
 		{
 			Name:        "it_IT-paola-medium",
 			Language:    "it-IT",
@@ -214,8 +196,7 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Paola - Italian female voice (Piper)",
 		},
-		
-		// Portuguese voices
+
 		{
 			Name:        "pt_BR-lais-medium",
 			Language:    "pt-BR",
@@ -224,8 +205,7 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Lais - Portuguese BR female voice (Piper)",
 		},
-		
-		// Russian voices
+
 		{
 			Name:        "ru_RU-irina-medium",
 			Language:    "ru-RU",
@@ -234,8 +214,6 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Irina - Russian female voice (Piper)",
 		},
-		
-		// Chinese voice
 		{
 			Name:        "zh_CN-huayan-medium",
 			Language:    "zh-CN",
@@ -244,8 +222,6 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Huayan - Chinese female voice (Piper)",
 		},
-		
-		// Japanese voice
 		{
 			Name:        "ja_JP-qmu_amaryllis-medium",
 			Language:    "ja-JP",
@@ -254,8 +230,7 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Amaryllis - Japanese female voice (Piper)",
 		},
-		
-		// Dutch voices
+
 		{
 			Name:        "nl_NL-mls_5809-low",
 			Language:    "nl-NL",
@@ -264,8 +239,7 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  16000,
 			Description: "MLS 5809 - Dutch female voice (Piper)",
 		},
-		
-		// Nordic voices
+
 		{
 			Name:        "no_NO-talesyntese-medium",
 			Language:    "no-NO",
@@ -290,8 +264,6 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Talesyntese - Danish voice (Piper)",
 		},
-		
-		// Other European languages
 		{
 			Name:        "fi_FI-anna-medium",
 			Language:    "fi-FI", 
@@ -316,8 +288,6 @@ func (s *TTSService) loadVoices() {
 			SampleRate:  22050,
 			Description: "Ukrainian TTS - Ukrainian voice (Piper)",
 		},
-		
-		// Other languages
 		{
 			Name:        "hi_IN-female-medium",
 			Language:    "hi-IN",
@@ -344,14 +314,12 @@ func (s *TTSService) loadVoices() {
 	}
 }
 
-// IsReady returns true if the service is ready
 func (s *TTSService) IsReady() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.ready
 }
 
-// GetVoices returns available voices
 func (s *TTSService) GetVoices() []*Voice {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -363,18 +331,15 @@ func (s *TTSService) GetVoices() []*Voice {
 	return voices
 }
 
-// GetInfo returns service information
 func (s *TTSService) GetInfo() *ServiceInfo {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	// Return a copy to avoid concurrent access issues
 	info := *s.info
 	info.LastUpdated = time.Now()
 	return &info
 }
 
-// Synthesize converts text to speech using Piper
 func (s *TTSService) Synthesize(ctx context.Context, text string, voice string) ([]byte, error) {
 	if !s.IsReady() {
 		return nil, fmt.Errorf("TTS service is not ready")
@@ -394,17 +359,13 @@ func (s *TTSService) Synthesize(ctx context.Context, text string, voice string) 
 	s.mu.RLock()
 	selectedVoice, exists := s.voices[voice]
 	
-	// If requested voice not found, use default young woman voice (Amy)
 	if !exists {
 		log.Printf("Voice '%s' not found, trying default voices...", voice)
-		
-		// First try to use configured default voice
 		if fallbackVoice, exists := s.voices[s.defaultVoice]; exists {
 			selectedVoice = fallbackVoice
 			voice = s.defaultVoice
 			log.Printf("Using default fallback voice: %s", s.defaultVoice)
 		} else {
-			// If Amy not available, try any other English voice
 			for _, fallbackVoice := range s.voices {
 				if fallbackVoice.Language == "en-US" || fallbackVoice.Language == "en-GB" {
 					selectedVoice = fallbackVoice
@@ -422,112 +383,90 @@ func (s *TTSService) Synthesize(ctx context.Context, text string, voice string) 
 		return nil, fmt.Errorf("no voices available")
 	}
 
-	// Ensure voice model exists
 	if err := s.ensureVoiceModel(ctx, voice); err != nil {
 		log.Printf("Failed to ensure voice model %s: %v", voice, err)
 		// Fall back to placeholder for now
 		return s.generatePlaceholderWAV(text, selectedVoice), nil
 	}
 
-	// Use Piper to synthesize speech
 	audioData, err := s.synthesizeWithPiper(ctx, text, voice)
 	if err != nil {
 		log.Printf("Failed to synthesize with Piper: %v", err)
-		// Fall back to placeholder
-		return s.generatePlaceholderWAV(text, selectedVoice), nil
+			return s.generatePlaceholderWAV(text, selectedVoice), nil
 	}
 
 	return audioData, nil
 }
 
-// generatePlaceholderWAV generates a speech-like WAV file with tones based on text
 func (s *TTSService) generatePlaceholderWAV(text string, voice *Voice) []byte {
-	// This generates a speech-like audio pattern based on text characteristics
-	// In a real implementation, this would be generated by Piper
 
 	const (
 		sampleRate = 22050
 		baseDuration = 0.8 // Base duration in seconds
 	)
 
-	// Calculate dynamic duration based on text length (roughly 150 words per minute)
 	textDuration := float64(len(text)) * 0.1 // ~10 characters per second
 	if textDuration < baseDuration {
 		textDuration = baseDuration
 	}
-	if textDuration > 10.0 { // Cap at 10 seconds
+	if textDuration > 10.0 {
 		textDuration = 10.0
 	}
 	
 	numSamples := int(sampleRate * textDuration)
 
-	// WAV file format
-	wav := make([]byte, 44+numSamples*2) // 44 bytes header + samples
+	wav := make([]byte, 44+numSamples*2)
 
-	// RIFF header
 	copy(wav[0:4], []byte("RIFF"))
-	// File size - 8
 	fileSize := uint32(44 + numSamples*2 - 8)
 	wav[4] = byte(fileSize & 0xFF)
 	wav[5] = byte((fileSize >> 8) & 0xFF)
 	wav[6] = byte((fileSize >> 16) & 0xFF)
 	wav[7] = byte((fileSize >> 24) & 0xFF)
 
-	// WAVE header
 	copy(wav[8:12], []byte("WAVE"))
 
-	// fmt chunk
 	copy(wav[12:16], []byte("fmt "))
-	wav[16] = 16 // Chunk size
-	wav[20] = 1  // Audio format (PCM)
-	wav[22] = 1  // Number of channels (mono)
+	wav[16] = 16
+	wav[20] = 1
+	wav[22] = 1
 
-	// Sample rate
 	wav[24] = byte(sampleRate & 0xFF)
 	wav[25] = byte((sampleRate >> 8) & 0xFF)
 	wav[26] = byte((sampleRate >> 16) & 0xFF)
 	wav[27] = byte((sampleRate >> 24) & 0xFF)
 
-	// Byte rate
 	byteRate := uint32(sampleRate * 2)
 	wav[28] = byte(byteRate & 0xFF)
 	wav[29] = byte((byteRate >> 8) & 0xFF)
 	wav[30] = byte((byteRate >> 16) & 0xFF)
 	wav[31] = byte((byteRate >> 24) & 0xFF)
 
-	// Block align
 	wav[32] = 2
 
-	// Bits per sample
 	wav[34] = 16
 
-	// data chunk
 	copy(wav[36:40], []byte("data"))
 
-	// Data size
 	dataSize := uint32(numSamples * 2)
 	wav[40] = byte(dataSize & 0xFF)
 	wav[41] = byte((dataSize >> 8) & 0xFF)
 	wav[42] = byte((dataSize >> 16) & 0xFF)
 	wav[43] = byte((dataSize >> 24) & 0xFF)
 
-	// Generate speech-like audio patterns
 	s.generateSpeechLikeAudio(wav[44:], numSamples, text, voice)
 
 	log.Printf("Generated %d samples (%.2f seconds) of audio for text: %s", numSamples, textDuration, text[:min(50, len(text))])
 	return wav
 }
 
-// generateSpeechLikeAudio creates speech-like audio patterns based on text and voice characteristics
 func (s *TTSService) generateSpeechLikeAudio(buffer []byte, numSamples int, text string, voice *Voice) {
 	
-	// Voice characteristics
 	baseFreq := 150.0 // Base frequency for speech
 	if voice.Gender == "female" {
-		baseFreq = 220.0 // Higher pitch for female voices
+		baseFreq = 220.0
 	}
 
-	// Text analysis for speech patterns
 	words := len(strings.Fields(text))
 	if words == 0 {
 		words = 1
@@ -535,101 +474,71 @@ func (s *TTSService) generateSpeechLikeAudio(buffer []byte, numSamples int, text
 
 	samplesPerWord := numSamples / words
 	if samplesPerWord < 1000 {
-		samplesPerWord = 1000 // Minimum duration per word
+		samplesPerWord = 1000
 	}
 
 	sampleIndex := 0
 	
 	for wordIndex := 0; wordIndex < words && sampleIndex < numSamples-samplesPerWord; wordIndex++ {
-		// Generate audio for this word
 		wordSamples := samplesPerWord
 		if sampleIndex + wordSamples > numSamples {
 			wordSamples = numSamples - sampleIndex
 		}
-		
 		s.generateWordAudio(buffer[sampleIndex*2:(sampleIndex+wordSamples)*2], wordSamples, baseFreq, wordIndex)
 		sampleIndex += wordSamples
-		
-		// Add brief pause between words (if space permits)
-		pauseSamples := min(500, numSamples-sampleIndex) // ~22ms pause
+		pauseSamples := min(500, numSamples-sampleIndex)
 		s.generateSilence(buffer[sampleIndex*2:(sampleIndex+pauseSamples)*2], pauseSamples)
 		sampleIndex += pauseSamples
 	}
 	
-	// Fill remaining with silence
 	if sampleIndex < numSamples {
 		remaining := numSamples - sampleIndex
 		s.generateSilence(buffer[sampleIndex*2:], remaining)
 	}
 }
 
-// generateWordAudio generates audio for a single word
 func (s *TTSService) generateWordAudio(buffer []byte, samples int, baseFreq float64, wordIndex int) {
 	
-	// Much more speech-like frequency modulation
 	for i := 0; i < samples; i++ {
-		t := float64(i) / 22050.0 // Time in seconds
-		
-		// Dynamic frequency that varies throughout the word (more like speech)
-		progress := float64(i) / float64(samples) // 0.0 to 1.0 through the word
-		
-		// Speech-like frequency modulation (rises and falls like natural speech)
-		freqModulation := 1.0 + 0.3*math.Sin(progress*math.Pi*4) // Oscillates 4 times per word
+		t := float64(i) / 22050.0
+		progress := float64(i) / float64(samples)
+		freqModulation := 1.0 + 0.3*math.Sin(progress*math.Pi*4)
 		currentFreq := baseFreq * freqModulation
-		
-		// Create speech-like formants (multiple frequency bands like vowels)
-		formant1 := 0.6 * math.Sin(2 * math.Pi * currentFreq * t)           // Fundamental
-		formant2 := 0.3 * math.Sin(2 * math.Pi * currentFreq * 2.5 * t)     // First formant  
-		formant3 := 0.15 * math.Sin(2 * math.Pi * currentFreq * 4.2 * t)    // Second formant
-		formant4 := 0.08 * math.Sin(2 * math.Pi * currentFreq * 6.8 * t)    // Higher formant
-		
-		// Combine formants
+		formant1 := 0.6 * math.Sin(2 * math.Pi * currentFreq * t)
+		formant2 := 0.3 * math.Sin(2 * math.Pi * currentFreq * 2.5 * t)
+		formant3 := 0.15 * math.Sin(2 * math.Pi * currentFreq * 4.2 * t)
+		formant4 := 0.08 * math.Sin(2 * math.Pi * currentFreq * 6.8 * t)
 		waveform := formant1 + formant2 + formant3 + formant4
-		
-		// Speech-like envelope (quick attack, sustained, quick decay)
 		var envelope float64
 		if progress < 0.1 {
-			envelope = progress * 10 // Quick attack
+			envelope = progress * 10
 		} else if progress > 0.8 {
-			envelope = (1.0 - progress) * 5 // Quick decay  
+			envelope = (1.0 - progress) * 5
 		} else {
-			envelope = 0.8 + 0.2*math.Sin(progress*math.Pi*6) // Sustained with slight variation
+			envelope = 0.8 + 0.2*math.Sin(progress*math.Pi*6)
 		}
-		
 		waveform *= envelope
-		
-		// Add speech-like noise and breathiness
 		breathNoise := (math.Sin(t*1000)*0.1 + math.Sin(t*1700)*0.05) * 0.3
 		waveform += breathNoise
-		
-		// Add random noise for naturalness
 		randomNoise := (float64((i*31+wordIndex*47)%200)/200.0 - 0.5) * 0.1
 		waveform += randomNoise
-		
-		// Apply light compression (like human vocal tract)
 		if waveform > 0.7 {
 			waveform = 0.7 + (waveform-0.7)*0.3
 		} else if waveform < -0.7 {
 			waveform = -0.7 + (waveform+0.7)*0.3
 		}
-		
-		// Convert to 16-bit signed integer with reasonable volume
-		sample := int16(waveform * 12000) // Higher volume than before
-		
-		// Write little-endian 16-bit sample
+		sample := int16(waveform * 12000)
 		buffer[i*2] = byte(sample & 0xFF)
 		buffer[i*2+1] = byte((sample >> 8) & 0xFF)
 	}
 }
 
-// generateSilence fills buffer with silence
 func (s *TTSService) generateSilence(buffer []byte, samples int) {
 	for i := 0; i < samples*2; i++ {
 		buffer[i] = 0
 	}
 }
 
-// min returns the minimum of two integers
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -637,9 +546,7 @@ func min(a, b int) int {
 	return b
 }
 
-// ensurePiper downloads and sets up the Piper binary if needed
 func (s *TTSService) ensurePiper(ctx context.Context) error {
-	// Set or fix PiperPath if needed
 	if s.config.PiperPath == "" {
 		if runtime.GOOS == "windows" {
 			s.config.PiperPath = "bin/piper.exe"
@@ -647,24 +554,19 @@ func (s *TTSService) ensurePiper(ctx context.Context) error {
 			s.config.PiperPath = "bin/piper"
 		}
 	} else {
-		// Fix path if it doesn't have correct extension on Windows
 		if runtime.GOOS == "windows" && !strings.HasSuffix(s.config.PiperPath, ".exe") {
 			s.config.PiperPath = s.config.PiperPath + ".exe"
 		}
 	}
 
 
-	// Check if Piper binary and required DLLs exist
 	binaryExists := false
 	if _, err := os.Stat(s.config.PiperPath); err == nil {
 		binaryExists = true
 		log.Printf("Piper binary already exists: %s", s.config.PiperPath)
-		
-		// Check if required DLLs and espeak-ng-data exist
 		binDir := filepath.Dir(s.config.PiperPath)
 		requiredDLLs := []string{"espeak-ng.dll", "onnxruntime_providers_shared.dll", "onnxruntime.dll", "piper_phonemize.dll"}
 		allDependenciesExist := true
-		
 		for _, dll := range requiredDLLs {
 			dllPath := filepath.Join(binDir, dll)
 			if _, err := os.Stat(dllPath); err != nil {
@@ -673,14 +575,11 @@ func (s *TTSService) ensurePiper(ctx context.Context) error {
 				break
 			}
 		}
-		
-		// Check if espeak-ng-data directory exists
 		espeakDataPath := filepath.Join(binDir, "espeak-ng-data")
 		if _, err := os.Stat(espeakDataPath); err != nil {
 			log.Printf("Required espeak-ng-data directory missing: %s", espeakDataPath)
 			allDependenciesExist = false
 		}
-		
 		if allDependenciesExist {
 			log.Printf("All required dependencies are present")
 			return nil
@@ -689,7 +588,6 @@ func (s *TTSService) ensurePiper(ctx context.Context) error {
 		}
 	}
 
-	// Create bin directory
 	binDir := filepath.Dir(s.config.PiperPath)
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		return fmt.Errorf("failed to create bin directory: %w", err)
@@ -702,7 +600,6 @@ func (s *TTSService) ensurePiper(ctx context.Context) error {
 	}
 	log.Printf("Attempting to download Piper binary automatically...")
 	
-	// Try to download automatically
 	if err := s.downloadPiperBinary(); err != nil {
 		log.Printf("Failed to download Piper binary: %v", err)
 		log.Printf("Please download Piper manually from: https://github.com/rhasspy/piper/releases")
@@ -714,7 +611,6 @@ func (s *TTSService) ensurePiper(ctx context.Context) error {
 	return nil
 }
 
-// ensureVoiceModel downloads a voice model if it doesn't exist
 func (s *TTSService) ensureVoiceModel(ctx context.Context, voice string) error {
 	modelDir := "models/piper"
 	if s.config.ModelPath != "" {
@@ -728,27 +624,23 @@ func (s *TTSService) ensureVoiceModel(ctx context.Context, voice string) error {
 	modelFile := filepath.Join(modelDir, voice+".onnx")
 	configFile := filepath.Join(modelDir, voice+".onnx.json")
 
-	// First check if embedded models were extracted
 	embeddedModelPath := s.assetManager.GetVoiceModelPath(voice)
 	embeddedConfigPath := embeddedModelPath + ".json"
 	
 	if s.assetManager.IsAssetAvailable(embeddedModelPath) && s.assetManager.IsAssetAvailable(embeddedConfigPath) {
 		log.Printf("Using embedded voice model: %s", voice)
-		// Update paths to use embedded models
 		modelFile = embeddedModelPath
 		configFile = embeddedConfigPath
 	}
 
-	// Check if both model and config exist
 	if _, err := os.Stat(modelFile); err == nil {
 		if _, err := os.Stat(configFile); err == nil {
-			return nil // Both files exist
+			return nil
 		}
 	}
 
 	log.Printf("Voice model %s not found, attempting to download...", voice)
 	
-	// Try to download the voice model automatically
 	if err := s.downloadVoiceModel(voice, modelDir); err != nil {
 		log.Printf("Failed to download voice model: %v", err)
 		log.Printf("Please download manually from: https://huggingface.co/rhasspy/piper-voices/tree/main")
@@ -760,7 +652,6 @@ func (s *TTSService) ensureVoiceModel(ctx context.Context, voice string) error {
 	return nil
 }
 
-// synthesizeWithPiper uses the Piper binary to synthesize speech
 func (s *TTSService) synthesizeWithPiper(ctx context.Context, text, voice string) ([]byte, error) {
 	modelDir := "models/piper"
 	if s.config.ModelPath != "" {
@@ -769,7 +660,6 @@ func (s *TTSService) synthesizeWithPiper(ctx context.Context, text, voice string
 
 	modelFile := filepath.Join(modelDir, voice+".onnx")
 
-	// Create temporary files for input and output
 	tmpDir := os.TempDir()
 	inputFile := filepath.Join(tmpDir, fmt.Sprintf("piper_input_%d.txt", time.Now().UnixNano()))
 	outputFile := filepath.Join(tmpDir, fmt.Sprintf("piper_output_%d.wav", time.Now().UnixNano()))
@@ -777,27 +667,22 @@ func (s *TTSService) synthesizeWithPiper(ctx context.Context, text, voice string
 	defer os.Remove(inputFile)
 	defer os.Remove(outputFile)
 
-	// Write text to input file
 	if err := os.WriteFile(inputFile, []byte(text), 0644); err != nil {
 		return nil, fmt.Errorf("failed to write input file: %w", err)
 	}
 
-	// Build Piper command
 	args := []string{
 		"--model", modelFile,
 		"--output-file", outputFile,
 	}
 
-	// Add speed if specified
 	if s.config.Speed > 0 && s.config.Speed != 1.0 {
 		args = append(args, "--length_scale", fmt.Sprintf("%.2f", 1.0/s.config.Speed))
 	}
 
-	// Run Piper
 	cmd := exec.CommandContext(ctx, s.config.PiperPath, args...)
 	cmd.Stdin = strings.NewReader(text)
 	
-	// Set espeak-ng data path environment variable
 	espeakDataPath := filepath.Join(filepath.Dir(s.config.PiperPath), "espeak-ng-data")
 	cmd.Env = append(os.Environ(), "ESPEAK_DATA_PATH="+espeakDataPath)
 
@@ -806,7 +691,6 @@ func (s *TTSService) synthesizeWithPiper(ctx context.Context, text, voice string
 		return nil, fmt.Errorf("failed to run piper: %w", err)
 	}
 
-	// Read the output WAV file
 	audioData, err := os.ReadFile(outputFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read output file: %w", err)
@@ -816,12 +700,10 @@ func (s *TTSService) synthesizeWithPiper(ctx context.Context, text, voice string
 	return audioData, nil
 }
 
-// downloadPiperBinary downloads the appropriate Piper binary for the current platform
 func (s *TTSService) downloadPiperBinary() error {
 	var downloadURLs []string
 	var fileName string
 	
-	// Determine platform and download URLs with GitHub repo as primary source
 	switch runtime.GOOS {
 	case "windows":
 		downloadURLs = []string{
@@ -865,29 +747,21 @@ func (s *TTSService) downloadPiperBinary() error {
 	log.Printf("Downloading Piper binary for %s/%s", runtime.GOOS, runtime.GOARCH)
 	downloadPath := filepath.Join("bin", fileName)
 	var lastErr error
-	
-	// Try downloading from multiple URLs
 	for i, downloadURL := range downloadURLs {
 		log.Printf("Attempting Piper download from source %d/%d: %s", i+1, len(downloadURLs), downloadURL)
-		
 		if err := s.downloadFileWithRetry(downloadURL, downloadPath, 2); err != nil {
 			lastErr = err
 			log.Printf("Piper download source %d failed: %v", i+1, err)
 			continue
 		}
-		
 		log.Printf("Piper download successful from source %d", i+1)
 		break
 	}
-	
-	// Check if any download succeeded
 	if _, err := os.Stat(downloadPath); err != nil {
 		return fmt.Errorf("failed to download Piper binary from any source: %w", lastErr)
 	}
 
-	// Handle different file types
 	if runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && fileName == "piper-macos-arm64" {
-		// Direct binary file - just make executable and rename
 		targetPath := filepath.Join("bin", "piper")
 		if err := os.Rename(downloadPath, targetPath); err != nil {
 			return fmt.Errorf("failed to move binary: %w", err)
@@ -897,7 +771,6 @@ func (s *TTSService) downloadPiperBinary() error {
 		}
 		log.Printf("Direct Piper binary installed: %s", targetPath)
 	} else {
-		// Archive file - extract as before
 		defer os.Remove(downloadPath)
 		if err := s.extractPiperBinary(downloadPath); err != nil {
 			return fmt.Errorf("failed to extract binary: %w", err)
@@ -908,7 +781,6 @@ func (s *TTSService) downloadPiperBinary() error {
 	return nil
 }
 
-// downloadFile downloads a file from a URL
 func (s *TTSService) downloadFile(url, filepath string) error {
 	client := &http.Client{
 		Timeout: 5 * time.Minute,
@@ -918,11 +790,9 @@ func (s *TTSService) downloadFile(url, filepath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
-	
-	// Add headers optimized for file downloads
 	req.Header.Set("User-Agent", "AliceElectron/1.0 (compatible; file downloader)")
 	req.Header.Set("Accept", "application/octet-stream, */*")
-	req.Header.Set("Accept-Encoding", "identity") // Disable compression for binary files
+	req.Header.Set("Accept-Encoding", "identity")
 	req.Header.Set("Connection", "keep-alive")
 	
 	resp, err := client.Do(req)
@@ -931,10 +801,8 @@ func (s *TTSService) downloadFile(url, filepath string) error {
 	}
 	defer resp.Body.Close()
 
-	// Handle response codes with better error reporting
 	switch resp.StatusCode {
 	case http.StatusOK:
-		// Success - continue with download
 	case http.StatusNotFound:
 		return fmt.Errorf("file not found (status: 404) - Piper release may have been moved")
 	case http.StatusTooManyRequests:
@@ -962,42 +830,34 @@ func (s *TTSService) downloadFile(url, filepath string) error {
 	return nil
 }
 
-// downloadFileWithRetry downloads a file with retry logic for robustness
 func (s *TTSService) downloadFileWithRetry(url, filepath string, maxRetries int) error {
 	var lastErr error
 	
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if attempt > 1 {
-			// Exponential backoff: wait 2, 4, 8 seconds between retries
 			waitTime := time.Duration(1<<uint(attempt-2)) * 2 * time.Second
 			log.Printf("Retrying download in %v (attempt %d/%d)", waitTime, attempt, maxRetries)
 			time.Sleep(waitTime)
 		}
-		
 		log.Printf("Download attempt %d/%d from: %s", attempt, maxRetries, url)
-		
 		if err := s.downloadFile(url, filepath); err != nil {
 			lastErr = err
 			log.Printf("Attempt %d failed: %v", attempt, err)
 			
-			// Clean up partial file on failure
 			if _, statErr := os.Stat(filepath); statErr == nil {
 				os.Remove(filepath)
 			}
 			
 			continue
 		}
-		
-		// Verify file was downloaded correctly
 		if info, err := os.Stat(filepath); err != nil {
 			lastErr = fmt.Errorf("downloaded file verification failed: %w", err)
 			continue
-		} else if info.Size() < 1000 { // Less than 1KB probably indicates error page
+		} else if info.Size() < 1000 {
 			lastErr = fmt.Errorf("downloaded file too small (%d bytes), likely an error page", info.Size())
 			os.Remove(filepath)
 			continue
 		}
-		
 		log.Printf("Download successful on attempt %d", attempt)
 		return nil
 	}
@@ -1005,7 +865,6 @@ func (s *TTSService) downloadFileWithRetry(url, filepath string, maxRetries int)
 	return fmt.Errorf("download failed after %d attempts: %w", maxRetries, lastErr)
 }
 
-// extractPiperBinary extracts the Piper binary from the downloaded archive
 func (s *TTSService) extractPiperBinary(archivePath string) error {
 	if strings.HasSuffix(archivePath, ".zip") {
 		return s.extractZip(archivePath)
@@ -1015,7 +874,6 @@ func (s *TTSService) extractPiperBinary(archivePath string) error {
 	return fmt.Errorf("unsupported archive format: %s", archivePath)
 }
 
-// extractZip extracts piper.exe from a ZIP archive
 func (s *TTSService) extractZip(archivePath string) error {
 	reader, err := zip.OpenReader(archivePath)
 	if err != nil {
@@ -1024,15 +882,12 @@ func (s *TTSService) extractZip(archivePath string) error {
 	defer reader.Close()
 
 
-	// First pass: extract required DLLs and espeak-ng-data
 	requiredDLLs := []string{"espeak-ng.dll", "onnxruntime_providers_shared.dll", "onnxruntime.dll", "piper_phonemize.dll"}
 	extractedFiles := 0
 	binDir := filepath.Dir(s.config.PiperPath)
 	
 	for _, file := range reader.File {
 		fileName := strings.ToLower(filepath.Base(file.Name))
-		
-		// Check if this is a required DLL
 		if !file.FileInfo().IsDir() {
 			for _, dll := range requiredDLLs {
 				if fileName == dll {
@@ -1047,20 +902,15 @@ func (s *TTSService) extractZip(archivePath string) error {
 				}
 			}
 		}
-		
-		// Extract espeak-ng-data directory
 		if strings.HasPrefix(file.Name, "piper/espeak-ng-data/") {
-			// Remove "piper/" prefix to get relative path from bin directory
 			relativePath := strings.TrimPrefix(file.Name, "piper/")
 			targetPath := filepath.Join(binDir, relativePath)
 			
 			if file.FileInfo().IsDir() {
-				// Create directory
 				if err := os.MkdirAll(targetPath, 0755); err != nil {
 					log.Printf("Warning: Failed to create directory %s: %v", targetPath, err)
 				}
 			} else {
-				// Extract file
 				if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 					log.Printf("Warning: Failed to create directory %s: %v", filepath.Dir(targetPath), err)
 					continue
@@ -1072,9 +922,7 @@ func (s *TTSService) extractZip(archivePath string) error {
 		}
 	}
 	
-	// Second pass: extract the main binary
 	for _, file := range reader.File {
-		// Look for piper.exe specifically, avoid directories and other files
 		if file.FileInfo().IsDir() {
 			continue
 		}
@@ -1092,7 +940,6 @@ func (s *TTSService) extractZip(archivePath string) error {
 	return fmt.Errorf("piper binary not found in archive")
 }
 
-// extractTarGz extracts piper from a tar.gz archive
 func (s *TTSService) extractTarGz(archivePath string) error {
 	file, err := os.Open(archivePath)
 	if err != nil {
@@ -1129,7 +976,6 @@ func (s *TTSService) extractTarGz(archivePath string) error {
 	return fmt.Errorf("piper binary not found in archive")
 }
 
-// extractSingleFileFromZip extracts a single file from ZIP
 func (s *TTSService) extractSingleFileFromZip(file *zip.File, outputPath string) error {
 	rc, err := file.Open()
 	if err != nil {
@@ -1148,7 +994,6 @@ func (s *TTSService) extractSingleFileFromZip(file *zip.File, outputPath string)
 		return err
 	}
 
-	// Make executable on Unix systems
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(outputPath, 0755); err != nil {
 			return err
@@ -1158,19 +1003,16 @@ func (s *TTSService) extractSingleFileFromZip(file *zip.File, outputPath string)
 	return nil
 }
 
-// GetDefaultVoice returns the current default voice
 func (s *TTSService) GetDefaultVoice() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.defaultVoice
 }
 
-// SetDefaultVoice sets the default voice to use for synthesis
 func (s *TTSService) SetDefaultVoice(voiceName string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	
-	// Check if voice exists
 	if _, exists := s.voices[voiceName]; !exists {
 		return fmt.Errorf("voice '%s' not found", voiceName)
 	}
@@ -1180,7 +1022,6 @@ func (s *TTSService) SetDefaultVoice(voiceName string) error {
 	return nil
 }
 
-// GetAvailableVoices returns list of available voice names
 func (s *TTSService) GetAvailableVoices() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -1192,7 +1033,6 @@ func (s *TTSService) GetAvailableVoices() []string {
 	return voices
 }
 
-// extractSingleFileFromTar extracts a single file from tar
 func (s *TTSService) extractSingleFileFromTar(tarReader *tar.Reader, outputPath string) error {
 	outFile, err := os.Create(outputPath)
 	if err != nil {
@@ -1205,7 +1045,6 @@ func (s *TTSService) extractSingleFileFromTar(tarReader *tar.Reader, outputPath 
 		return err
 	}
 
-	// Make executable on Unix systems
 	if runtime.GOOS != "windows" {
 		if err := os.Chmod(outputPath, 0755); err != nil {
 			return err
@@ -1215,76 +1054,53 @@ func (s *TTSService) extractSingleFileFromTar(tarReader *tar.Reader, outputPath 
 	return nil
 }
 
-// downloadVoiceModel downloads a voice model from HuggingFace
 func (s *TTSService) downloadVoiceModel(voiceName, modelDir string) error {
-	// HuggingFace base URL for Piper voice models
 	baseURL := "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 	
-	// Map voice names to their language/voice/quality paths on HuggingFace
 	voiceMapping := map[string]struct {
 		lang     string
 		voice    string
 		quality  string
 	}{
-		// English US voices
 		"en_US-amy-medium":        {"en/en_US", "amy", "medium"},
 		"en_US-lessac-medium":     {"en/en_US", "lessac", "medium"},
 		"en_US-hfc_female-medium": {"en/en_US", "hfc_female", "medium"},
 		"en_US-kristin-medium":    {"en/en_US", "kristin", "medium"},
-		
-		// English GB voices
 		"en_GB-alba-medium": {"en/en_GB", "alba", "medium"},
-		
-		// Spanish voices
+
 		"es_ES-carme-medium":  {"es/es_ES", "carme", "medium"},
 		"es_MX-teresa-medium": {"es/es_MX", "teresa", "medium"},
-		
-		// French voices
+
 		"fr_FR-siwis-medium": {"fr/fr_FR", "siwis", "medium"},
-		
-		// German voices
+
 		"de_DE-eva_k-x_low": {"de/de_DE", "eva_k", "x_low"},
-		
-		// Italian voices
+
 		"it_IT-paola-medium": {"it/it_IT", "paola", "medium"},
-		
-		// Portuguese voices
+
 		"pt_BR-lais-medium": {"pt/pt_BR", "lais", "medium"},
-		
-		// Russian voices
+
 		"ru_RU-irina-medium": {"ru/ru_RU", "irina", "medium"},
-		
-		// Chinese voices
+
 		"zh_CN-huayan-medium": {"zh/zh_CN", "huayan", "medium"},
-		
-		// Japanese voices
+
 		"ja_JP-qmu_amaryllis-medium": {"ja/ja_JP", "qmu_amaryllis", "medium"},
-		
-		// Dutch voices
+
 		"nl_NL-mls_5809-low": {"nl/nl_NL", "mls_5809", "low"},
-		
-		// Norwegian voices
+
 		"no_NO-talesyntese-medium": {"no/no_NO", "talesyntese", "medium"},
-		
-		// Swedish voices
+
 		"sv_SE-nst-medium": {"sv/sv_SE", "nst", "medium"},
-		
-		// Danish voices
+
 		"da_DK-talesyntese-medium": {"da/da_DK", "talesyntese", "medium"},
-		
-		// Finnish voices
+
 		"fi_FI-anna-medium": {"fi/fi_FI", "anna", "medium"},
-		
-		// Polish voices
+
 		"pl_PL-mls_6892-low": {"pl/pl_PL", "mls_6892", "low"},
-		
-		// Ukrainian voices
+
 		"uk_UA-ukrainian_tts-medium": {"uk/uk_UA", "ukrainian_tts", "medium"},
-		
-		// Hindi voices
+
 		"hi_IN-female-medium": {"hi/hi_IN", "female", "medium"},
-		
-		// Arabic voices
+
 		"ar_JO-amina-medium": {"ar/ar_JO", "amina", "medium"},
 	}
 	
@@ -1293,20 +1109,17 @@ func (s *TTSService) downloadVoiceModel(voiceName, modelDir string) error {
 		return fmt.Errorf("unknown voice: %s", voiceName)
 	}
 	
-	// Build download URLs
 	onnxURL := fmt.Sprintf("%s/%s/%s/%s/%s.onnx", baseURL, voiceInfo.lang, voiceInfo.voice, voiceInfo.quality, voiceName)
 	jsonURL := fmt.Sprintf("%s/%s/%s/%s/%s.onnx.json", baseURL, voiceInfo.lang, voiceInfo.voice, voiceInfo.quality, voiceName)
 	
 	onnxFile := filepath.Join(modelDir, voiceName+".onnx")
 	jsonFile := filepath.Join(modelDir, voiceName+".onnx.json")
 	
-	// Download .onnx file with retry
 	log.Printf("Downloading voice model: %s", onnxURL)
 	if err := s.downloadFileWithRetry(onnxURL, onnxFile, 3); err != nil {
 		return fmt.Errorf("failed to download .onnx file: %w", err)
 	}
 	
-	// Download .onnx.json file with retry
 	log.Printf("Downloading voice config: %s", jsonURL)
 	if err := s.downloadFileWithRetry(jsonURL, jsonFile, 3); err != nil {
 		return fmt.Errorf("failed to download .onnx.json file: %w", err)
@@ -1315,7 +1128,6 @@ func (s *TTSService) downloadVoiceModel(voiceName, modelDir string) error {
 	return nil
 }
 
-// Shutdown gracefully shuts down the TTS service
 func (s *TTSService) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()

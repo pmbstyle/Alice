@@ -24,7 +24,7 @@
     {
       from: 'resources/backend',
       to: 'backend',
-      filter: ['**/*']
+      filter: ['**/*'],
     },
   ],
   mac: {
@@ -45,7 +45,7 @@
     oneClick: true,
     perMachine: false,
     allowToChangeInstallationDirectory: false,
-    deleteAppDataOnUninstall: false
+    deleteAppDataOnUninstall: false,
   },
   compression: 'store',
   linux: {

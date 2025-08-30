@@ -479,5 +479,45 @@
       "required": ["query"],
       "additionalProperties": false
     }
+  },
+  {
+    "type": "function",
+    "name": "searxng_web_search",
+    "description": "Searches the web using a SearXNG instance for information on a given query. Use this when you want to use a privacy-focused, self-hosted search engine. Good for current events, general knowledge questions, or topics not covered by other tools.",
+    "strict": false,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The specific search query or question to look up on the web."
+        },
+        "categories": {
+          "type": "string",
+          "description": "Comma-separated search categories (e.g., 'general,web,videos'). Optional."
+        },
+        "engines": {
+          "type": "string",
+          "description": "Comma-separated specific search engines to use (e.g., 'google,bing'). Optional."
+        },
+        "language": {
+          "type": "string",
+          "description": "Language code for search results (e.g., 'en', 'es', 'fr'). Optional."
+        },
+        "time_range": {
+          "type": "string",
+          "enum": ["day", "month", "year"],
+          "description": "Time range filter for search results. Optional."
+        },
+        "safesearch": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 2,
+          "description": "Safe search level: 0=off, 1=moderate, 2=strict. Optional."
+        }
+      },
+      "required": ["query"],
+      "additionalProperties": false
+    }
   }
 ]

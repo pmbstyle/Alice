@@ -85,7 +85,9 @@
                 </svg>
                 Speech-to-Text
               </span>
-              <span class="text-base-content/60">Local Whisper (Go Backend)</span>
+              <span class="text-base-content/60"
+                >Local Whisper (Go Backend)</span
+              >
             </div>
 
             <div
@@ -108,8 +110,12 @@
                 Text-to-Speech
               </span>
               <div class="text-right">
-                <div class="text-base-content/90 font-medium">Local Piper TTS (Go Backend)</div>
-                <div class="text-xs text-base-content/60">30+ voices, 20+ languages</div>
+                <div class="text-base-content/90 font-medium">
+                  Local Piper TTS (Go Backend)
+                </div>
+                <div class="text-xs text-base-content/60">
+                  30+ voices, 20+ languages
+                </div>
               </div>
             </div>
 
@@ -132,7 +138,9 @@
                 </svg>
                 Embeddings
               </span>
-              <span class="text-base-content/60">Local MiniLM (Go Backend)</span>
+              <span class="text-base-content/60"
+                >Local MiniLM (Go Backend)</span
+              >
             </div>
           </div>
         </div>
@@ -142,7 +150,9 @@
           <h3 class="font-medium text-base-content/90 flex items-center gap-2">
             <span>🌍</span> Available Voice Languages
           </h3>
-          <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 text-xs">
+          <div
+            class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 text-xs"
+          >
             <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
               <span>🇺🇸</span> English (US)
             </div>
@@ -181,7 +191,8 @@
             </div>
           </div>
           <p class="text-xs text-base-content/60 mt-2">
-            <strong>+8 more languages</strong> including Hindi, Arabic, Polish, Ukrainian, Finnish and more!
+            <strong>+8 more languages</strong> including Hindi, Arabic, Polish,
+            Ukrainian, Finnish and more!
           </p>
         </div>
 
@@ -200,7 +211,8 @@
             ></path>
           </svg>
           <span
-            >Voice models will be downloaded automatically when first used. You can preview and select different voices in Settings.</span
+            >Voice models will be downloaded automatically when first used. You
+            can preview and select different voices in Settings.</span
           >
         </div>
       </div>

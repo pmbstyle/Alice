@@ -285,7 +285,8 @@ function betterToolName(name: string): string {
     get_email_content: 'Get Email Content',
     search_torrents: 'Torrent Search',
     add_torrent_to_qb: 'Add Torrent to QB',
-    perform_web_search: 'Web Search (local models)',
+    perform_web_search: 'Web Search (Tavily)',
+    searxng_web_search: 'Web Search (SearXNG)',
   }
   return (
     nameMap[name] ||

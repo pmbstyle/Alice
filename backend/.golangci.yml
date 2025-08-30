@@ -19,7 +19,7 @@ linters-settings:
       # is allowed to use only in logutils package
       - github.com/sirupsen/logrus
     packages-with-error-message:
-      - github.com/sirupsen/logrus: "logging is allowed only by logutils.Log"
+      - github.com/sirupsen/logrus: 'logging is allowed only by logutils.Log'
   misspell:
     locale: US
   lll:
@@ -111,7 +111,7 @@ issues:
     # https://github.com/go-critic/go-critic/issues/926
     - linters:
         - gocritic
-      text: "unnecessaryDefer:"
+      text: 'unnecessaryDefer:'
 
 run:
   timeout: 5m
@@ -120,9 +120,9 @@ run:
   build-tags:
     - bench
     - !bench
+      # golangci.com configuration
+      # https://github.com/golangci/golangci/wiki/Configuration
 
-# golangci.com configuration
-# https://github.com/golangci/golangci/wiki/Configuration
 service:
   golangci-lint-version: 1.50.x # use the fixed version to not introduce new linters unexpectedly
   prepare:

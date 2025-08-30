@@ -98,7 +98,6 @@
           ></textarea>
         </div>
 
-
         <div
           v-if="currentSettings.assistantModel.startsWith('gpt-5')"
           class="grid grid-cols-1 md:grid-cols-2 gap-4"

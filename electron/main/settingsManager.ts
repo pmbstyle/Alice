@@ -55,6 +55,9 @@ export interface AppSettings {
 
   VITE_TAVILY_API_KEY?: string
 
+  VITE_SEARXNG_URL?: string
+  VITE_SEARXNG_API_KEY?: string
+
   websocketPort?: number
 
   approvedCommands?: string[]

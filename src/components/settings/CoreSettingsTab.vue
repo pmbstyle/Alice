@@ -128,7 +128,7 @@
     >
       <legend class="fieldset-legend">
         Local Speech-to-Text Configuration (Go Backend)
-        <span 
+        <span
           class="w-2 h-2 rounded-full inline-block"
           :class="getServiceStatusClass('stt')"
           :title="getServiceStatusText('stt')"
@@ -144,9 +144,13 @@
               id="stt-model"
               v-model="currentSettings.localSttModel"
               class="select select-bordered w-full focus:select-primary"
-              @change="e => $emit('update:setting', 'localSttModel', e.target.value)"
+              @change="
+                e => $emit('update:setting', 'localSttModel', e.target.value)
+              "
             >
-              <option value="whisper-tiny.en">Tiny (English only, fastest)</option>
+              <option value="whisper-tiny.en">
+                Tiny (English only, fastest)
+              </option>
               <option value="whisper-base">Base (multilingual)</option>
               <option value="whisper-small">Small (better accuracy)</option>
               <option value="whisper-medium">Medium (high accuracy)</option>
@@ -164,7 +168,9 @@
               id="stt-language"
               v-model="currentSettings.localSttLanguage"
               class="select select-bordered w-full focus:select-primary"
-              @change="e => $emit('update:setting', 'localSttLanguage', e.target.value)"
+              @change="
+                e => $emit('update:setting', 'localSttLanguage', e.target.value)
+              "
             >
               <option value="auto">Auto-detect</option>
               <option value="en">English</option>
@@ -188,7 +194,8 @@
               <option value="fi">Finnish</option>
             </select>
             <p class="text-xs text-gray-400 mt-1">
-              Auto-detect works for most languages. Select a specific language for better accuracy.
+              Auto-detect works for most languages. Select a specific language
+              for better accuracy.
             </p>
           </div>
           <div>
@@ -199,7 +206,14 @@
               id="stt-wake-enable"
               v-model="currentSettings.localSttEnabled"
               class="select select-bordered w-full focus:select-primary"
-              @change="e => $emit('update:setting', 'localSttEnabled', e.target.value === 'true')"
+              @change="
+                e =>
+                  $emit(
+                    'update:setting',
+                    'localSttEnabled',
+                    e.target.value === 'true'
+                  )
+              "
             >
               <option value="true">Enable</option>
               <option value="false">Disable</option>
@@ -214,11 +228,14 @@
               type="text"
               v-model="currentSettings.localSttWakeWord"
               class="input input-bordered w-full focus:input-primary"
-              @change="e => $emit('update:setting', 'localSttWakeWord', e.target.value)"
+              @change="
+                e => $emit('update:setting', 'localSttWakeWord', e.target.value)
+              "
               placeholder="alice"
             />
             <p class="text-xs text-gray-400 mt-1">
-              The word that will activate voice recording. Use simple, common words for better recognition.
+              The word that will activate voice recording. Use simple, common
+              words for better recognition.
             </p>
           </div>
         </div>
@@ -231,7 +248,7 @@
     >
       <legend class="fieldset-legend">
         Text-to-Speech Configuration
-        <span 
+        <span
           class="w-2 h-2 rounded-full inline-block"
           :class="getServiceStatusClass('tts')"
           :title="getServiceStatusText('tts')"
@@ -284,16 +301,20 @@
                 @change="onVoiceChange"
               >
                 <option v-if="availableVoices.length === 0" disabled value="">
-                  {{ isRefreshingVoices ? 'Loading voices...' : 'No voices available' }}
+                  {{
+                    isRefreshingVoices
+                      ? 'Loading voices...'
+                      : 'No voices available'
+                  }}
                 </option>
-                <optgroup 
-                  v-for="(voices, language) in groupedVoices" 
+                <optgroup
+                  v-for="(voices, language) in groupedVoices"
                   :key="language"
                   :label="getLanguageDisplayName(language)"
                 >
-                  <option 
-                    v-for="voice in voices" 
-                    :key="voice.name" 
+                  <option
+                    v-for="voice in voices"
+                    :key="voice.name"
                     :value="voice.name"
                     :title="`${voice.description} | Quality: ${getVoiceQuality(voice.name)} | Gender: ${voice.gender || 'Unknown'}`"
                   >
@@ -308,7 +329,10 @@
                 class="btn btn-square btn-sm"
                 title="Refresh voices"
               >
-                <span v-if="isRefreshingVoices" class="loading loading-spinner loading-xs"></span>
+                <span
+                  v-if="isRefreshingVoices"
+                  class="loading loading-spinner loading-xs"
+                ></span>
                 <span v-else>🔄</span>
               </button>
               <button
@@ -318,32 +342,64 @@
                 class="btn btn-square btn-sm"
                 title="Preview selected voice"
               >
-                <span v-if="isPreviewingVoice" class="loading loading-spinner loading-xs"></span>
+                <span
+                  v-if="isPreviewingVoice"
+                  class="loading loading-spinner loading-xs"
+                ></span>
                 <span v-else>🎵</span>
               </button>
             </div>
-            
-            <div class="flex items-center justify-between text-xs text-gray-400">
+
+            <div
+              class="flex items-center justify-between text-xs text-gray-400"
+            >
               <span>
-                {{ availableVoices.filter(v => v.gender !== 'male').length }} voice{{ availableVoices.filter(v => v.gender !== 'male').length !== 1 ? 's' : '' }} across {{ Object.keys(groupedVoices).length }} languages
+                {{
+                  availableVoices.filter(v => v.gender !== 'male').length
+                }}
+                voice{{
+                  availableVoices.filter(v => v.gender !== 'male').length !== 1
+                    ? 's'
+                    : ''
+                }}
+                across {{ Object.keys(groupedVoices).length }} languages
               </span>
-              <span class="text-blue-400 cursor-pointer hover:underline" @click="showVoiceHelp = !showVoiceHelp">
+              <span
+                class="text-blue-400 cursor-pointer hover:underline"
+                @click="showVoiceHelp = !showVoiceHelp"
+              >
                 {{ showVoiceHelp ? 'Hide Help' : 'Voice Help' }}
               </span>
             </div>
-            
+
             <!-- Voice Help Section -->
-            <div v-if="showVoiceHelp" class="bg-base-300 p-3 rounded-lg text-xs space-y-2">
+            <div
+              v-if="showVoiceHelp"
+              class="bg-base-300 p-3 rounded-lg text-xs space-y-2"
+            >
               <h5 class="font-medium text-sm">Voice Quality Levels:</h5>
               <div class="grid grid-cols-2 gap-2">
-                <div><span class="badge badge-xs badge-outline mr-1">x_low</span> 16kHz, Smallest</div>
-                <div><span class="badge badge-xs badge-outline mr-1">low</span> 16kHz, Fast</div>
-                <div><span class="badge badge-xs badge-outline mr-1">medium</span> 22kHz, High Quality</div>
-                <div><span class="badge badge-xs badge-outline mr-1">high</span> 22kHz, Best Quality</div>
+                <div>
+                  <span class="badge badge-xs badge-outline mr-1">x_low</span>
+                  16kHz, Smallest
+                </div>
+                <div>
+                  <span class="badge badge-xs badge-outline mr-1">low</span>
+                  16kHz, Fast
+                </div>
+                <div>
+                  <span class="badge badge-xs badge-outline mr-1">medium</span>
+                  22kHz, High Quality
+                </div>
+                <div>
+                  <span class="badge badge-xs badge-outline mr-1">high</span>
+                  22kHz, Best Quality
+                </div>
               </div>
               <p class="text-base-content/60 mt-2">
-                💡 <strong>Tip:</strong> Voice models are downloaded automatically when first used. 
-                Higher quality voices provide better audio but require more storage space.
+                💡 <strong>Tip:</strong> Voice models are downloaded
+                automatically when first used. Higher quality voices provide
+                better audio but require more storage space.
               </p>
             </div>
           </div>
@@ -357,7 +413,7 @@
     >
       <legend class="fieldset-legend">
         Embedding Configuration
-        <span 
+        <span
           class="w-2 h-2 rounded-full inline-block"
           :class="getServiceStatusClass('embeddings')"
           :title="getServiceStatusText('embeddings')"
@@ -377,13 +433,13 @@
             <option value="local">Local (all-MiniLM-L6-v2)</option>
           </select>
           <p class="text-xs text-gray-400 mt-1">
-            Choose between cloud-based OpenAI embeddings or local all-MiniLM-L6-v2 embeddings. Your existing data is preserved when switching.
+            Choose between cloud-based OpenAI embeddings or local
+            all-MiniLM-L6-v2 embeddings. Your existing data is preserved when
+            switching.
           </p>
         </div>
       </div>
     </fieldset>
-
-
   </div>
 </template>
 
@@ -408,7 +464,6 @@ const emit = defineEmits<{
   ]
 }>()
 
-
 const serviceStatus = ref<{
   stt: ServiceStatus
   tts: ServiceStatus
@@ -416,7 +471,7 @@ const serviceStatus = ref<{
 }>({
   stt: { status: 'offline' },
   tts: { status: 'offline' },
-  embeddings: { status: 'offline' }
+  embeddings: { status: 'offline' },
 })
 
 const availableVoices = ref<Voice[]>([])
@@ -429,25 +484,25 @@ let statusInterval: NodeJS.Timeout | null = null
 const updateServiceStatus = async () => {
   try {
     await backendApi.initialize()
-    
+
     // Check each service status
     const [sttReady, ttsReady, embeddingsReady] = await Promise.all([
       backendApi.isSTTReady().catch(() => false),
       backendApi.isTTSReady().catch(() => false),
-      backendApi.isEmbeddingsReady().catch(() => false)
+      backendApi.isEmbeddingsReady().catch(() => false),
     ])
-    
+
     serviceStatus.value = {
       stt: { status: sttReady ? 'ready' : 'error' },
       tts: { status: ttsReady ? 'ready' : 'error' },
-      embeddings: { status: embeddingsReady ? 'ready' : 'error' }
+      embeddings: { status: embeddingsReady ? 'ready' : 'error' },
     }
   } catch (error) {
     console.warn('Failed to get service status:', error)
     serviceStatus.value = {
       stt: { status: 'offline' },
       tts: { status: 'offline' },
-      embeddings: { status: 'offline' }
+      embeddings: { status: 'offline' },
     }
   }
 }
@@ -471,10 +526,10 @@ const getServiceStatusText = (service: 'stt' | 'tts' | 'embeddings') => {
   const status = serviceStatus.value[service].status
   const serviceNames = {
     stt: 'Speech-to-Text',
-    tts: 'Text-to-Speech', 
-    embeddings: 'Embeddings'
+    tts: 'Text-to-Speech',
+    embeddings: 'Embeddings',
   }
-  
+
   switch (status) {
     case 'ready':
       return `${serviceNames[service]} service is ready`
@@ -492,18 +547,20 @@ const getServiceStatusText = (service: 'stt' | 'tts' | 'embeddings') => {
 const groupedVoices = computed(() => {
   const groups: Record<string, Voice[]> = {}
   // Filter out male voices
-  const femaleVoices = availableVoices.value.filter(voice => voice.gender !== 'male')
+  const femaleVoices = availableVoices.value.filter(
+    voice => voice.gender !== 'male'
+  )
   femaleVoices.forEach(voice => {
     const lang = voice.language || 'unknown'
     if (!groups[lang]) groups[lang] = []
     groups[lang].push(voice)
   })
-  
+
   // Sort voices within each language group by name
   Object.keys(groups).forEach(lang => {
     groups[lang].sort((a, b) => a.name.localeCompare(b.name))
   })
-  
+
   return groups
 })
 
@@ -528,7 +585,7 @@ const getLanguageDisplayName = (langCode: string): string => {
     'pl-PL': 'Polish',
     'uk-UA': 'Ukrainian',
     'hi-IN': 'Hindi',
-    'ar-JO': 'Arabic'
+    'ar-JO': 'Arabic',
   }
   return languageMap[langCode] || langCode
 }
@@ -554,14 +611,15 @@ const getLanguageFlag = (langCode: string): string => {
     'pl-PL': '🇵🇱',
     'uk-UA': '🇺🇦',
     'hi-IN': '🇮🇳',
-    'ar-JO': '🇯🇴'
+    'ar-JO': '🇯🇴',
   }
   return flagMap[langCode] || '🌍'
 }
 
 const getVoiceDisplayName = (voice: Voice): string => {
   const quality = getVoiceQuality(voice.name)
-  const genderIcon = voice.gender === 'male' ? '👨' : voice.gender === 'female' ? '👩' : '👥'
+  const genderIcon =
+    voice.gender === 'male' ? '👨' : voice.gender === 'female' ? '👩' : '👥'
   return `${genderIcon} ${voice.description || voice.name} (${quality})`
 }
 
@@ -575,13 +633,15 @@ const getVoiceQuality = (voiceName: string): string => {
 
 const previewVoice = async () => {
   if (!props.currentSettings.localTtsVoice || isPreviewingVoice.value) return
-  
+
   isPreviewingVoice.value = true
   try {
     await backendApi.initialize()
-    
+
     // Get sample text based on language
-    const selectedVoice = availableVoices.value.find(v => v.name === props.currentSettings.localTtsVoice)
+    const selectedVoice = availableVoices.value.find(
+      v => v.name === props.currentSettings.localTtsVoice
+    )
     const sampleTexts: Record<string, string> = {
       'en-US': 'Hello! This is a preview of the Amy voice.',
       'en-GB': 'Good day! This is a preview of this British voice.',
@@ -602,26 +662,30 @@ const previewVoice = async () => {
       'pl-PL': 'Cześć, to jest przykład tego polskiego głosu.',
       'uk-UA': 'Привіт, це приклад цього українського голосу.',
       'hi-IN': 'नमस्ते, यह इस हिंदी आवाज़ का उदाहरण है।',
-      'ar-JO': 'مرحبا، هذا مثال على هذا الصوت العربي.'
+      'ar-JO': 'مرحبا، هذا مثال على هذا الصوت العربي.',
     }
-    
-    const sampleText = sampleTexts[selectedVoice?.language || 'en-US'] || 'Hello, this is a voice preview.'
-    
-    const result = await backendApi.synthesizeSpeech(sampleText, props.currentSettings.localTtsVoice)
-    
+
+    const sampleText =
+      sampleTexts[selectedVoice?.language || 'en-US'] ||
+      'Hello, this is a voice preview.'
+
+    const result = await backendApi.synthesizeSpeech(
+      sampleText,
+      props.currentSettings.localTtsVoice
+    )
+
     // Play the audio
     const audioData = new Uint8Array(result.audio)
     const blob = new Blob([audioData], { type: 'audio/wav' })
     const audioUrl = URL.createObjectURL(blob)
     const audio = new Audio(audioUrl)
-    
+
     audio.play().catch(console.error)
-    
+
     // Clean up URL after playing
     audio.addEventListener('ended', () => {
       URL.revokeObjectURL(audioUrl)
     })
-    
   } catch (error) {
     console.warn('Failed to preview voice:', error)
   } finally {
@@ -631,7 +695,7 @@ const previewVoice = async () => {
 
 const refreshVoices = async () => {
   if (isRefreshingVoices.value) return
-  
+
   isRefreshingVoices.value = true
   try {
     await backendApi.initialize()
@@ -659,7 +723,7 @@ const onVoiceChange = async () => {
 onMounted(async () => {
   updateServiceStatus()
   statusInterval = setInterval(updateServiceStatus, 10000) // Check every 10 seconds
-  
+
   // Load voices if local TTS is selected
   if (props.currentSettings.ttsProvider === 'local') {
     await refreshVoices()
@@ -667,11 +731,14 @@ onMounted(async () => {
 })
 
 // Watch for TTS provider changes to load voices
-watch(() => props.currentSettings.ttsProvider, async (newProvider) => {
-  if (newProvider === 'local') {
-    await refreshVoices()
+watch(
+  () => props.currentSettings.ttsProvider,
+  async newProvider => {
+    if (newProvider === 'local') {
+      await refreshVoices()
+    }
   }
-})
+)
 
 onUnmounted(() => {
   if (statusInterval) {

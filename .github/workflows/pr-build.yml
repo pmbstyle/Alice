@@ -78,7 +78,7 @@ jobs:
         run: |
           which go
           go version
-          
+
       - name: Install Go Dependencies
         working-directory: backend
         run: go mod download

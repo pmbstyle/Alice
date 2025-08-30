@@ -37,7 +37,7 @@ export class BackendManager {
       host: '127.0.0.1',
       port: 8765,
       timeout: 30000, // 30 seconds - Go starts much faster than Python
-      ...config
+      ...config,
     }
   }
 
@@ -63,7 +63,7 @@ export class BackendManager {
   private async _startInternal(): Promise<boolean> {
     try {
       console.log('[BackendManager] Starting Go AI backend...')
-      
+
       // Get backend executable path
       const backendPath = this.getBackendPath()
       if (!backendPath) {
@@ -88,7 +88,7 @@ export class BackendManager {
       this.process = spawn(backendPath, [], {
         stdio: ['pipe', 'pipe', 'pipe'],
         env,
-        detached: false
+        detached: false,
       })
 
       if (!this.process) {
@@ -96,14 +96,16 @@ export class BackendManager {
         return false
       }
 
-      console.log(`[BackendManager] Go backend started with PID: ${this.process.pid}`)
+      console.log(
+        `[BackendManager] Go backend started with PID: ${this.process.pid}`
+      )
 
       // Set up process event handlers
       this.setupProcessHandlers()
 
       // Wait for the server to be ready
       const isReady = await this.waitForReady()
-      
+
       if (isReady) {
         console.log('[BackendManager] ✅ Go AI backend is ready')
         this.startupPromise = null
@@ -114,7 +116,6 @@ export class BackendManager {
         this.startupPromise = null
         return false
       }
-
     } catch (error) {
       console.error('[BackendManager] Error starting Go backend:', error)
       this.startupPromise = null
@@ -136,15 +137,17 @@ export class BackendManager {
     // Terminate process if running
     if (this.process && !this.process.killed) {
       try {
-        console.log(`[BackendManager] Terminating Go process PID: ${this.process.pid}`)
-        
+        console.log(
+          `[BackendManager] Terminating Go process PID: ${this.process.pid}`
+        )
+
         if (process.platform === 'win32') {
           // On Windows, try graceful termination first
           this.process.kill('SIGTERM')
-          
+
           // Wait briefly for graceful shutdown
           await new Promise(resolve => setTimeout(resolve, 2000))
-          
+
           // Force kill if still running
           if (this.process && !this.process.killed) {
             this.process.kill('SIGKILL')
@@ -152,9 +155,9 @@ export class BackendManager {
         } else {
           // Unix-like systems - graceful then forceful
           this.process.kill('SIGTERM')
-          
+
           await new Promise(resolve => setTimeout(resolve, 1000))
-          
+
           if (this.process && !this.process.killed) {
             this.process.kill('SIGKILL')
           }
@@ -175,13 +178,18 @@ export class BackendManager {
    */
   async isHealthy(): Promise<boolean> {
     try {
-      const response = await axios.get(`http://${this.config.host}:${this.config.port}/api/health`, {
-        timeout: 5000
-      })
-      
-      return response.status === 200 && 
-             response.data?.success === true && 
-             response.data?.data?.status === 'healthy'
+      const response = await axios.get(
+        `http://${this.config.host}:${this.config.port}/api/health`,
+        {
+          timeout: 5000,
+        }
+      )
+
+      return (
+        response.status === 200 &&
+        response.data?.success === true &&
+        response.data?.data?.status === 'healthy'
+      )
     } catch (error: any) {
       return false
     }
@@ -192,15 +200,22 @@ export class BackendManager {
    */
   async getServiceStatus(): Promise<ServiceStatus> {
     try {
-      const response = await axios.get(`http://${this.config.host}:${this.config.port}/api/health`, {
-        timeout: 5000
-      })
-      
-      if (response.status === 200 && response.data?.success && response.data?.data?.services) {
+      const response = await axios.get(
+        `http://${this.config.host}:${this.config.port}/api/health`,
+        {
+          timeout: 5000,
+        }
+      )
+
+      if (
+        response.status === 200 &&
+        response.data?.success &&
+        response.data?.data?.services
+      ) {
         return {
           stt: response.data.data.services.stt || false,
           tts: response.data.data.services.tts || false,
-          embeddings: response.data.data.services.embeddings || false
+          embeddings: response.data.data.services.embeddings || false,
         }
       }
     } catch (error) {
@@ -229,25 +244,30 @@ export class BackendManager {
    */
   private getBackendPath(): string | null {
     const isDev = !app.isPackaged
-    
+
     if (isDev) {
       // Development mode - look for compiled Go binary in resources/backend/
-      const devPath = path.join(__dirname, '../../resources/backend/alice-backend')
+      const devPath = path.join(
+        __dirname,
+        '../../resources/backend/alice-backend'
+      )
       const devPathWin = devPath + '.exe'
-      
+
       if (process.platform === 'win32') {
         if (fs.existsSync(devPathWin)) return devPathWin
       } else {
         if (fs.existsSync(devPath)) return devPath
       }
-      
-      console.warn('[BackendManager] Go backend not built. Run: npm run build:go')
+
+      console.warn(
+        '[BackendManager] Go backend not built. Run: npm run build:go'
+      )
       return null
     } else {
       // Production mode - use bundled executable
       const resourcesPath = process.resourcesPath
       const backendDir = path.join(resourcesPath, 'backend')
-      
+
       let backendPath: string
       if (process.platform === 'win32') {
         backendPath = path.join(backendDir, 'alice-backend.exe')
@@ -258,8 +278,11 @@ export class BackendManager {
       if (fs.existsSync(backendPath)) {
         return backendPath
       }
-      
-      console.error('[BackendManager] Bundled Go backend not found at:', backendPath)
+
+      console.error(
+        '[BackendManager] Bundled Go backend not found at:',
+        backendPath
+      )
       return null
     }
   }
@@ -285,7 +308,9 @@ export class BackendManager {
       await new Promise(resolve => setTimeout(resolve, checkInterval))
     }
 
-    console.error(`[BackendManager] Timeout waiting for Go backend (${this.config.timeout}ms)`)
+    console.error(
+      `[BackendManager] Timeout waiting for Go backend (${this.config.timeout}ms)`
+    )
     return false
   }
 
@@ -310,8 +335,10 @@ export class BackendManager {
     })
 
     this.process.on('close', (code: number | null, signal: string | null) => {
-      console.log(`[BackendManager] Process exited with code ${code}, signal ${signal}`)
-      
+      console.log(
+        `[BackendManager] Process exited with code ${code}, signal ${signal}`
+      )
+
       if (code !== 0 && code !== null && !this.isShuttingDown) {
         console.error('[BackendManager] Go backend crashed unexpectedly')
       }
@@ -319,9 +346,11 @@ export class BackendManager {
 
     this.process.on('error', (error: Error) => {
       console.error('[BackendManager] Process error:', error)
-      
+
       if (error.message.includes('ENOENT')) {
-        console.error('[BackendManager] Go backend executable not found. Run: npm run build:go')
+        console.error(
+          '[BackendManager] Go backend executable not found. Run: npm run build:go'
+        )
       }
     })
   }

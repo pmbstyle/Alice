@@ -103,9 +103,16 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
-        const provider: 'openai' | 'local' = embedding.length === 384 ? 'local' : 'openai'
-        
-        await addThoughtVector(conversationId, role, textContent, embedding, provider)
+        const provider: 'openai' | 'local' =
+          embedding.length === 384 ? 'local' : 'openai'
+
+        await addThoughtVector(
+          conversationId,
+          role,
+          textContent,
+          embedding,
+          provider
+        )
         return { success: true }
       } catch (error) {
         console.error('IPC thoughtVector:add error:', error)
@@ -127,10 +134,13 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
-        const provider: 'openai' | 'local' | 'both' = 
-          queryEmbedding.length === 384 ? 'local' :
-          queryEmbedding.length === 1536 ? 'openai' : 'both'
-        
+        const provider: 'openai' | 'local' | 'both' =
+          queryEmbedding.length === 384
+            ? 'local'
+            : queryEmbedding.length === 1536
+              ? 'openai'
+              : 'both'
+
         const thoughtsMetadatas = await searchSimilarThoughts(
           queryEmbedding,
           topK,
@@ -375,7 +385,6 @@ export function registerIPCHandlers(): void {
   ipcMain.handle('focus-main-window', () => {
     return focusMainWindow()
   })
-
 
   // Settings management
   ipcMain.handle('settings:load', async () => {
@@ -1017,5 +1026,4 @@ export function registerGoogleIPCHandlers(): void {
       }
     }
   })
-
 }

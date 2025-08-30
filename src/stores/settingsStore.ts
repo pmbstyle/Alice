@@ -136,7 +136,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   // Local Go Backend STT labels
   localSttModel: 'Local STT Model',
   localSttLanguage: 'Language',
-  localSttEnabled: 'Enable Local STT',
+  localSttEnabled: 'Enable Wake Word',
   localSttWakeWord: 'Wake Word',
 
   ollamaBaseUrl: 'Ollama Base URL',

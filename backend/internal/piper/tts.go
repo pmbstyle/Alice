@@ -63,8 +63,9 @@ type ServiceInfo struct {
 
 // NewTTSService creates a new TTS service
 func NewTTSService(config *Config) *TTSService {
-	// Create asset manager with current working directory as base
-	assetManager := embedded.NewAssetManager(".")
+	// Determine the base directory for assets
+	baseDir := embedded.GetProductionBaseDirectory()
+	assetManager := embedded.NewAssetManager(baseDir)
 	
 	return &TTSService{
 		config:       config,
@@ -120,8 +121,9 @@ func (s *TTSService) Initialize(ctx context.Context) error {
 
 // loadVoices loads available TTS voices
 func (s *TTSService) loadVoices() {
-	// Real Piper voices that can be downloaded
+	// Piper TTS voices - includes popular models across multiple languages
 	voices := []*Voice{
+		// English US voices
 		{
 			Name:        "en_US-amy-medium",
 			Language:    "en-US",
@@ -131,20 +133,206 @@ func (s *TTSService) loadVoices() {
 			Description: "Amy - English US female voice (Piper)",
 		},
 		{
-			Name:        "en_US-hfc_female-medium", 
+			Name:        "en_US-lessac-medium",
 			Language:    "en-US",
-			Gender:      "female",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Lessac - English US female voice (Piper)",
+		},
+		{
+			Name:        "en_US-hfc_female-medium",
+			Language:    "en-US",
+			Gender:      "female", 
 			Quality:     "medium",
 			SampleRate:  22050,
 			Description: "HFC Female - English US female voice (Piper)",
 		},
 		{
 			Name:        "en_US-kristin-medium",
-			Language:    "en-US", 
-			Gender:      "female",
+			Language:    "en-US",
+			Gender:      "female", 
 			Quality:     "medium",
 			SampleRate:  22050,
 			Description: "Kristin - English US female voice (Piper)",
+		},
+		
+		// English GB voices
+		{
+			Name:        "en_GB-alba-medium",
+			Language:    "en-GB",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Alba - English GB female voice (Piper)",
+		},
+		
+		// Spanish voices
+		{
+			Name:        "es_ES-carme-medium",
+			Language:    "es-ES",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Carme - Spanish ES female voice (Piper)",
+		},
+		{
+			Name:        "es_MX-teresa-medium",
+			Language:    "es-MX",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Teresa - Spanish MX female voice (Piper)",
+		},
+		
+		// French voices
+		{
+			Name:        "fr_FR-siwis-medium",
+			Language:    "fr-FR",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Siwis - French female voice (Piper)",
+		},
+		
+		// German voices
+		{
+			Name:        "de_DE-eva_k-x_low",
+			Language:    "de-DE",
+			Gender:      "female",
+			Quality:     "x_low",
+			SampleRate:  16000,
+			Description: "Eva K - German female voice (Piper)",
+		},
+		
+		// Italian voices
+		{
+			Name:        "it_IT-paola-medium",
+			Language:    "it-IT",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Paola - Italian female voice (Piper)",
+		},
+		
+		// Portuguese voices
+		{
+			Name:        "pt_BR-lais-medium",
+			Language:    "pt-BR",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Lais - Portuguese BR female voice (Piper)",
+		},
+		
+		// Russian voices
+		{
+			Name:        "ru_RU-irina-medium",
+			Language:    "ru-RU",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Irina - Russian female voice (Piper)",
+		},
+		
+		// Chinese voice
+		{
+			Name:        "zh_CN-huayan-medium",
+			Language:    "zh-CN",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Huayan - Chinese female voice (Piper)",
+		},
+		
+		// Japanese voice
+		{
+			Name:        "ja_JP-qmu_amaryllis-medium",
+			Language:    "ja-JP",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Amaryllis - Japanese female voice (Piper)",
+		},
+		
+		// Dutch voices
+		{
+			Name:        "nl_NL-mls_5809-low",
+			Language:    "nl-NL",
+			Gender:      "female",
+			Quality:     "low",
+			SampleRate:  16000,
+			Description: "MLS 5809 - Dutch female voice (Piper)",
+		},
+		
+		// Nordic voices
+		{
+			Name:        "no_NO-talesyntese-medium",
+			Language:    "no-NO",
+			Gender:      "multi",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Talesyntese - Norwegian voice (Piper)",
+		},
+		{
+			Name:        "sv_SE-nst-medium",
+			Language:    "sv-SE",
+			Gender:      "multi",
+			Quality:     "medium", 
+			SampleRate:  22050,
+			Description: "NST - Swedish voice (Piper)",
+		},
+		{
+			Name:        "da_DK-talesyntese-medium",
+			Language:    "da-DK",
+			Gender:      "multi",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Talesyntese - Danish voice (Piper)",
+		},
+		
+		// Other European languages
+		{
+			Name:        "fi_FI-anna-medium",
+			Language:    "fi-FI", 
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Anna - Finnish female voice (Piper)",
+		},
+		{
+			Name:        "pl_PL-mls_6892-low",
+			Language:    "pl-PL",
+			Gender:      "female",
+			Quality:     "low",
+			SampleRate:  16000,
+			Description: "MLS 6892 - Polish female voice (Piper)",
+		},
+		{
+			Name:        "uk_UA-ukrainian_tts-medium",
+			Language:    "uk-UA",
+			Gender:      "multi",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Ukrainian TTS - Ukrainian voice (Piper)",
+		},
+		
+		// Other languages
+		{
+			Name:        "hi_IN-female-medium",
+			Language:    "hi-IN",
+			Gender:      "female", 
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Female - Hindi voice (Piper)",
+		},
+		{
+			Name:        "ar_JO-amina-medium",
+			Language:    "ar-JO",
+			Gender:      "female",
+			Quality:     "medium",
+			SampleRate:  22050,
+			Description: "Amina - Arabic female voice (Piper)",
 		},
 	}
 
@@ -597,7 +785,7 @@ func (s *TTSService) synthesizeWithPiper(ctx context.Context, text, voice string
 	// Build Piper command
 	args := []string{
 		"--model", modelFile,
-		"--output_file", outputFile,
+		"--output-file", outputFile,
 	}
 
 	// Add speed if specified
@@ -1029,30 +1217,85 @@ func (s *TTSService) extractSingleFileFromTar(tarReader *tar.Reader, outputPath 
 
 // downloadVoiceModel downloads a voice model from HuggingFace
 func (s *TTSService) downloadVoiceModel(voiceName, modelDir string) error {
-	// HuggingFace URLs for Piper voice models
-	baseURL := "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_US"
+	// HuggingFace base URL for Piper voice models
+	baseURL := "https://huggingface.co/rhasspy/piper-voices/resolve/main"
 	
-	// Map voice names to their paths
-	voicePaths := map[string]string{
-		"en_US-amy-medium":        "amy/medium",
-		"en_US-hfc_female-medium": "hfc_female/medium",
-		"en_US-kristin-medium":    "kristin/medium",
+	// Map voice names to their language/voice/quality paths on HuggingFace
+	voiceMapping := map[string]struct {
+		lang     string
+		voice    string
+		quality  string
+	}{
+		// English US voices
+		"en_US-amy-medium":        {"en/en_US", "amy", "medium"},
+		"en_US-lessac-medium":     {"en/en_US", "lessac", "medium"},
+		"en_US-hfc_female-medium": {"en/en_US", "hfc_female", "medium"},
+		"en_US-kristin-medium":    {"en/en_US", "kristin", "medium"},
+		
+		// English GB voices
+		"en_GB-alba-medium": {"en/en_GB", "alba", "medium"},
+		
+		// Spanish voices
+		"es_ES-carme-medium":  {"es/es_ES", "carme", "medium"},
+		"es_MX-teresa-medium": {"es/es_MX", "teresa", "medium"},
+		
+		// French voices
+		"fr_FR-siwis-medium": {"fr/fr_FR", "siwis", "medium"},
+		
+		// German voices
+		"de_DE-eva_k-x_low": {"de/de_DE", "eva_k", "x_low"},
+		
+		// Italian voices
+		"it_IT-paola-medium": {"it/it_IT", "paola", "medium"},
+		
+		// Portuguese voices
+		"pt_BR-lais-medium": {"pt/pt_BR", "lais", "medium"},
+		
+		// Russian voices
+		"ru_RU-irina-medium": {"ru/ru_RU", "irina", "medium"},
+		
+		// Chinese voices
+		"zh_CN-huayan-medium": {"zh/zh_CN", "huayan", "medium"},
+		
+		// Japanese voices
+		"ja_JP-qmu_amaryllis-medium": {"ja/ja_JP", "qmu_amaryllis", "medium"},
+		
+		// Dutch voices
+		"nl_NL-mls_5809-low": {"nl/nl_NL", "mls_5809", "low"},
+		
+		// Norwegian voices
+		"no_NO-talesyntese-medium": {"no/no_NO", "talesyntese", "medium"},
+		
+		// Swedish voices
+		"sv_SE-nst-medium": {"sv/sv_SE", "nst", "medium"},
+		
+		// Danish voices
+		"da_DK-talesyntese-medium": {"da/da_DK", "talesyntese", "medium"},
+		
+		// Finnish voices
+		"fi_FI-anna-medium": {"fi/fi_FI", "anna", "medium"},
+		
+		// Polish voices
+		"pl_PL-mls_6892-low": {"pl/pl_PL", "mls_6892", "low"},
+		
+		// Ukrainian voices
+		"uk_UA-ukrainian_tts-medium": {"uk/uk_UA", "ukrainian_tts", "medium"},
+		
+		// Hindi voices
+		"hi_IN-female-medium": {"hi/hi_IN", "female", "medium"},
+		
+		// Arabic voices
+		"ar_JO-amina-medium": {"ar/ar_JO", "amina", "medium"},
 	}
 	
-	voicePath, exists := voicePaths[voiceName]
+	voiceInfo, exists := voiceMapping[voiceName]
 	if !exists {
 		return fmt.Errorf("unknown voice: %s", voiceName)
 	}
 	
-	// Special handling for en_GB voices
-	voiceURL := baseURL
-	if strings.HasPrefix(voiceName, "en_GB") {
-		voiceURL = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0/en/en_GB"
-	}
-	
-	// Download both .onnx and .onnx.json files
-	onnxURL := fmt.Sprintf("%s/%s/%s.onnx", voiceURL, voicePath, voiceName)
-	jsonURL := fmt.Sprintf("%s/%s/%s.onnx.json", voiceURL, voicePath, voiceName)
+	// Build download URLs
+	onnxURL := fmt.Sprintf("%s/%s/%s/%s/%s.onnx", baseURL, voiceInfo.lang, voiceInfo.voice, voiceInfo.quality, voiceName)
+	jsonURL := fmt.Sprintf("%s/%s/%s/%s/%s.onnx.json", baseURL, voiceInfo.lang, voiceInfo.voice, voiceInfo.quality, voiceName)
 	
 	onnxFile := filepath.Join(modelDir, voiceName+".onnx")
 	jsonFile := filepath.Join(modelDir, voiceName+".onnx.json")

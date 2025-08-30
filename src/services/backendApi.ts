@@ -47,10 +47,11 @@ export interface EmbeddingsResult {
 }
 
 export interface Voice {
-  id: string
+  id?: string
   name: string
   language: string
   gender?: string
+  description?: string
 }
 
 export interface SimilarityResult {

@@ -48,21 +48,60 @@ func GetPlatformInfo() *PlatformInfo {
 
 	switch runtime.GOOS {
 	case "windows":
-		info.WhisperPath = "whisper-cli.exe"
+		info.WhisperPath = "main.exe"
 		info.PiperPath = "piper.exe"
 	case "darwin":
-		info.WhisperPath = "whisper-cli"
+		info.WhisperPath = "main"
 		info.PiperPath = "piper"
 	case "linux":
-		info.WhisperPath = "whisper-cli"
+		info.WhisperPath = "main"
 		info.PiperPath = "piper"
 	default:
 		log.Printf("Warning: Unsupported platform %s", runtime.GOOS)
-		info.WhisperPath = "whisper-cli"
+		info.WhisperPath = "main"
 		info.PiperPath = "piper"
 	}
 
 	return info
+}
+
+// GetProductionBaseDirectory determines the appropriate base directory for assets
+// based on whether we're running in development or production (Electron bundled) mode
+func GetProductionBaseDirectory() string {
+	// Get the executable path
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Printf("Warning: Could not determine executable path, using current directory: %v", err)
+		return "."
+	}
+
+	exeDir := filepath.Dir(exePath)
+	log.Printf("Executable directory: %s", exeDir)
+
+	// Check if we're in an Electron app bundle structure
+	// In production Electron apps, the backend executable is in:
+	// - Windows: resources/backend/alice-backend.exe
+	// - macOS: Resources/backend/alice-backend  
+	// - Linux: resources/backend/alice-backend
+	
+	// Check for Electron resources structure
+	parentDir := filepath.Dir(exeDir)
+	if filepath.Base(exeDir) == "backend" && 
+	   (filepath.Base(parentDir) == "resources" || filepath.Base(parentDir) == "Resources") {
+		// We're in Electron production bundle
+		log.Printf("Detected Electron production environment, using exe directory as base: %s", exeDir)
+		return exeDir
+	}
+
+	// Check for typical development structure (resources/backend/)
+	if strings.Contains(exeDir, "resources/backend") || strings.Contains(exeDir, "resources\\backend") {
+		log.Printf("Detected development environment, using exe directory as base: %s", exeDir)  
+		return exeDir
+	}
+
+	// Default to executable directory
+	log.Printf("Using executable directory as asset base: %s", exeDir)
+	return exeDir
 }
 
 // NewAssetManager creates a new asset manager with a base directory
@@ -371,23 +410,35 @@ func (am *AssetManager) GetAssetPath(assetName string) (string, bool) {
 func (am *AssetManager) GetBinaryPath(binaryName string) string {
 	info := GetPlatformInfo()
 	
+	// Ensure bin directory exists
+	binDir := filepath.Join(am.baseDir, "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		log.Printf("Warning: Failed to create bin directory: %v", err)
+	}
+	
 	switch binaryName {
 	case "whisper":
-		return filepath.Join(am.baseDir, "bin", info.WhisperPath)
+		return filepath.Join(binDir, info.WhisperPath)
 	case "piper":
-		return filepath.Join(am.baseDir, "bin", info.PiperPath)
+		return filepath.Join(binDir, info.PiperPath)
 	default:
-		return filepath.Join(am.baseDir, "bin", binaryName)
+		return filepath.Join(binDir, binaryName)
 	}
 }
 
 // GetModelPath returns the path to a model file
 func (am *AssetManager) GetModelPath(modelName string) string {
+	// Ensure models directory exists
+	modelsDir := filepath.Join(am.baseDir, "models")
+	if err := os.MkdirAll(modelsDir, 0755); err != nil {
+		log.Printf("Warning: Failed to create models directory: %v", err)
+	}
+	
 	switch modelName {
 	case "whisper":
-		return filepath.Join(am.baseDir, "models", "whisper-base.bin")
+		return filepath.Join(modelsDir, "whisper-base.bin")
 	default:
-		return filepath.Join(am.baseDir, "models", modelName)
+		return filepath.Join(modelsDir, modelName)
 	}
 }
 

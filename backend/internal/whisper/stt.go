@@ -305,13 +305,22 @@ func (s *STTService) transcribeDirectly(ctx context.Context, samples []float32) 
 	// Get model path
 	modelPath := s.assetManager.GetModelPath("whisper")
 	
-	// whisper.cpp command arguments
+	// whisper.cpp command arguments - build args based on binary capabilities
 	args := []string{
 		"-m", modelPath,
 		"-f", inputFile,
-		"-otxt",
-		"-of", strings.TrimSuffix(outputFile, ".txt"),
 	}
+	
+	// Check if this binary supports -otxt flag by testing with --help
+	helpCmd := exec.Command(whisperPath, "--help")
+	helpOutput, _ := helpCmd.CombinedOutput()
+	supportsOtxt := strings.Contains(string(helpOutput), "-otxt") || strings.Contains(string(helpOutput), "otxt")
+	
+	if supportsOtxt {
+		args = append(args, "-otxt")
+	}
+	
+	args = append(args, "-of", strings.TrimSuffix(outputFile, ".txt"))
 	
 	if s.config.Language != "" && s.config.Language != "auto" {
 		args = append(args, "-l", s.config.Language)
@@ -454,14 +463,21 @@ func (s *STTService) extractWhisperBinary(zipPath string) error {
 
 	log.Printf("Extracting whisper binary from: %s", zipPath)
 
-	// Extract multiple useful whisper binaries and required DLLs
+	// Extract multiple useful whisper binaries and required DLLs/dylibs
 	extractedCount := 0
 	whisperBinaries := []string{"whisper-cli.exe", "whisper-command.exe", "main.exe", "whisper.exe"}
 	requiredDLLs := []string{"ggml-base.dll", "ggml-cpu.dll", "ggml.dll", "whisper.dll", "SDL2.dll"}
+	requiredDylibs := []string{} // dylib files for macOS
 
 	if runtime.GOOS != "windows" {
 		whisperBinaries = []string{"whisper-cli", "whisper-command", "main", "whisper"}
 		requiredDLLs = []string{} // No DLLs needed on Unix
+		if runtime.GOOS == "darwin" {
+			// Required dylib files for macOS
+			requiredDylibs = []string{"libggml.dylib", "libggml-base.dylib", "libggml-blas.dylib", 
+				"libggml-cpu.dylib", "libggml-metal.dylib", "libwhisper.dylib", 
+				"libwhisper.1.dylib", "libwhisper.1.7.6.dylib"}
+		}
 	}
 
 	for _, file := range reader.File {
@@ -490,6 +506,24 @@ func (s *STTService) extractWhisperBinary(zipPath string) error {
 				outputPath := filepath.Join("bin", wantedDLL)
 				if err := s.extractSingleFile(file, outputPath); err != nil {
 					log.Printf("Failed to extract DLL %s: %v", wantedDLL, err)
+					continue
+				}
+				extractedCount++
+				break
+			}
+		}
+
+		// Check if this is one of the dylibs we need (macOS)
+		for _, wantedDylib := range requiredDylibs {
+			if fileName == strings.ToLower(wantedDylib) {
+				// Create libinternal directory if it doesn't exist
+				if err := os.MkdirAll("libinternal", 0755); err != nil {
+					log.Printf("Failed to create libinternal directory: %v", err)
+					continue
+				}
+				outputPath := filepath.Join("libinternal", wantedDylib)
+				if err := s.extractSingleFile(file, outputPath); err != nil {
+					log.Printf("Failed to extract dylib %s: %v", wantedDylib, err)
 					continue
 				}
 				extractedCount++

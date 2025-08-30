@@ -240,7 +240,7 @@ function extractWhisper(archivePath, outputDir) {
         fs.copyFileSync(whisperExePath, targetPath);
         console.log(`Copied whisper to: ${targetPath}`);
         
-        // Copy all DLL dependencies for Windows
+        // Copy all DLL dependencies for Windows and dylibs for macOS
         if (platform === 'win32') {
           const requiredDlls = ['SDL2.dll', 'ggml-base.dll', 'ggml-cpu.dll', 'ggml.dll', 'whisper.dll'];
           
@@ -261,8 +261,40 @@ function extractWhisper(archivePath, outputDir) {
           }
           
           findAndCopyDlls(tempDir);
-        } else {
+        } else if (platform === 'darwin') {
+          // Copy dylib dependencies for macOS
+          const requiredDylibs = ['libggml.dylib', 'libggml-base.dylib', 'libggml-blas.dylib', 
+                                   'libggml-cpu.dylib', 'libggml-metal.dylib', 'libwhisper.dylib', 
+                                   'libwhisper.1.dylib', 'libwhisper.1.7.6.dylib'];
+          
+          // Create libinternal directory
+          const libInternalDir = path.join(path.dirname(outputDir), 'libinternal');
+          if (!fs.existsSync(libInternalDir)) {
+            fs.mkdirSync(libInternalDir, { recursive: true });
+          }
+          
+          function findAndCopyDylibs(dir) {
+            const items = fs.readdirSync(dir, { withFileTypes: true });
+            
+            for (const item of items) {
+              const fullPath = path.join(dir, item.name);
+              
+              if (item.isDirectory()) {
+                findAndCopyDylibs(fullPath);
+              } else if (requiredDylibs.includes(item.name)) {
+                const targetDylibPath = path.join(libInternalDir, item.name);
+                fs.copyFileSync(fullPath, targetDylibPath);
+                console.log(`Copied dylib: ${item.name}`);
+              }
+            }
+          }
+          
+          findAndCopyDylibs(tempDir);
+          
           // Make executable on Unix systems
+          fs.chmodSync(targetPath, '755');
+        } else {
+          // Make executable on Unix systems (Linux)
           fs.chmodSync(targetPath, '755');
         }
         

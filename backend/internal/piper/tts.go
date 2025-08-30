@@ -769,7 +769,7 @@ func (s *TTSService) synthesizeWithPiper(ctx context.Context, text, voice string
 	// Build Piper command
 	args := []string{
 		"--model", modelFile,
-		"--output_file", outputFile,
+		"--output-file", outputFile,
 	}
 
 	// Add speed if specified

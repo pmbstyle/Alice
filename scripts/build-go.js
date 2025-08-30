@@ -631,6 +631,89 @@ async function ensureWhisperModel() {
 }
 
 /**
+ * Setup Piper TTS binary for out-of-box text-to-speech
+ */
+async function setupPiper() {
+  const platform = os.platform();
+  const backendBinDir = path.join(process.cwd(), 'resources', 'backend', 'bin');
+  const piperPath = path.join(backendBinDir, platform === 'win32' ? 'piper.exe' : 'piper');
+  
+  // Check if piper already exists and is working
+  if (fs.existsSync(piperPath)) {
+    try {
+      // Test if it's a working binary (not a broken script)
+      const testCmd = execSync(`"${piperPath}" --help`, { stdio: 'pipe', timeout: 5000 });
+      if (testCmd.toString().includes('--model')) {
+        console.log(`✅ Piper already available: ${piperPath}`);
+        return true;
+      }
+    } catch (error) {
+      console.log('🔄 Existing Piper binary is broken, replacing...');
+    }
+  }
+  
+  // Ensure bin directory exists
+  if (!fs.existsSync(backendBinDir)) {
+    fs.mkdirSync(backendBinDir, { recursive: true });
+  }
+  
+  try {
+    console.log('📥 Installing Piper TTS binary...');
+    
+    // Try to install piper-tts via pip and copy the binary
+    try {
+      console.log('Installing piper-tts via pip...');
+      execSync('python3 -m pip install --user piper-tts', { stdio: 'pipe' });
+      
+      // Find the installed piper binary
+      const homeDir = os.homedir();
+      const possiblePaths = [
+        path.join(homeDir, 'Library', 'Python', '3.9', 'bin', 'piper'),  // macOS
+        path.join(homeDir, '.local', 'bin', 'piper'),  // Linux
+        path.join(homeDir, 'AppData', 'Roaming', 'Python', 'Scripts', 'piper.exe')  // Windows
+      ];
+      
+      let sourcePiper = null;
+      for (const possiblePath of possiblePaths) {
+        if (fs.existsSync(possiblePath)) {
+          sourcePiper = possiblePath;
+          break;
+        }
+      }
+      
+      if (!sourcePiper) {
+        // Try to find piper in PATH
+        try {
+          const whichResult = execSync(platform === 'win32' ? 'where piper' : 'which piper', { stdio: 'pipe' });
+          sourcePiper = whichResult.toString().trim();
+        } catch (e) {
+          throw new Error('Piper binary not found after pip installation');
+        }
+      }
+      
+      // Copy the working piper binary
+      fs.copyFileSync(sourcePiper, piperPath);
+      if (platform !== 'win32') {
+        fs.chmodSync(piperPath, '755');
+      }
+      
+      console.log(`✅ Piper TTS setup completed: ${piperPath}`);
+      return true;
+      
+    } catch (pipError) {
+      console.log('⚠️  pip installation failed, trying fallback method...');
+      console.log('Note: Piper TTS will be downloaded at runtime');
+      return false;
+    }
+    
+  } catch (error) {
+    console.error('❌ Failed to setup Piper TTS:', error.message);
+    console.log('Note: Piper will try to download at runtime');
+    return false;
+  }
+}
+
+/**
  * Download and setup ffmpeg binary if missing
  */
 async function ensureFFmpeg() {
@@ -781,7 +864,12 @@ async function buildGoBackend() {
         console.warn('⚠️  Whisper model download failed, will fallback to runtime download');
       }
 
-      // Note: Piper TTS will be downloaded at runtime to avoid Windows Defender issues
+      // Setup Piper TTS for out-of-box text-to-speech
+      console.log('\nSetting up Piper TTS for out-of-box text-to-speech...');
+      const piperSuccess = await setupPiper();
+      if (!piperSuccess) {
+        console.warn('⚠️  Piper TTS setup failed, will fallback to runtime download');
+      }
     } else {
       throw new Error(`Binary not found at expected path: ${finalPath}`);
     }

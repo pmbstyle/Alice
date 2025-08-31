@@ -83,12 +83,26 @@ function downloadFile(url, outputPath) {
         response.pipe(file)
 
         file.on('finish', () => {
-          file.close(resolve)
+          file.close(() => {
+            response.destroy()  // Properly close the HTTP response
+            resolve()
+          })
+        })
+
+        file.on('error', (err) => {
+          file.close()
+          response.destroy()
+          if (fs.existsSync(outputPath)) {
+            fs.unlinkSync(outputPath)
+          }
+          reject(err)
         })
       })
       .on('error', err => {
         file.close()
-        fs.unlinkSync(outputPath)
+        if (fs.existsSync(outputPath)) {
+          fs.unlinkSync(outputPath)
+        }
         reject(err)
       })
   })
@@ -1113,6 +1127,8 @@ async function buildGoBackend() {
 ;(async () => {
   try {
     await buildGoBackend()
+    console.log('🎉 Build script completed successfully!')
+    process.exit(0)  // Explicitly exit with success code
   } catch (error) {
     console.error('Build failed:', error.message)
     process.exit(1)

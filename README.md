@@ -115,7 +115,7 @@ Other tools:
 
 * [Jackett](https://github.com/Jackett/Jackett) — Torrent aggregator
 * [qBittorrent](https://www.qbittorrent.org/) — Torrent client
-
+* [Searxng](https://github.com/searxng/searxng) - Self-hosted web search
 
 
 ## 🧑‍💻 Getting Started (Development)

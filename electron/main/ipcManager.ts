@@ -1,6 +1,7 @@
 import { ipcMain, desktopCapturer, shell, clipboard, app } from 'electron'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import axios from 'axios'
 import { loadSettings, saveSettings, AppSettings } from './settingsManager'
 import {
   getWebSocketServer,
@@ -103,9 +104,16 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
-        const provider: 'openai' | 'local' = embedding.length === 384 ? 'local' : 'openai'
-        
-        await addThoughtVector(conversationId, role, textContent, embedding, provider)
+        const provider: 'openai' | 'local' =
+          embedding.length === 384 ? 'local' : 'openai'
+
+        await addThoughtVector(
+          conversationId,
+          role,
+          textContent,
+          embedding,
+          provider
+        )
         return { success: true }
       } catch (error) {
         console.error('IPC thoughtVector:add error:', error)
@@ -127,10 +135,13 @@ export function registerIPCHandlers(): void {
       }
     ) => {
       try {
-        const provider: 'openai' | 'local' | 'both' = 
-          queryEmbedding.length === 384 ? 'local' :
-          queryEmbedding.length === 1536 ? 'openai' : 'both'
-        
+        const provider: 'openai' | 'local' | 'both' =
+          queryEmbedding.length === 384
+            ? 'local'
+            : queryEmbedding.length === 1536
+              ? 'openai'
+              : 'both'
+
         const thoughtsMetadatas = await searchSimilarThoughts(
           queryEmbedding,
           topK,
@@ -375,7 +386,6 @@ export function registerIPCHandlers(): void {
   ipcMain.handle('focus-main-window', () => {
     return focusMainWindow()
   })
-
 
   // Settings management
   ipcMain.handle('settings:load', async () => {
@@ -733,6 +743,52 @@ export function registerIPCHandlers(): void {
       return { success: false, error: error.message }
     }
   })
+
+  // HTTP request handler to bypass CORS
+  ipcMain.handle('http:request', async (event, args: {
+    url: string
+    method?: string
+    headers?: Record<string, string>
+    params?: Record<string, any>
+    data?: any
+    timeout?: number
+  }) => {
+    try {
+      const { url, method = 'GET', headers = {}, params, data, timeout = 15000 } = args
+      
+      console.log(`[IPC http:request] Making ${method} request to:`, url)
+      
+      const response = await axios({
+        url,
+        method,
+        headers,
+        params,
+        data,
+        timeout,
+        validateStatus: () => true // Don't throw on HTTP error status codes
+      })
+
+      return {
+        success: true,
+        data: response.data,
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers
+      }
+    } catch (error: any) {
+      console.error('[IPC http:request] Error:', error)
+      return {
+        success: false,
+        error: error.message,
+        code: error.code,
+        response: error.response ? {
+          status: error.response.status,
+          statusText: error.response.statusText,
+          data: error.response.data
+        } : null
+      }
+    }
+  })
 }
 
 let googleIPCHandlersRegistered = false
@@ -1017,5 +1073,4 @@ export function registerGoogleIPCHandlers(): void {
       }
     }
   })
-
 }

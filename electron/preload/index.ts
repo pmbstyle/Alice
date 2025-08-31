@@ -45,6 +45,17 @@ contextBridge.exposeInMainWorld('electronPaths', {
   getRendererDistPath: () => ipcRenderer.invoke('get-renderer-dist-path'),
 })
 
+contextBridge.exposeInMainWorld('httpAPI', {
+  request: (args: {
+    url: string
+    method?: string
+    headers?: Record<string, string>
+    params?: Record<string, any>
+    data?: any
+    timeout?: number
+  }) => ipcRenderer.invoke('http:request', args),
+})
+
 contextBridge.exposeInMainWorld('pythonAPI', {
   // Python Backend Management
   start: () => ipcRenderer.invoke('python:start'),
@@ -52,37 +63,56 @@ contextBridge.exposeInMainWorld('pythonAPI', {
   restart: () => ipcRenderer.invoke('python:restart'),
   health: () => ipcRenderer.invoke('python:health'),
   serviceStatus: () => ipcRenderer.invoke('python:service-status'),
-  
+
   // STT (Speech-to-Text)
   stt: {
-    transcribeAudio: (audioData: number[], sampleRate?: number, language?: string) => 
-      ipcRenderer.invoke('python:stt:transcribe-audio', { audioData, sampleRate, language }),
-    transcribeFile: (file: Blob, language?: string) => 
+    transcribeAudio: (
+      audioData: number[],
+      sampleRate?: number,
+      language?: string
+    ) =>
+      ipcRenderer.invoke('python:stt:transcribe-audio', {
+        audioData,
+        sampleRate,
+        language,
+      }),
+    transcribeFile: (file: Blob, language?: string) =>
       ipcRenderer.invoke('python:stt:transcribe-file', { file, language }),
     isReady: () => ipcRenderer.invoke('python:stt:ready'),
     getInfo: () => ipcRenderer.invoke('python:stt:info'),
   },
-  
+
   // TTS (Text-to-Speech)
   tts: {
-    synthesize: (text: string, voice?: string) => 
+    synthesize: (text: string, voice?: string) =>
       ipcRenderer.invoke('python:tts:synthesize', { text, voice }),
     getVoices: () => ipcRenderer.invoke('python:tts:voices'),
     test: () => ipcRenderer.invoke('python:tts:test'),
     isReady: () => ipcRenderer.invoke('python:tts:ready'),
     getInfo: () => ipcRenderer.invoke('python:tts:info'),
   },
-  
+
   // Embeddings
   embeddings: {
-    generate: (text: string) => 
+    generate: (text: string) =>
       ipcRenderer.invoke('python:embeddings:generate', { text }),
-    generateBatch: (texts: string[]) => 
+    generateBatch: (texts: string[]) =>
       ipcRenderer.invoke('python:embeddings:generate-batch', { texts }),
-    similarity: (embedding1: number[], embedding2: number[]) => 
-      ipcRenderer.invoke('python:embeddings:similarity', { embedding1, embedding2 }),
-    search: (queryEmbedding: number[], candidateEmbeddings: number[][], topK?: number) => 
-      ipcRenderer.invoke('python:embeddings:search', { queryEmbedding, candidateEmbeddings, topK }),
+    similarity: (embedding1: number[], embedding2: number[]) =>
+      ipcRenderer.invoke('python:embeddings:similarity', {
+        embedding1,
+        embedding2,
+      }),
+    search: (
+      queryEmbedding: number[],
+      candidateEmbeddings: number[][],
+      topK?: number
+    ) =>
+      ipcRenderer.invoke('python:embeddings:search', {
+        queryEmbedding,
+        candidateEmbeddings,
+        topK,
+      }),
     test: () => ipcRenderer.invoke('python:embeddings:test'),
     isReady: () => ipcRenderer.invoke('python:embeddings:ready'),
     getInfo: () => ipcRenderer.invoke('python:embeddings:info'),

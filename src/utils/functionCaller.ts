@@ -58,6 +58,15 @@ interface WebSearchArgs {
   query: string
 }
 
+interface SearXNGSearchArgs {
+  query: string
+  categories?: string
+  engines?: string
+  language?: string
+  time_range?: 'day' | 'month' | 'year'
+  safesearch?: number
+}
+
 async function save_memory(args: SaveMemoryArgs) {
   if (!args.content) {
     return { success: false, error: 'Content is required.' }
@@ -555,6 +564,133 @@ async function perform_web_search(
   }
 }
 
+/**
+ * Performs a web search using a SearXNG instance.
+ */
+async function searxng_web_search(
+  args: SearXNGSearchArgs,
+  settings?: any
+): Promise<FunctionResult> {
+  const SEARXNG_URL = settings?.VITE_SEARXNG_URL
+  const SEARXNG_API_KEY = settings?.VITE_SEARXNG_API_KEY || ''
+
+  if (!SEARXNG_URL) {
+    return { success: false, error: 'SearXNG instance URL is not configured.' }
+  }
+  if (!args.query) {
+    return { success: false, error: 'Search query is missing.' }
+  }
+
+  console.log(`Performing SearXNG web search for: ${args.query}`)
+  try {
+    // Clean and prepare the base URL
+    const baseUrl = SEARXNG_URL.replace(/\/+$/, '') // Remove trailing slashes
+    const searchUrl = `${baseUrl}/search`
+
+    // Build query parameters
+    const params: Record<string, string> = {
+      q: args.query,
+      format: 'json',
+    }
+
+    if (args.categories) {
+      params.categories = args.categories
+    }
+    if (args.engines) {
+      params.engines = args.engines
+    }
+    if (args.language) {
+      params.language = args.language
+    }
+    if (args.time_range) {
+      params.time_range = args.time_range
+    }
+    if (args.safesearch !== undefined) {
+      params.safesearch = args.safesearch.toString()
+    }
+
+    // Add API key if provided (some instances may require it)
+    const headers: Record<string, string> = {
+      'User-Agent': 'Alice-Assistant/1.0',
+    }
+    if (SEARXNG_API_KEY) {
+      headers['Authorization'] = `Bearer ${SEARXNG_API_KEY}`
+    }
+
+    // Use main process HTTP request to bypass CORS
+    const httpResponse = await window.httpAPI.request({
+      url: searchUrl,
+      method: 'GET',
+      params,
+      headers,
+      timeout: 15000,
+    })
+
+    if (!httpResponse.success) {
+      return {
+        success: false,
+        error: `SearXNG request failed: ${httpResponse.error || 'Unknown error'}`,
+      }
+    }
+
+    const response = {
+      data: httpResponse.data,
+      status: httpResponse.status,
+    }
+
+    if (!response.data || !response.data.results) {
+      return {
+        success: false,
+        error:
+          'No results returned from SearXNG instance. Please check if JSON format is enabled in the instance settings.',
+      }
+    }
+
+    const results = response.data.results.map((res: any) => ({
+      title: res.title || 'No Title',
+      url: res.url || '',
+      snippet: res.content || res.snippet || 'No description available',
+      engine: res.engine || 'unknown',
+    }))
+
+    const responseData = {
+      results: results.slice(0, 10), // Limit to 10 results
+      query: args.query,
+      total_results: results.length,
+      search_info: {
+        instance_url: baseUrl,
+        categories: args.categories,
+        engines: args.engines,
+        language: args.language,
+        time_range: args.time_range,
+      },
+    }
+
+    console.log('SearXNG web search successful.')
+    return { success: true, data: responseData }
+  } catch (error: any) {
+    console.error('SearXNG API error:', error.response?.data || error.message)
+
+    let errorMessage = 'Failed to perform SearXNG web search'
+    if (error.response?.status === 404) {
+      errorMessage +=
+        ': Search endpoint not found. Please check the SearXNG URL.'
+    } else if (error.response?.status === 401) {
+      errorMessage += ': Authentication failed. Please check your API key.'
+    } else if (error.code === 'ECONNREFUSED') {
+      errorMessage +=
+        ': Cannot connect to SearXNG instance. Please check the URL and ensure the instance is running.'
+    } else {
+      errorMessage += `: ${error.response?.data?.error || error.message}`
+    }
+
+    return {
+      success: false,
+      error: errorMessage,
+    }
+  }
+}
+
 const functionRegistry: {
   [key: string]: (args: any) => Promise<FunctionResult>
 } = {
@@ -579,6 +715,7 @@ const functionRegistry: {
   manage_scheduled_tasks,
   browser_context: browser_context,
   perform_web_search: perform_web_search,
+  searxng_web_search: searxng_web_search,
 }
 
 const functionSchemas = {
@@ -605,6 +742,7 @@ const functionSchemas = {
   manage_scheduled_tasks: { required: ['action'] },
   browser_context: { required: [] },
   perform_web_search: { required: ['query'] },
+  searxng_web_search: { required: ['query'] },
 }
 
 /**
@@ -657,12 +795,11 @@ export async function executeFunction(
     }
 
     let result: FunctionResult
-    if (name === 'perform_web_search') {
+    if (name === 'perform_web_search' || name === 'searxng_web_search') {
       result = await func(args, settings)
     } else {
       result = await func(args)
     }
-
 
     if (
       name === 'manage_clipboard' &&

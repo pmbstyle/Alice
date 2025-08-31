@@ -32,6 +32,7 @@ import { initializeUpdater, checkForUpdates } from './updaterManager'
 import { registerAuthIPCHandlers, stopAuthServer } from './authManager'
 import DesktopManager from './desktopManager'
 import { backendManager } from './backendManager'
+import { setupDependencies } from '../../scripts/setup-dependencies.js'
 
 // Global state for hot reload persistence
 declare global {
@@ -78,7 +79,6 @@ console.log(
 function isBrowserContextToolEnabled(settings: any): boolean {
   return settings?.assistantTools?.includes('browser_context') || false
 }
-
 
 if (os.release().startsWith('6.1') || process.platform === 'win32') {
   app.disableHardwareAcceleration()
@@ -361,6 +361,18 @@ app.whenReady().then(async () => {
   global.aliceAppState.appInitialized = true
 
   console.log(`[Main Index ${initId}] Starting app initialization...`)
+
+  // Setup dependencies for out-of-box experience
+  console.log(`[Main Index ${initId}] Setting up dependencies...`)
+  try {
+    await setupDependencies()
+  } catch (error) {
+    console.warn(
+      `[Main Index ${initId}] Warning: Could not setup all dependencies:`,
+      error
+    )
+  }
+
   initializeManagers()
 
   registerCustomProtocol(GENERATED_IMAGES_FULL_PATH)

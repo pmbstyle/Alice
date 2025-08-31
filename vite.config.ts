@@ -63,7 +63,7 @@ export default defineConfig(({ mode, command }) => {
                   'dependencies' in pkg ? pkg.dependencies : {}
                 ),
                 input: {
-                  index: 'electron/main/index.ts'
+                  index: 'electron/main/index.ts',
                 },
               },
             },
@@ -124,12 +124,12 @@ export default defineConfig(({ mode, command }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            'vue': ['vue'],
-            'openai': ['openai'],
-            'vendor': ['pinia']
-          }
-        }
-      }
+            vue: ['vue'],
+            openai: ['openai'],
+            vendor: ['pinia'],
+          },
+        },
+      },
     },
     define: {
       global: {},

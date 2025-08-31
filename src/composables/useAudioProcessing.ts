@@ -12,7 +12,12 @@ export function useAudioProcessing() {
   const conversationStore = useConversationStore()
   const settingsStore = useSettingsStore()
 
-  const { audioState, isRecordingRequested, awaitingWakeWord, wakeWordDetected } = storeToRefs(generalStore)
+  const {
+    audioState,
+    isRecordingRequested,
+    awaitingWakeWord,
+    wakeWordDetected,
+  } = storeToRefs(generalStore)
   const { setAudioState } = generalStore
 
   const myvad = ref<vad.MicVAD | null>(null)
@@ -184,35 +189,39 @@ export function useAudioProcessing() {
     }
   }
 
-  const checkForWakeWord = (transcription: string): { hasWakeWord: boolean; command: string } => {
-    if (!settingsStore.config.localSttEnabled || 
-        !settingsStore.config.localSttWakeWord ||
-        settingsStore.config.sttProvider !== 'local') {
-      return { hasWakeWord: false, command: transcription }
+  const checkForWakeWord = (
+    transcription: string
+  ): { hasWakeWord: boolean; command: string } => {
+    if (
+      !settingsStore.config.localSttEnabled ||
+      !settingsStore.config.localSttWakeWord ||
+      settingsStore.config.sttProvider !== 'local'
+    ) {
+      return { hasWakeWord: true, command: transcription }
     }
 
     const wakeWord = settingsStore.config.localSttWakeWord.toLowerCase().trim()
     const text = transcription.toLowerCase().trim()
-    
-    const patterns = [
-      `hey ${wakeWord}`,
-      `ok ${wakeWord}`,
-      `${wakeWord}`
-    ]
-    
+
+    if (!wakeWord) {
+      return { hasWakeWord: true, command: transcription }
+    }
+
+    const patterns = [`hey ${wakeWord}`, `ok ${wakeWord}`, `${wakeWord}`]
+
     for (const pattern of patterns) {
-      if (text.includes(pattern)) {
-        const index = text.indexOf(pattern)
+      const index = text.indexOf(pattern)
+      if (index !== -1) {
         const afterWakeWord = transcription.slice(index + pattern.length).trim()
         const command = afterWakeWord.replace(/^[,.\s]+/, '').trim()
-        
-        return { 
-          hasWakeWord: true, 
-          command: command || transcription
+
+        return {
+          hasWakeWord: true,
+          command: command || transcription,
         }
       }
     }
-    
+
     return { hasWakeWord: false, command: transcription }
   }
 
@@ -233,28 +242,21 @@ export function useAudioProcessing() {
         await conversationStore.transcribeAudioMessage(wavBuffer)
 
       if (transcription && transcription.trim()) {
-        if (settingsStore.config.localSttEnabled && 
-            settingsStore.config.sttProvider === 'local') {
-          
-          if (awaitingWakeWord.value) {
-            const { hasWakeWord, command } = checkForWakeWord(transcription)
-            
-            if (hasWakeWord) {
-              awaitingWakeWord.value = true
-              wakeWordDetected.value = false
-              
-              if (command && command.trim()) {
-                generalStore.recognizedText = command
-                eventBus.emit('processing-complete', command)
-              } else {
-                generalStore.recognizedText = transcription
-                setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-                isSpeechDetected.value = false
-              }
-            } else {
-              setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-              isSpeechDetected.value = false
-            }
+        if (
+          settingsStore.config.localSttEnabled &&
+          settingsStore.config.sttProvider === 'local'
+        ) {
+          const { hasWakeWord, command } = checkForWakeWord(transcription)
+
+          if (hasWakeWord) {
+            generalStore.recognizedText = command
+            eventBus.emit('processing-complete', command)
+          } else {
+            console.log(
+              '[Audio Processing] Wake word not detected, continuing to listen'
+            )
+            setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+            isSpeechDetected.value = false
           }
         } else {
           generalStore.recognizedText = transcription
@@ -282,8 +284,10 @@ export function useAudioProcessing() {
       }
       if (audioState.value === 'IDLE' || audioState.value === 'CONFIG') {
         setAudioState('LISTENING')
-        if (settingsStore.config.localSttEnabled && 
-            settingsStore.config.sttProvider === 'local') {
+        if (
+          settingsStore.config.localSttEnabled &&
+          settingsStore.config.sttProvider === 'local'
+        ) {
           awaitingWakeWord.value = true
           wakeWordDetected.value = false
         } else {
@@ -296,6 +300,9 @@ export function useAudioProcessing() {
       if (audioState.value === 'LISTENING') {
         setAudioState('IDLE')
       }
+
+      awaitingWakeWord.value = false
+      wakeWordDetected.value = false
     }
   })
 

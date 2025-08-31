@@ -187,7 +187,7 @@ export function reinitializeClients(): void {
 export async function initializeClients(): Promise<void> {
   console.log('Initializing API clients...')
   reinitializeClients()
-  
+
   // Initialize backend API and wait for it
   try {
     await backendApi.initialize()

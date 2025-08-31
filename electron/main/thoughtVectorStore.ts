@@ -6,8 +6,8 @@ const { HierarchicalNSW } = HnswlibNode
 import Database from 'better-sqlite3'
 import { randomUUID } from 'node:crypto'
 
-const OPENAI_VECTOR_DIMENSION = 1536  // OpenAI embedding dimension
-const LOCAL_VECTOR_DIMENSION = 384   // all-MiniLM-L6-v2 embedding dimension (Go backend)
+const OPENAI_VECTOR_DIMENSION = 1536 // OpenAI embedding dimension
+const LOCAL_VECTOR_DIMENSION = 384 // all-MiniLM-L6-v2 embedding dimension (Go backend)
 const MAX_ELEMENTS_HNSW = 10000
 const HNSW_OPENAI_INDEX_FILE_NAME = 'alice-thoughts-hnsw-openai.index'
 const HNSW_LOCAL_INDEX_FILE_NAME = 'alice-thoughts-hnsw-local.index'
@@ -116,14 +116,15 @@ function initDB() {
   `)
 
   runDualEmbeddingMigration()
-
 }
 
 function runDualEmbeddingMigration() {
   if (!db) return
 
   // Check if migration already completed
-  const migrationFlag = db.prepare('SELECT completed FROM migration_flags WHERE flag_name = ?').get('dual_embedding_support')
+  const migrationFlag = db
+    .prepare('SELECT completed FROM migration_flags WHERE flag_name = ?')
+    .get('dual_embedding_support')
   if (migrationFlag?.completed) {
     return
   }
@@ -134,39 +135,60 @@ function runDualEmbeddingMigration() {
       ALTER TABLE thoughts ADD COLUMN embedding_openai BLOB;
       ALTER TABLE thoughts ADD COLUMN embedding_local BLOB;
     `)
-    
+
     // Migrate existing embeddings to openai column
-    const existingThoughtsStmt = db.prepare('SELECT hnsw_label, embedding FROM thoughts WHERE embedding IS NOT NULL')
-    const updateThoughtStmt = db.prepare('UPDATE thoughts SET embedding_openai = ? WHERE hnsw_label = ?')
-    
-    const existingThoughts = existingThoughtsStmt.all() as { hnsw_label: number; embedding: Buffer }[]
+    const existingThoughtsStmt = db.prepare(
+      'SELECT hnsw_label, embedding FROM thoughts WHERE embedding IS NOT NULL'
+    )
+    const updateThoughtStmt = db.prepare(
+      'UPDATE thoughts SET embedding_openai = ? WHERE hnsw_label = ?'
+    )
+
+    const existingThoughts = existingThoughtsStmt.all() as {
+      hnsw_label: number
+      embedding: Buffer
+    }[]
     for (const thought of existingThoughts) {
       updateThoughtStmt.run(thought.embedding, thought.hnsw_label)
     }
 
-    // Backup existing embedding column to openai-specific column for long_term_memories table  
+    // Backup existing embedding column to openai-specific column for long_term_memories table
     db.exec(`
       ALTER TABLE long_term_memories ADD COLUMN embedding_openai BLOB;
       ALTER TABLE long_term_memories ADD COLUMN embedding_local BLOB;
     `)
-    
+
     // Migrate existing embeddings to openai column
-    const existingMemoriesStmt = db.prepare('SELECT id, embedding FROM long_term_memories WHERE embedding IS NOT NULL')
-    const updateMemoryStmt = db.prepare('UPDATE long_term_memories SET embedding_openai = ? WHERE id = ?')
-    
-    const existingMemories = existingMemoriesStmt.all() as { id: string; embedding: Buffer }[]
+    const existingMemoriesStmt = db.prepare(
+      'SELECT id, embedding FROM long_term_memories WHERE embedding IS NOT NULL'
+    )
+    const updateMemoryStmt = db.prepare(
+      'UPDATE long_term_memories SET embedding_openai = ? WHERE id = ?'
+    )
+
+    const existingMemories = existingMemoriesStmt.all() as {
+      id: string
+      embedding: Buffer
+    }[]
     for (const memory of existingMemories) {
       updateMemoryStmt.run(memory.embedding, memory.id)
     }
 
     // Mark migration as completed
-    db.prepare('INSERT OR REPLACE INTO migration_flags (flag_name, completed) VALUES (?, 1)').run('dual_embedding_support')
-    
+    db.prepare(
+      'INSERT OR REPLACE INTO migration_flags (flag_name, completed) VALUES (?, 1)'
+    ).run('dual_embedding_support')
+
     if (existingThoughts.length > 0 || existingMemories.length > 0) {
-      console.log(`[ThoughtVectorStore Migration] Migrated ${existingThoughts.length} thoughts and ${existingMemories.length} memories to dual embedding support.`)
+      console.log(
+        `[ThoughtVectorStore Migration] Migrated ${existingThoughts.length} thoughts and ${existingMemories.length} memories to dual embedding support.`
+      )
     }
   } catch (error) {
-    console.error('[ThoughtVectorStore Migration] Error during dual embedding migration:', error)
+    console.error(
+      '[ThoughtVectorStore Migration] Error during dual embedding migration:',
+      error
+    )
     // Migration failure is non-fatal - system will continue with legacy single embedding column
   }
 }
@@ -263,24 +285,29 @@ function insertThoughtMetadata(
   if (!db) throw new Error('Database not initialized for inserting metadata.')
   try {
     const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer)
-    
+
     // Check if this thought already exists
-    const existingStmt = db.prepare('SELECT thought_id FROM thoughts WHERE thought_id = ?')
+    const existingStmt = db.prepare(
+      'SELECT thought_id FROM thoughts WHERE thought_id = ?'
+    )
     const existing = existingStmt.get(thoughtId)
-    
+
     if (existing) {
       // Update existing thought with new embedding
-      const embeddingColumn = provider === 'local' ? 'embedding_local' : 'embedding_openai'
+      const embeddingColumn =
+        provider === 'local' ? 'embedding_local' : 'embedding_openai'
       const updateStmt = db.prepare(`
         UPDATE thoughts SET ${embeddingColumn} = ?, 
         role = ?, text_content = ?, created_at = ?
         WHERE thought_id = ?
       `)
       updateStmt.run(embeddingBuffer, role, textContent, createdAt, thoughtId)
-      
+
       // Also update legacy embedding column for backward compatibility
       if (provider === 'openai') {
-        const legacyStmt = db.prepare('UPDATE thoughts SET embedding = ? WHERE thought_id = ?')
+        const legacyStmt = db.prepare(
+          'UPDATE thoughts SET embedding = ? WHERE thought_id = ?'
+        )
         legacyStmt.run(embeddingBuffer, thoughtId)
       }
     } else {
@@ -288,16 +315,20 @@ function insertThoughtMetadata(
       const embeddingOpenAI = provider === 'openai' ? embeddingBuffer : null
       const embeddingLocal = provider === 'local' ? embeddingBuffer : null
       const legacyEmbedding = provider === 'openai' ? embeddingBuffer : null
-      
+
       // Get next available hnsw_label from database
-      const maxLabelResult = db.prepare('SELECT COALESCE(MAX(hnsw_label), -1) + 1 as next_label FROM thoughts').get() as { next_label: number }
+      const maxLabelResult = db
+        .prepare(
+          'SELECT COALESCE(MAX(hnsw_label), -1) + 1 as next_label FROM thoughts'
+        )
+        .get() as { next_label: number }
       const nextLabel = maxLabelResult.next_label
-      
+
       const insertStmt = db.prepare(`
         INSERT INTO thoughts (hnsw_label, thought_id, conversation_id, role, text_content, created_at, embedding, embedding_openai, embedding_local)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `)
-      
+
       const info = insertStmt.run(
         nextLabel,
         thoughtId,
@@ -309,7 +340,7 @@ function insertThoughtMetadata(
         embeddingOpenAI,
         embeddingLocal
       )
-      
+
       if (info.changes === 0) {
         console.warn(
           '[insertThoughtMetadata] SQLite insert reported 0 changes. ID might exist or other issue.',
@@ -323,15 +354,21 @@ function insertThoughtMetadata(
   }
 }
 
-function getThoughtMetadataByLabels(labels: number[], provider: 'openai' | 'local'): ThoughtMetadata[] {
+function getThoughtMetadataByLabels(
+  labels: number[],
+  provider: 'openai' | 'local'
+): ThoughtMetadata[] {
   if (!db) throw new Error('Database not initialized for fetching metadata.')
   if (labels.length === 0) return []
 
-  const labelMapping = provider === 'local' ? localLabelToThoughtId : openAILabelToThoughtId
-  
+  const labelMapping =
+    provider === 'local' ? localLabelToThoughtId : openAILabelToThoughtId
+
   // Convert HNSW labels to thought_ids using our mapping
-  const thoughtIds = labels.map(label => labelMapping.get(label)).filter(Boolean) as string[]
-  
+  const thoughtIds = labels
+    .map(label => labelMapping.get(label))
+    .filter(Boolean) as string[]
+
   if (thoughtIds.length === 0) return []
 
   const placeholders = thoughtIds.map(() => '?').join(',')
@@ -357,18 +394,20 @@ function getAllEmbeddingsWithLabelsFromDB(provider: 'openai' | 'local'): {
   thoughtId: string
 }[] {
   if (!db) throw new Error('Database not initialized for fetching embeddings.')
-  
+
   let query: string
   if (provider === 'local') {
-    query = 'SELECT thought_id, embedding_local as embedding FROM thoughts WHERE embedding_local IS NOT NULL ORDER BY thought_id'
+    query =
+      'SELECT thought_id, embedding_local as embedding FROM thoughts WHERE embedding_local IS NOT NULL ORDER BY thought_id'
   } else {
     // For OpenAI, prefer new column but fallback to legacy
-    query = 'SELECT thought_id, COALESCE(embedding_openai, embedding) as embedding FROM thoughts WHERE embedding_openai IS NOT NULL OR (embedding_openai IS NULL AND embedding IS NOT NULL) ORDER BY thought_id'
+    query =
+      'SELECT thought_id, COALESCE(embedding_openai, embedding) as embedding FROM thoughts WHERE embedding_openai IS NOT NULL OR (embedding_openai IS NULL AND embedding IS NOT NULL) ORDER BY thought_id'
   }
-  
+
   const stmt = db.prepare(query)
   const rows = stmt.all() as { thought_id: string; embedding: Buffer }[]
-  
+
   // Create sequential labels for this provider
   return rows.map((row, index) => ({
     label: index, // Sequential labeling per provider
@@ -394,21 +433,25 @@ async function loadIndexAndSyncWithDB() {
   let numPointsInDB = 0
   let numOpenAIEmbeddings = 0
   let numLocalEmbeddings = 0
-  
+
   try {
     const countResult = db
       .prepare('SELECT COUNT(*) as count FROM thoughts')
       .get() as { count: number }
     numPointsInDB = countResult.count
-    
+
     // Count OpenAI and Local embeddings separately
     const openaiCountResult = db
-      .prepare('SELECT COUNT(*) as count FROM thoughts WHERE embedding_openai IS NOT NULL OR (embedding_openai IS NULL AND embedding IS NOT NULL)')
+      .prepare(
+        'SELECT COUNT(*) as count FROM thoughts WHERE embedding_openai IS NOT NULL OR (embedding_openai IS NULL AND embedding IS NOT NULL)'
+      )
       .get() as { count: number }
     numOpenAIEmbeddings = openaiCountResult.count
-    
+
     const localCountResult = db
-      .prepare('SELECT COUNT(*) as count FROM thoughts WHERE embedding_local IS NOT NULL')
+      .prepare(
+        'SELECT COUNT(*) as count FROM thoughts WHERE embedding_local IS NOT NULL'
+      )
       .get() as { count: number }
     numLocalEmbeddings = localCountResult.count
   } catch (e) {
@@ -416,15 +459,27 @@ async function loadIndexAndSyncWithDB() {
   }
 
   if (numPointsInDB > 0) {
-    console.log(`[ThoughtVectorStore LOAD] Loading ${numPointsInDB} points (OpenAI: ${numOpenAIEmbeddings}, Local: ${numLocalEmbeddings})`)
+    console.log(
+      `[ThoughtVectorStore LOAD] Loading ${numPointsInDB} points (OpenAI: ${numOpenAIEmbeddings}, Local: ${numLocalEmbeddings})`
+    )
   }
 
   // Load OpenAI index
-  await loadProviderIndex('openai', hnswOpenAIIndex, hnswOpenAIIndexFilePath, numOpenAIEmbeddings)
-  
+  await loadProviderIndex(
+    'openai',
+    hnswOpenAIIndex,
+    hnswOpenAIIndexFilePath,
+    numOpenAIEmbeddings
+  )
+
   // Load Local index
-  await loadProviderIndex('local', hnswLocalIndex, hnswLocalIndexFilePath, numLocalEmbeddings)
-  
+  await loadProviderIndex(
+    'local',
+    hnswLocalIndex,
+    hnswLocalIndexFilePath,
+    numLocalEmbeddings
+  )
+
   isStoreInitialized = true
 }
 
@@ -436,7 +491,6 @@ async function loadProviderIndex(
 ) {
   try {
     if (numEmbeddings > 0) {
-      
       try {
         await index.readIndex(indexFilePath)
 
@@ -468,30 +522,30 @@ async function loadProviderIndex(
 
 async function rebuildHnswIndexFromDB(provider: 'openai' | 'local') {
   const index = provider === 'local' ? hnswLocalIndex : hnswOpenAIIndex
-  const labelMapping = provider === 'local' ? localLabelToThoughtId : openAILabelToThoughtId
-  
+  const labelMapping =
+    provider === 'local' ? localLabelToThoughtId : openAILabelToThoughtId
+
   if (!db || !index) {
     console.error(
       `[ThoughtVectorStore REBUILD] DB or ${provider} HNSW Index not initialized. Cannot rebuild.`
     )
     return
   }
-  
-  
+
   // Count embeddings for this provider
-  const countQuery = provider === 'local' 
-    ? 'SELECT COUNT(*) as count FROM thoughts WHERE embedding_local IS NOT NULL'
-    : 'SELECT COUNT(*) as count FROM thoughts WHERE embedding_openai IS NOT NULL OR (embedding_openai IS NULL AND embedding IS NOT NULL)'
-  
-  const embeddingCount = (db.prepare(countQuery).get() as { count: number }).count
-  
-  index.initIndex(
-    Math.max(MAX_ELEMENTS_HNSW, embeddingCount + 1000)
-  )
+  const countQuery =
+    provider === 'local'
+      ? 'SELECT COUNT(*) as count FROM thoughts WHERE embedding_local IS NOT NULL'
+      : 'SELECT COUNT(*) as count FROM thoughts WHERE embedding_openai IS NOT NULL OR (embedding_openai IS NULL AND embedding IS NOT NULL)'
+
+  const embeddingCount = (db.prepare(countQuery).get() as { count: number })
+    .count
+
+  index.initIndex(Math.max(MAX_ELEMENTS_HNSW, embeddingCount + 1000))
 
   // Clear and rebuild label mapping
   labelMapping.clear()
-  
+
   const allEmbeddings = getAllEmbeddingsWithLabelsFromDB(provider)
   if (allEmbeddings.length === 0) {
     console.log(
@@ -517,30 +571,34 @@ async function saveHnswIndex(provider?: 'openai' | 'local') {
     )
     return
   }
-  
+
   // If no provider specified, save both
   if (!provider) {
     await saveHnswIndex('openai')
     await saveHnswIndex('local')
     return
   }
-  
+
   const index = provider === 'local' ? hnswLocalIndex : hnswOpenAIIndex
-  const indexFilePath = provider === 'local' ? hnswLocalIndexFilePath : hnswOpenAIIndexFilePath
-  
+  const indexFilePath =
+    provider === 'local' ? hnswLocalIndexFilePath : hnswOpenAIIndexFilePath
+
   if (!index) {
     console.warn(
       `[ThoughtVectorStore Save] ${provider} HNSW index not initialized.`
     )
     return
   }
-  
+
   try {
     const dir = path.dirname(indexFilePath)
     await fs.mkdir(dir, { recursive: true })
     await index.writeIndex(indexFilePath)
   } catch (error) {
-    console.error(`[ThoughtVectorStore] Error saving ${provider} HNSW index:`, error)
+    console.error(
+      `[ThoughtVectorStore] Error saving ${provider} HNSW index:`,
+      error
+    )
   }
 }
 
@@ -558,9 +616,10 @@ export async function addThoughtVector(
   embedding: number[],
   provider: 'openai' | 'local' = 'openai'
 ): Promise<void> {
-  const expectedDimension = provider === 'local' ? LOCAL_VECTOR_DIMENSION : OPENAI_VECTOR_DIMENSION
+  const expectedDimension =
+    provider === 'local' ? LOCAL_VECTOR_DIMENSION : OPENAI_VECTOR_DIMENSION
   const hnswIndex = provider === 'local' ? hnswLocalIndex : hnswOpenAIIndex
-  
+
   if (!isStoreInitialized || !hnswIndex || !db) {
     console.error('[ThoughtVectorStore ADD] Store not initialized properly.')
     await initializeThoughtVectorStore()
@@ -581,8 +640,9 @@ export async function addThoughtVector(
   // Generate a unique thought ID
   const thoughtId = `${conversationId}-${role}-${Date.now()}-${randomUUID().substring(0, 8)}`
   const currentIndex = provider === 'local' ? hnswLocalIndex : hnswOpenAIIndex
-  const labelMapping = provider === 'local' ? localLabelToThoughtId : openAILabelToThoughtId
-  
+  const labelMapping =
+    provider === 'local' ? localLabelToThoughtId : openAILabelToThoughtId
+
   // Get next available label for this provider's index
   const label = currentIndex!.getCurrentCount()
 
@@ -594,7 +654,9 @@ export async function addThoughtVector(
       currentIndex!.getMaxElements() +
       Math.max(1000, Math.floor(currentIndex!.getMaxElements() * 0.2))
     currentIndex!.resizeIndex(newMaxElements)
-    console.log(`[ThoughtVectorStore ADD] ${provider} index resized to ${newMaxElements}`)
+    console.log(
+      `[ThoughtVectorStore ADD] ${provider} index resized to ${newMaxElements}`
+    )
   }
 
   db.transaction(() => {
@@ -640,9 +702,13 @@ export async function searchSimilarThoughts(
 
   // Handle dual search from both providers
   if (provider === 'both') {
-    const openaiResults = await searchWithProvider(queryEmbedding, topK, 'openai')
+    const openaiResults = await searchWithProvider(
+      queryEmbedding,
+      topK,
+      'openai'
+    )
     const localResults = await searchWithProvider(queryEmbedding, topK, 'local')
-    
+
     // Combine and deduplicate results, preserving order
     const combined = [...openaiResults, ...localResults]
     const seen = new Set<string>()
@@ -651,7 +717,7 @@ export async function searchSimilarThoughts(
       seen.add(item.id)
       return true
     })
-    
+
     return unique.slice(0, topK)
   }
 
@@ -663,9 +729,10 @@ async function searchWithProvider(
   topK: number,
   provider: 'openai' | 'local'
 ): Promise<ThoughtMetadata[]> {
-  const expectedDimension = provider === 'local' ? LOCAL_VECTOR_DIMENSION : OPENAI_VECTOR_DIMENSION
+  const expectedDimension =
+    provider === 'local' ? LOCAL_VECTOR_DIMENSION : OPENAI_VECTOR_DIMENSION
   const hnswIndex = provider === 'local' ? hnswLocalIndex : hnswOpenAIIndex
-  
+
   if (!hnswIndex || hnswIndex.getCurrentCount() === 0) {
     return []
   }
@@ -689,7 +756,10 @@ async function searchWithProvider(
     return []
   }
 
-  const retrievedMetadata = getThoughtMetadataByLabels(results.neighbors, provider)
+  const retrievedMetadata = getThoughtMetadataByLabels(
+    results.neighbors,
+    provider
+  )
 
   return retrievedMetadata
 }
@@ -708,7 +778,7 @@ export async function deleteAllThoughtVectors(): Promise<void> {
     }
   }
   db.prepare('DELETE FROM thoughts').run()
-  
+
   // Clear both indices and mappings
   if (hnswOpenAIIndex) {
     hnswOpenAIIndex.clearPoints()
@@ -726,8 +796,10 @@ export async function deleteAllThoughtVectors(): Promise<void> {
 
 export async function ensureSaveOnQuit(): Promise<void> {
   if (isStoreInitialized) {
-    if ((hnswOpenAIIndex && hnswOpenAIIndex.getCurrentCount() > 0) || 
-        (hnswLocalIndex && hnswLocalIndex.getCurrentCount() > 0)) {
+    if (
+      (hnswOpenAIIndex && hnswOpenAIIndex.getCurrentCount() > 0) ||
+      (hnswLocalIndex && hnswLocalIndex.getCurrentCount() > 0)
+    ) {
       await saveHnswIndex()
     }
   }

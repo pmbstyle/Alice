@@ -67,7 +67,9 @@ export const useGeneralStore = defineStore('general', () => {
           : 'Stand by'
         break
       case 'LISTENING':
-        statusMessage.value = awaitingWakeWord.value ? 'Waiting for wake word...' : 'Listening...'
+        statusMessage.value = awaitingWakeWord.value
+          ? 'Waiting for wake word...'
+          : 'Listening...'
         break
       case 'PROCESSING_AUDIO':
         statusMessage.value = 'Processing audio...'

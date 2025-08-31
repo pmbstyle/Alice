@@ -209,6 +209,48 @@
             >.
           </p>
         </div>
+        <div
+          v-if="currentSettings.assistantTools.includes('searxng_web_search')"
+          class="col-span-2"
+        >
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label for="searxng-url" class="block mb-1 text-sm"
+                >SearXNG Instance URL</label
+              >
+              <input
+                id="searxng-url"
+                type="url"
+                v-model="currentSettings.VITE_SEARXNG_URL"
+                class="input focus:outline-none w-full"
+                placeholder="https://your-searxng-instance.com"
+              />
+            </div>
+            <div>
+              <label for="searxng-key" class="block mb-1 text-sm"
+                >SearXNG API Key (Optional)</label
+              >
+              <input
+                id="searxng-key"
+                type="password"
+                v-model="currentSettings.VITE_SEARXNG_API_KEY"
+                class="input focus:outline-none w-full"
+                autocomplete="new-password"
+                placeholder="Leave empty for public instances"
+              />
+            </div>
+          </div>
+          <p class="text-xs text-gray-400 mt-1">
+            Use your own SearXNG instance for privacy-focused web search. API
+            key is optional - most self-hosted instances don't require it.
+            <a
+              href="https://docs.searxng.org"
+              target="_blank"
+              class="link link-primary"
+              >Setup guide</a
+            >.
+          </p>
+        </div>
       </div>
     </fieldset>
   </div>

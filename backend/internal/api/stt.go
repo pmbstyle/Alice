@@ -36,6 +36,7 @@ func (h *Handler) TranscribeAudio(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var audioData []byte
+	var language string
 	var err error
 
 	// Check Content-Type to determine request format
@@ -53,6 +54,9 @@ func (h *Handler) TranscribeAudio(w http.ResponseWriter, r *http.Request) {
 			h.writeError(w, http.StatusBadRequest, "Audio data is required")
 			return
 		}
+
+		// Store language from request
+		language = req.Language
 
 		// Convert Float32Array to 16-bit PCM bytes
 		audioData = make([]byte, len(req.AudioData)*2)
@@ -89,6 +93,9 @@ func (h *Handler) TranscribeAudio(w http.ResponseWriter, r *http.Request) {
 		}
 		defer file.Close()
 
+		// Get language from form parameter
+		language = r.FormValue("language")
+
 		// Read audio data
 		audioData, err = io.ReadAll(file)
 		if err != nil {
@@ -97,8 +104,8 @@ func (h *Handler) TranscribeAudio(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Transcribe audio
-	text, err := sttService.TranscribeAudio(r.Context(), audioData)
+	// Transcribe audio with language parameter
+	text, err := sttService.TranscribeAudioWithLanguage(r.Context(), audioData, language)
 	if err != nil {
 		h.writeError(w, http.StatusInternalServerError, "Transcription failed: "+err.Error())
 		return

@@ -2,12 +2,12 @@ name: Build Go Backend
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'backend/**'
       - '.github/workflows/build-go-backend.yml'
   pull_request:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'backend/**'
       - '.github/workflows/build-go-backend.yml'
@@ -33,181 +33,181 @@ jobs:
             output: alice-backend
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Go
-      uses: actions/setup-go@v5
-      with:
-        go-version: '1.23'
-        cache-dependency-path: backend/go.sum
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache-dependency-path: backend/go.sum
 
-    - name: Cache Go modules
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.cache/go-build
-          ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('backend/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-${{ matrix.goos }}-${{ matrix.goarch }}-
-          ${{ runner.os }}-go-
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('backend/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-${{ matrix.goos }}-${{ matrix.goarch }}-
+            ${{ runner.os }}-go-
 
-    - name: Install dependencies
-      working-directory: backend
-      run: go mod download
+      - name: Install dependencies
+        working-directory: backend
+        run: go mod download
 
-    - name: Verify dependencies
-      working-directory: backend
-      run: go mod verify
+      - name: Verify dependencies
+        working-directory: backend
+        run: go mod verify
 
-    - name: Run tests
-      working-directory: backend
-      env:
-        CGO_ENABLED: 1
-      run: go test -v ./...
+      - name: Run tests
+        working-directory: backend
+        env:
+          CGO_ENABLED: 1
+        run: go test -v ./...
 
-    - name: Build binary
-      working-directory: backend
-      env:
-        GOOS: ${{ matrix.goos }}
-        GOARCH: ${{ matrix.goarch }}
-        CGO_ENABLED: 1
-      run: |
-        # Install cross-compilation tools if needed
-        if [ "${{ matrix.goos }}" = "windows" ]; then
-          sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64
-          export CC=x86_64-w64-mingw32-gcc
-          export CXX=x86_64-w64-mingw32-g++
-        fi
-        
-        go build -v -ldflags="-s -w" -o ${{ matrix.output }} .
+      - name: Build binary
+        working-directory: backend
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          CGO_ENABLED: 1
+        run: |
+          # Install cross-compilation tools if needed
+          if [ "${{ matrix.goos }}" = "windows" ]; then
+            sudo apt-get update
+            sudo apt-get install -y gcc-mingw-w64
+            export CC=x86_64-w64-mingw32-gcc
+            export CXX=x86_64-w64-mingw32-g++
+          fi
 
-    - name: Test binary
-      working-directory: backend
-      if: matrix.goos == 'linux'
-      run: |
-        chmod +x ${{ matrix.output }}
-        timeout 10s ./${{ matrix.output }} --version || true
+          go build -v -ldflags="-s -w" -o ${{ matrix.output }} .
 
-    - name: Upload artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: alice-backend-${{ matrix.goos }}-${{ matrix.goarch }}
-        path: backend/${{ matrix.output }}
-        retention-days: 30
+      - name: Test binary
+        working-directory: backend
+        if: matrix.goos == 'linux'
+        run: |
+          chmod +x ${{ matrix.output }}
+          timeout 10s ./${{ matrix.output }} --version || true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: alice-backend-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: backend/${{ matrix.output }}
+          retention-days: 30
 
   validate-api:
     name: Validate API Endpoints
     runs-on: ubuntu-latest
     needs: build-go
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Download Linux binary
-      uses: actions/download-artifact@v4
-      with:
-        name: alice-backend-linux-amd64
-        path: backend/
+      - name: Download Linux binary
+        uses: actions/download-artifact@v4
+        with:
+          name: alice-backend-linux-amd64
+          path: backend/
 
-    - name: Start backend server
-      working-directory: backend
-      run: |
-        chmod +x alice-backend
-        echo "Starting alice-backend..."
-        
-        # Create log files
-        touch backend.log backend.error.log
-        
-        # Start backend with logging and CI-specific environment
-        # Disable model features since models aren't available in CI
-        echo "Starting backend with features disabled (CI environment)"
-        echo "Configuration: ENABLE_STT=false ENABLE_TTS=false ENABLE_EMBEDDINGS=false PORT=8765"
-        nohup env ENABLE_STT=false ENABLE_TTS=false ENABLE_EMBEDDINGS=false PORT=8765 ./alice-backend > backend.log 2> backend.error.log &
-        BACKEND_PID=$!
-        echo "BACKEND_PID=$BACKEND_PID" >> $GITHUB_ENV
-        echo "Started backend with PID: $BACKEND_PID"
-        
-        # Wait for server to start
-        echo "Waiting for backend to start..."
-        for i in {1..30}; do
-          if curl -f http://127.0.0.1:8765/api/health >/dev/null 2>&1; then
-            echo "Backend started successfully after ${i} attempts"
-            break
-          fi
-          echo "Waiting for backend to start... ($i/30)"
-          
-          # Check if process is still running
-          if ! ps -p $BACKEND_PID > /dev/null 2>&1; then
-            echo "Backend process died! Checking logs..."
+      - name: Start backend server
+        working-directory: backend
+        run: |
+          chmod +x alice-backend
+          echo "Starting alice-backend..."
+
+          # Create log files
+          touch backend.log backend.error.log
+
+          # Start backend with logging and CI-specific environment
+          # Disable model features since models aren't available in CI
+          echo "Starting backend with features disabled (CI environment)"
+          echo "Configuration: ENABLE_STT=false ENABLE_TTS=false ENABLE_EMBEDDINGS=false PORT=8765"
+          nohup env ENABLE_STT=false ENABLE_TTS=false ENABLE_EMBEDDINGS=false PORT=8765 ./alice-backend > backend.log 2> backend.error.log &
+          BACKEND_PID=$!
+          echo "BACKEND_PID=$BACKEND_PID" >> $GITHUB_ENV
+          echo "Started backend with PID: $BACKEND_PID"
+
+          # Wait for server to start
+          echo "Waiting for backend to start..."
+          for i in {1..30}; do
+            if curl -f http://127.0.0.1:8765/api/health >/dev/null 2>&1; then
+              echo "Backend started successfully after ${i} attempts"
+              break
+            fi
+            echo "Waiting for backend to start... ($i/30)"
+            
+            # Check if process is still running
+            if ! ps -p $BACKEND_PID > /dev/null 2>&1; then
+              echo "Backend process died! Checking logs..."
+              echo "=== STDOUT ==="
+              cat backend.log || echo "No stdout log"
+              echo "=== STDERR ==="
+              cat backend.error.log || echo "No stderr log"
+              exit 1
+            fi
+            
+            sleep 2
+          done
+
+          # Final check
+          if ! curl -f http://127.0.0.1:8765/api/health >/dev/null 2>&1; then
+            echo "Backend failed to start within timeout. Final logs:"
             echo "=== STDOUT ==="
             cat backend.log || echo "No stdout log"
             echo "=== STDERR ==="
             cat backend.error.log || echo "No stderr log"
+            echo "=== Process status ==="
+            ps aux | grep alice-backend || echo "No alice-backend processes"
+            echo "=== Network status ==="
+            netstat -tlnp | grep 8765 || echo "Port 8765 not bound"
             exit 1
           fi
-          
-          sleep 2
-        done
-        
-        # Final check
-        if ! curl -f http://127.0.0.1:8765/api/health >/dev/null 2>&1; then
-          echo "Backend failed to start within timeout. Final logs:"
-          echo "=== STDOUT ==="
-          cat backend.log || echo "No stdout log"
-          echo "=== STDERR ==="
-          cat backend.error.log || echo "No stderr log"
-          echo "=== Process status ==="
-          ps aux | grep alice-backend || echo "No alice-backend processes"
-          echo "=== Network status ==="
-          netstat -tlnp | grep 8765 || echo "Port 8765 not bound"
-          exit 1
-        fi
 
-    - name: Test API endpoints
-      working-directory: backend
-      run: |
-        echo "Testing API endpoints..."
-        
-        # Test health endpoint
-        echo "Testing health endpoint..."
-        if curl -f http://127.0.0.1:8765/api/health; then
-          echo "Health endpoint OK"
-        else
-          echo "Health endpoint failed"
-          exit 1
-        fi
-        
-        # Test service status endpoints (these may not be ready, that's expected)
-        echo "Testing STT ready endpoint..."
-        if curl -f http://127.0.0.1:8765/api/stt/ready; then
-          echo "STT service ready"
-        else
-          echo "STT not ready (expected - models not downloaded)"
-        fi
-        
-        echo "Testing TTS ready endpoint..."
-        if curl -f http://127.0.0.1:8765/api/tts/ready; then
-          echo "TTS service ready" 
-        else
-          echo "TTS not ready (expected - models not downloaded)"
-        fi
-        
-        echo "Testing embeddings ready endpoint..."
-        if curl -f http://127.0.0.1:8765/api/embeddings/ready; then
-          echo "Embeddings service ready"
-        else
-          echo "Embeddings not ready (expected - models not downloaded)"
-        fi
-        
-        echo "API endpoint tests completed successfully!"
+      - name: Test API endpoints
+        working-directory: backend
+        run: |
+          echo "Testing API endpoints..."
 
-    - name: Stop backend server
-      if: always()
-      run: |
-        if [ ! -z "$BACKEND_PID" ]; then
-          kill $BACKEND_PID || true
-        fi
-        pkill -f alice-backend || true
+          # Test health endpoint
+          echo "Testing health endpoint..."
+          if curl -f http://127.0.0.1:8765/api/health; then
+            echo "Health endpoint OK"
+          else
+            echo "Health endpoint failed"
+            exit 1
+          fi
+
+          # Test service status endpoints (these may not be ready, that's expected)
+          echo "Testing STT ready endpoint..."
+          if curl -f http://127.0.0.1:8765/api/stt/ready; then
+            echo "STT service ready"
+          else
+            echo "STT not ready (expected - models not downloaded)"
+          fi
+
+          echo "Testing TTS ready endpoint..."
+          if curl -f http://127.0.0.1:8765/api/tts/ready; then
+            echo "TTS service ready" 
+          else
+            echo "TTS not ready (expected - models not downloaded)"
+          fi
+
+          echo "Testing embeddings ready endpoint..."
+          if curl -f http://127.0.0.1:8765/api/embeddings/ready; then
+            echo "Embeddings service ready"
+          else
+            echo "Embeddings not ready (expected - models not downloaded)"
+          fi
+
+          echo "API endpoint tests completed successfully!"
+
+      - name: Stop backend server
+        if: always()
+        run: |
+          if [ ! -z "$BACKEND_PID" ]; then
+            kill $BACKEND_PID || true
+          fi
+          pkill -f alice-backend || true

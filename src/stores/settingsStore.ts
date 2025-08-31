@@ -64,6 +64,9 @@ export interface AliceSettings {
 
   VITE_TAVILY_API_KEY: string
 
+  VITE_SEARXNG_URL: string
+  VITE_SEARXNG_API_KEY: string
+
   websocketPort: number
 
   approvedCommands: string[]
@@ -120,6 +123,9 @@ const defaultSettings: AliceSettings = {
 
   VITE_TAVILY_API_KEY: '',
 
+  VITE_SEARXNG_URL: '',
+  VITE_SEARXNG_API_KEY: '',
+
   websocketPort: 5421,
 
   approvedCommands: ['ls', 'dir'],
@@ -136,7 +142,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   // Local Go Backend STT labels
   localSttModel: 'Local STT Model',
   localSttLanguage: 'Language',
-  localSttEnabled: 'Enable Local STT',
+  localSttEnabled: 'Enable Wake Word',
   localSttWakeWord: 'Wake Word',
 
   ollamaBaseUrl: 'Ollama Base URL',
@@ -169,6 +175,9 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
 
   VITE_TAVILY_API_KEY: 'Tavily API Key (Web Search)',
 
+  VITE_SEARXNG_URL: 'SearXNG Instance URL',
+  VITE_SEARXNG_API_KEY: 'SearXNG API Key (optional)',
+
   websocketPort: 'WebSocket Port',
   mcpServersConfig: 'MCP Servers JSON Configuration',
   approvedCommands: 'Approved Commands',
@@ -198,25 +207,33 @@ export const useSettingsStore = defineStore('settings', () => {
 
     // Migration: Handle old 'transformers' provider
     if ((validated.sttProvider as any) === 'transformers') {
-      console.log('🔄 Migrating settings: Converting old "transformers" provider to "local" (Go backend)')
+      console.log(
+        '🔄 Migrating settings: Converting old "transformers" provider to "local" (Go backend)'
+      )
       validated.sttProvider = 'local'
       migrated = true
-      
+
       // Migrate old transformers settings to new local settings
       if ((loadedSettings as any).transformersModel) {
         validated.localSttModel = (loadedSettings as any).transformersModel
         console.log(`📝 Migrated STT model: ${validated.localSttModel}`)
       }
       if ((loadedSettings as any).transformersLanguage) {
-        validated.localSttLanguage = (loadedSettings as any).transformersLanguage
+        validated.localSttLanguage = (
+          loadedSettings as any
+        ).transformersLanguage
         console.log(`🌐 Migrated STT language: ${validated.localSttLanguage}`)
       }
       if ((loadedSettings as any).transformersWakeWordEnabled !== undefined) {
-        validated.localSttEnabled = (loadedSettings as any).transformersWakeWordEnabled
+        validated.localSttEnabled = (
+          loadedSettings as any
+        ).transformersWakeWordEnabled
         console.log(`🎤 Migrated STT enabled: ${validated.localSttEnabled}`)
       }
       if ((loadedSettings as any).transformersWakeWord) {
-        validated.localSttWakeWord = (loadedSettings as any).transformersWakeWord
+        validated.localSttWakeWord = (
+          loadedSettings as any
+        ).transformersWakeWord
         console.log(`🎯 Migrated wake word: ${validated.localSttWakeWord}`)
       }
       console.log('✅ Settings migration completed successfully')
@@ -384,13 +401,13 @@ export const useSettingsStore = defineStore('settings', () => {
             loaded as Partial<AliceSettings>
           )
           settings.value = result.settings
-          
+
           let needsSave = false
           if (result.migrated) {
             needsSave = true
             console.log('💾 Automatically saving migrated settings to file')
           }
-          
+
           if (
             !settings.value.onboardingCompleted &&
             settings.value.VITE_OPENAI_API_KEY?.trim()
@@ -398,7 +415,7 @@ export const useSettingsStore = defineStore('settings', () => {
             settings.value.onboardingCompleted = true
             needsSave = true
           }
-          
+
           if (needsSave) {
             await saveSettingsToFile()
           }
@@ -458,7 +475,7 @@ export const useSettingsStore = defineStore('settings', () => {
         try {
           const result = validateAndFixSettings(devCombinedSettings)
           settings.value = result.settings
-          
+
           if (result.migrated && window.settingsAPI) {
             console.log('💾 Automatically saving migrated dev settings to file')
             await saveSettingsToFile()
@@ -607,6 +624,8 @@ export const useSettingsStore = defineStore('settings', () => {
         VITE_QB_USERNAME: settings.value.VITE_QB_USERNAME,
         VITE_QB_PASSWORD: settings.value.VITE_QB_PASSWORD,
         VITE_TAVILY_API_KEY: settings.value.VITE_TAVILY_API_KEY,
+        VITE_SEARXNG_URL: settings.value.VITE_SEARXNG_URL,
+        VITE_SEARXNG_API_KEY: settings.value.VITE_SEARXNG_API_KEY,
         websocketPort: settings.value.websocketPort,
         approvedCommands: Array.from(settings.value.approvedCommands || []),
         onboardingCompleted: settings.value.onboardingCompleted,

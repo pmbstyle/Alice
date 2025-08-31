@@ -19,47 +19,50 @@ import {
  */
 function parseWavToFloat32Array(arrayBuffer: ArrayBuffer): Float32Array {
   const dataView = new DataView(arrayBuffer)
-  
+
   // Verify WAV format
-  if (dataView.getUint32(0, false) !== 0x52494646) { // "RIFF"
+  if (dataView.getUint32(0, false) !== 0x52494646) {
+    // "RIFF"
     throw new Error('Invalid WAV file: missing RIFF header')
   }
-  
-  if (dataView.getUint32(8, false) !== 0x57415645) { // "WAVE"
+
+  if (dataView.getUint32(8, false) !== 0x57415645) {
+    // "WAVE"
     throw new Error('Invalid WAV file: missing WAVE header')
   }
-  
+
   // Find data chunk
   let offset = 12
   let dataOffset = -1
   let dataSize = 0
-  
+
   while (offset < arrayBuffer.byteLength) {
     const chunkId = dataView.getUint32(offset, false)
     const chunkSize = dataView.getUint32(offset + 4, true)
-    
-    if (chunkId === 0x64617461) { // "data"
+
+    if (chunkId === 0x64617461) {
+      // "data"
       dataOffset = offset + 8
       dataSize = chunkSize
       break
     }
-    
+
     offset += 8 + chunkSize
   }
-  
+
   if (dataOffset === -1) {
     throw new Error('Invalid WAV file: data chunk not found')
   }
-  
+
   // Extract PCM data and convert to Float32
   const pcmData = new Int16Array(arrayBuffer, dataOffset, dataSize / 2)
   const float32Data = new Float32Array(pcmData.length)
-  
+
   // Convert 16-bit PCM to Float32 (-1.0 to 1.0 range)
   for (let i = 0; i < pcmData.length; i++) {
     float32Data[i] = pcmData[i] / 32768.0
   }
-  
+
   return float32Data
 }
 
@@ -132,7 +135,6 @@ async function* convertLocalLLMStreamToResponsesFormat(
             if (toolCall.function || toolCall.id) {
               const toolCallIndex = toolCall.index || 0
               const toolCallId = `tool-${toolCallIndex}`
-
 
               if (!toolCallsBuffer.has(toolCallId)) {
                 toolCallsBuffer.set(toolCallId, {
@@ -330,7 +332,6 @@ async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
             if (toolCall.function || toolCall.id) {
               const toolCallIndex = toolCall.index || 0
               const toolCallId = `tool-${toolCallIndex}`
-
 
               if (!toolCallsBuffer.has(toolCallId)) {
                 toolCallsBuffer.set(toolCallId, {
@@ -1009,9 +1010,9 @@ export const ttsStream = async (
     try {
       // Import the backend API
       const { backendApi } = await import('./backendApi')
-      
+
       const ttsReady = await backendApi.isTTSReady()
-      
+
       if (!ttsReady) {
         return fallbackToOpenAITTS(cleanedText, signal)
       }
@@ -1029,15 +1030,15 @@ export const ttsStream = async (
       const audioBuffer = new ArrayBuffer(speechResult.audio.length)
       const audioView = new Uint8Array(audioBuffer)
       audioView.set(speechResult.audio)
-      
+
       const audioBlob = new Blob([audioBuffer], { type: 'audio/wav' })
       return new Response(audioBlob, {
         status: 200,
         statusText: 'OK',
         headers: {
           'Content-Type': 'audio/wav',
-          'Content-Length': audioBuffer.byteLength.toString()
-        }
+          'Content-Length': audioBuffer.byteLength.toString(),
+        },
       })
     } catch (error: any) {
       return fallbackToOpenAITTS(cleanedText, signal)
@@ -1087,11 +1088,12 @@ export const transcribeWithBackend = async (
 ): Promise<string> => {
   try {
     const settingsStore = useSettingsStore()
-    const selectedLanguage = language || settingsStore.config.localSttLanguage || 'auto'
-    
+    const selectedLanguage =
+      language || settingsStore.config.localSttLanguage || 'auto'
+
     // Import the backend API
     const { backendApi } = await import('./backendApi')
-    
+
     // Check if Go backend is ready
     const isHealthy = await backendApi.isHealthy()
     if (!isHealthy) {
@@ -1100,33 +1102,40 @@ export const transcribeWithBackend = async (
 
     const sttReady = await backendApi.isSTTReady()
     if (!sttReady) {
-      throw new Error('Go STT service not ready - AI dependencies may not be installed')
+      throw new Error(
+        'Go STT service not ready - AI dependencies may not be installed'
+      )
     }
 
     // Parse WAV file to extract raw PCM audio data
     const audioData = parseWavToFloat32Array(audioBuffer)
-    
+
     // Filter out null/NaN values and ensure valid number range
-    const cleanedAudioData = Array.from(audioData).filter(value => 
-      value !== null && 
-      value !== undefined && 
-      !isNaN(value) && 
-      isFinite(value) &&
-      Math.abs(value) <= 1.5 // Allow slight headroom beyond -1.0 to 1.0 range
+    const cleanedAudioData = Array.from(audioData).filter(
+      value =>
+        value !== null &&
+        value !== undefined &&
+        !isNaN(value) &&
+        isFinite(value) &&
+        Math.abs(value) <= 1.5 // Allow slight headroom beyond -1.0 to 1.0 range
     )
-    
+
     if (cleanedAudioData.length === 0) {
       throw new Error('Audio data contains no valid samples')
     }
-    
+
     // Skip very short audio clips
     if (cleanedAudioData.length / 16000 < 0.5) {
       throw new Error('Audio clip too short for reliable transcription')
     }
-    
+
     const audioDataFloat32 = new Float32Array(cleanedAudioData)
-    const result = await backendApi.transcribeAudio(audioDataFloat32, 16000, selectedLanguage === 'auto' ? undefined : selectedLanguage)
-    
+    const result = await backendApi.transcribeAudio(
+      audioDataFloat32,
+      16000,
+      selectedLanguage === 'auto' ? undefined : selectedLanguage
+    )
+
     return result.text
   } catch (error: any) {
     throw error
@@ -1170,14 +1179,14 @@ export const createEmbedding = async (textInput: any): Promise<number[]> => {
     try {
       // Import the backend API
       const { backendApi } = await import('./backendApi')
-      
+
       const embeddingsReady = await backendApi.isEmbeddingsReady()
       if (!embeddingsReady) {
         return fallbackToOpenAIEmbedding(textToEmbed)
       }
 
       const embedding = await backendApi.generateEmbedding(textToEmbed)
-      
+
       if (embedding && embedding.length > 0) {
         return embedding
       } else {
@@ -1191,7 +1200,9 @@ export const createEmbedding = async (textInput: any): Promise<number[]> => {
   }
 }
 
-const fallbackToOpenAIEmbedding = async (textToEmbed: string): Promise<number[]> => {
+const fallbackToOpenAIEmbedding = async (
+  textToEmbed: string
+): Promise<number[]> => {
   const openai = getOpenAIClient()
   const response = await openai.embeddings.create({
     model: 'text-embedding-ada-002',

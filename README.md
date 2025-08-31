@@ -52,7 +52,7 @@ Alice can now interact with your local system with user-approved permissions:
 
 ### ⚙️ Function Calling
 
-* Web search (including Seaxng support)
+* Web search (including Searxng support)
 * Google Calendar & Gmail integration
 * Torrent search & download (via Jackett + qBittorrent)
 * Time & date awareness

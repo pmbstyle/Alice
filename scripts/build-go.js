@@ -491,6 +491,53 @@ function extractPiper(archivePath, outputDir) {
           }
 
           findAndCopyDlls(tempDir)
+
+          // Copy espeak-ng-data directory (required for phonemization)
+          function findAndCopyEspeakData(dir) {
+            const items = fs.readdirSync(dir, { withFileTypes: true })
+
+            for (const item of items) {
+              const fullPath = path.join(dir, item.name)
+
+              if (item.isDirectory()) {
+                if (item.name === 'espeak-ng-data') {
+                  const targetEspeakDataPath = path.join(outputDir, 'espeak-ng-data')
+                  console.log(`Copying espeak-ng-data directory from ${fullPath} to ${targetEspeakDataPath}`)
+                  
+                  // Copy directory recursively
+                  function copyDirRecursive(src, dest) {
+                    if (!fs.existsSync(dest)) {
+                      fs.mkdirSync(dest, { recursive: true })
+                    }
+                    
+                    const items = fs.readdirSync(src, { withFileTypes: true })
+                    for (const item of items) {
+                      const srcPath = path.join(src, item.name)
+                      const destPath = path.join(dest, item.name)
+                      
+                      if (item.isDirectory()) {
+                        copyDirRecursive(srcPath, destPath)
+                      } else {
+                        fs.copyFileSync(srcPath, destPath)
+                      }
+                    }
+                  }
+                  
+                  copyDirRecursive(fullPath, targetEspeakDataPath)
+                  console.log(`Copied espeak-ng-data directory successfully`)
+                  return true
+                } else {
+                  // Recursively search in subdirectories
+                  if (findAndCopyEspeakData(fullPath)) {
+                    return true
+                  }
+                }
+              }
+            }
+            return false
+          }
+
+          findAndCopyEspeakData(tempDir)
         } else {
           // Make executable on Unix systems
           fs.chmodSync(targetPath, '755')

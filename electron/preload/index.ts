@@ -45,6 +45,17 @@ contextBridge.exposeInMainWorld('electronPaths', {
   getRendererDistPath: () => ipcRenderer.invoke('get-renderer-dist-path'),
 })
 
+contextBridge.exposeInMainWorld('httpAPI', {
+  request: (args: {
+    url: string
+    method?: string
+    headers?: Record<string, string>
+    params?: Record<string, any>
+    data?: any
+    timeout?: number
+  }) => ipcRenderer.invoke('http:request', args),
+})
+
 contextBridge.exposeInMainWorld('pythonAPI', {
   // Python Backend Management
   start: () => ipcRenderer.invoke('python:start'),

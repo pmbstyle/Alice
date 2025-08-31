@@ -29,6 +29,29 @@ interface Window {
   electronPaths: {
     getRendererDistPath: () => Promise<string>
   }
+  httpAPI: {
+    request: (args: {
+      url: string
+      method?: string
+      headers?: Record<string, string>
+      params?: Record<string, any>
+      data?: any
+      timeout?: number
+    }) => Promise<{
+      success: boolean
+      data?: any
+      status?: number
+      statusText?: string
+      headers?: any
+      error?: string
+      code?: string
+      response?: {
+        status: number
+        statusText: string
+        data: any
+      }
+    }>
+  }
   pythonAPI: {
     // Python Backend Management
     start: () => Promise<{ success: boolean; error?: string }>

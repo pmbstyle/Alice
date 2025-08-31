@@ -617,11 +617,26 @@ async function searxng_web_search(
       headers['Authorization'] = `Bearer ${SEARXNG_API_KEY}`
     }
 
-    const response = await axios.get(searchUrl, {
+    // Use main process HTTP request to bypass CORS
+    const httpResponse = await window.httpAPI.request({
+      url: searchUrl,
+      method: 'GET',
       params,
       headers,
       timeout: 15000,
     })
+
+    if (!httpResponse.success) {
+      return {
+        success: false,
+        error: `SearXNG request failed: ${httpResponse.error || 'Unknown error'}`,
+      }
+    }
+
+    const response = {
+      data: httpResponse.data,
+      status: httpResponse.status,
+    }
 
     if (!response.data || !response.data.results) {
       return {

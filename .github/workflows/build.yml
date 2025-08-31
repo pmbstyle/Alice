@@ -100,16 +100,8 @@ jobs:
         run: mkdir -p resources/backend
         shell: bash
 
-      - name: Build Go Backend (Cross-platform)
-        working-directory: backend
-        run: |
-          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            go build -ldflags="-s -w" -o ../resources/backend/alice-backend.exe
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            go build -ldflags="-s -w" -o ../resources/backend/alice-backend
-          else
-            go build -ldflags="-s -w" -o ../resources/backend/alice-backend
-          fi
+      - name: Build Go Backend and Download Models
+        run: npm run build:go
         shell: bash
 
       - name: Build Release Files

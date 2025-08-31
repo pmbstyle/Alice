@@ -21,7 +21,7 @@ While the OpenAI cloud API is preferred and provides the best user experience, A
 ### 🗣️ Voice Interaction
 
 * Fast, VAD-powered voice recognition (via `gpt-4o-transcribe` or `whisper-large-v3`)
-* Natural-sounding responses with OpenAI TTS
+* Natural-sounding responses with OpenAI TTS and optional support for local multilingual text-to-speech via Piper TTS
 * Interruptible speech and streaming response cancellation for smoother flow
 
 ### 🧠 Memory & Context
@@ -52,7 +52,7 @@ Alice can now interact with your local system with user-approved permissions:
 
 ### ⚙️ Function Calling
 
-* Web search
+* Web search (including Seaxng support)
 * Google Calendar & Gmail integration
 * Torrent search & download (via Jackett + qBittorrent)
 * Time & date awareness
@@ -64,7 +64,7 @@ Alice can now interact with your local system with user-approved permissions:
 
 ### 💬 Wake Word Support  
 With the local STT model, you can now set a **wake-up word** (like "Hey, Siri").  
-- Alice will always listen but only process request when the wake word is spoken.  
+- Alice will always listen, but only process requests when the wake word is spoken.  
 - Default mode is **auto language detection**, but you can also select a specific language in settings. 
 
 ### 💻 Dedicated Chrome [Extension](https://github.com/pmbstyle/alice-chrome-extension)

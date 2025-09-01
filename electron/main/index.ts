@@ -1,4 +1,14 @@
+// Fix for hybrid graphics systems (NVIDIA + AMD): Disable GPU before any Electron initialization
+// This prevents GPU process crashes on systems with multiple graphics cards
+process.env.ELECTRON_DISABLE_GPU = '1'
+process.env.ELECTRON_NO_SANDBOX = '1'
+process.env.LIBGL_ALWAYS_SOFTWARE = '1'
+process.env.GALLIUM_DRIVER = 'llvmpipe'
+
 import { app, session } from 'electron'
+
+// Disable hardware acceleration immediately after app import
+app.disableHardwareAcceleration()
 import {
   initializeThoughtVectorStore,
   ensureSaveOnQuit as ensureThoughtStoreSave,
@@ -33,6 +43,7 @@ import { registerAuthIPCHandlers, stopAuthServer } from './authManager'
 import DesktopManager from './desktopManager'
 import { backendManager } from './backendManager'
 import { setupDependencies } from '../../scripts/setup-dependencies.js'
+
 
 // Global state for hot reload persistence
 declare global {
@@ -80,14 +91,10 @@ function isBrowserContextToolEnabled(settings: any): boolean {
   return settings?.assistantTools?.includes('browser_context') || false
 }
 
+// Disable hardware acceleration on Windows 7 and Windows in general
 if (os.release().startsWith('6.1') || process.platform === 'win32') {
   app.disableHardwareAcceleration()
 }
-
-// Optimize for CPU-only processing with stability focus
-app.commandLine.appendSwitch('--disable-gpu')
-app.commandLine.appendSwitch('--disable-gpu-sandbox')
-app.commandLine.appendSwitch('--disable-software-rasterizer')
 
 // CPU optimization for worker threads
 process.env.ONNX_WEB_WEBGPU_DISABLED = 'true'

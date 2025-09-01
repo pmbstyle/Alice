@@ -82,8 +82,29 @@ func (s *STTService) Initialize(ctx context.Context) error {
 
 	log.Println("Initializing Whisper STT service...")
 
+	// Ensure assets are available (embedded or download)
+	if err := s.assetManager.EnsureAssets(ctx); err != nil {
+		log.Printf("Warning: Failed to extract embedded whisper assets: %v", err)
+		log.Println("Will use download fallback when whisper binary is needed")
+	} else {
+		log.Println("Successfully extracted embedded Whisper assets")
+	}
+
 	if s.config.ModelPath == "" {
 		s.config.ModelPath = "models/whisper-base.bin"
+	}
+
+	// Ensure Whisper model is available
+	modelPath := s.assetManager.GetModelPath("whisper")
+	if !s.assetManager.IsAssetAvailable(modelPath) {
+		log.Printf("Whisper model not found at %s, will download when needed", modelPath)
+		// Download model during initialization to avoid delays during transcription
+		if err := s.downloadWhisperModel(ctx, modelPath); err != nil {
+			log.Printf("Warning: Failed to download Whisper model during initialization: %v", err)
+			log.Println("Will attempt to download when transcription is requested")
+		} else {
+			log.Printf("Successfully downloaded Whisper model to: %s", modelPath)
+		}
 	}
 
 	s.ready = true
@@ -298,6 +319,14 @@ func (s *STTService) transcribeDirectlyWithLanguage(ctx context.Context, samples
 	// Get model path
 	modelPath := s.assetManager.GetModelPath("whisper")
 	
+	// Ensure model is available, download if needed
+	if !s.assetManager.IsAssetAvailable(modelPath) {
+		log.Printf("Whisper model not available at %s, downloading...", modelPath)
+		if err := s.downloadWhisperModel(ctx, modelPath); err != nil {
+			return "", fmt.Errorf("failed to download whisper model: %w", err)
+		}
+	}
+	
 	// whisper.cpp command arguments - build args based on binary capabilities
 	args := []string{
 		"-m", modelPath,
@@ -328,6 +357,25 @@ func (s *STTService) transcribeDirectlyWithLanguage(ctx context.Context, samples
 	log.Printf("Executing whisper: %s %v", whisperPath, args)
 	
 	cmd := exec.CommandContext(ctx, whisperPath, args...)
+	
+	// Set library path for Linux to find shared libraries
+	if runtime.GOOS == "linux" {
+		binDir := filepath.Dir(whisperPath)
+		if cmd.Env == nil {
+			cmd.Env = os.Environ()
+		}
+		// Add bin directory to LD_LIBRARY_PATH
+		ldLibraryPath := binDir
+		for _, env := range cmd.Env {
+			if strings.HasPrefix(env, "LD_LIBRARY_PATH=") {
+				existingPath := strings.TrimPrefix(env, "LD_LIBRARY_PATH=")
+				ldLibraryPath = binDir + ":" + existingPath
+				break
+			}
+		}
+		cmd.Env = append(cmd.Env, "LD_LIBRARY_PATH="+ldLibraryPath)
+	}
+	
 	output, err := cmd.CombinedOutput()
 	
 	log.Printf("Whisper command output: %s", string(output))
@@ -470,6 +518,10 @@ func (s *STTService) extractWhisperBinary(zipPath string) error {
 			requiredDylibs = []string{"libggml.dylib", "libggml-base.dylib", "libggml-blas.dylib", 
 				"libggml-cpu.dylib", "libggml-metal.dylib", "libwhisper.dylib", 
 				"libwhisper.1.dylib", "libwhisper.1.7.6.dylib"}
+		} else if runtime.GOOS == "linux" {
+			// Required shared libraries for Linux
+			requiredDLLs = []string{"libggml.so", "libggml-base.so", "libggml-cpu.so", 
+				"libwhisper.so", "libwhisper.so.1", "libwhisper.so.1.7.6"}
 		}
 	}
 

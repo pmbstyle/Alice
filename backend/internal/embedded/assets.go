@@ -78,6 +78,21 @@ func GetProductionBaseDirectory() string {
 	exeDir := filepath.Dir(exePath)
 	log.Printf("Executable directory: %s", exeDir)
 
+	// Check if we're running in an AppImage (Linux)
+	if strings.Contains(exeDir, "/.mount_") && strings.Contains(exeDir, "/tmp/") {
+		// AppImage environment - use writable user data directory
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			log.Printf("Warning: Could not get user home directory, using temp: %v", err)
+			userDataDir := filepath.Join(os.TempDir(), "alice-ai-app")
+			log.Printf("Detected AppImage environment, using temp directory as base: %s", userDataDir)
+			return userDataDir
+		}
+		userDataDir := filepath.Join(homeDir, ".local", "share", "alice-ai-app")
+		log.Printf("Detected AppImage environment, using user data directory as base: %s", userDataDir)
+		return userDataDir
+	}
+
 	// Check if we're in an Electron app bundle structure
 	// In production Electron apps, the backend executable is in:
 	// - Windows: resources/backend/alice-backend.exe
@@ -88,9 +103,25 @@ func GetProductionBaseDirectory() string {
 	parentDir := filepath.Dir(exeDir)
 	if filepath.Base(exeDir) == "backend" && 
 	   (filepath.Base(parentDir) == "resources" || filepath.Base(parentDir) == "Resources") {
-		// We're in Electron production bundle
-		log.Printf("Detected Electron production environment, using exe directory as base: %s", exeDir)
-		return exeDir
+		// We're in Electron production bundle - check if directory is writable
+		testFile := filepath.Join(exeDir, ".write_test")
+		if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+			// Directory is not writable (e.g., read-only filesystem)
+			homeDir, err := os.UserHomeDir()
+			if err != nil {
+				log.Printf("Warning: Could not get user home directory, using temp: %v", err)
+				userDataDir := filepath.Join(os.TempDir(), "alice-ai-app")
+				log.Printf("Electron directory not writable, using temp directory as base: %s", userDataDir)
+				return userDataDir
+			}
+			userDataDir := filepath.Join(homeDir, ".local", "share", "alice-ai-app")
+			log.Printf("Electron directory not writable, using user data directory as base: %s", userDataDir)
+			return userDataDir
+		} else {
+			os.Remove(testFile) // Clean up test file
+			log.Printf("Detected Electron production environment, using exe directory as base: %s", exeDir)
+			return exeDir
+		}
 	}
 
 	// Check for typical development structure (resources/backend/)
@@ -129,11 +160,19 @@ func (am *AssetManager) EnsureAssets(ctx context.Context) error {
 	// Extract Whisper assets
 	if err := am.extractWhisperAssets(ctx, info); err != nil {
 		log.Printf("Warning: Failed to extract Whisper assets: %v", err)
+		// Create bin directory even if extraction fails so download can work
+		if err := os.MkdirAll(filepath.Join(am.baseDir, "bin"), 0755); err != nil {
+			log.Printf("Warning: Failed to create bin directory: %v", err)
+		}
 	}
 
 	// Extract Piper assets
 	if err := am.extractPiperAssets(ctx, info); err != nil {
 		log.Printf("Warning: Failed to extract Piper assets: %v", err)
+		// Create bin directory even if extraction fails so download can work
+		if err := os.MkdirAll(filepath.Join(am.baseDir, "bin"), 0755); err != nil {
+			log.Printf("Warning: Failed to create bin directory: %v", err)
+		}
 	}
 
 	// Extract voice models

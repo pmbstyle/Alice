@@ -7,8 +7,8 @@ process.env.GALLIUM_DRIVER = 'llvmpipe'
 
 import { app, session } from 'electron'
 
-// Disable hardware acceleration immediately after app import
 app.disableHardwareAcceleration()
+
 import {
   initializeThoughtVectorStore,
   ensureSaveOnQuit as ensureThoughtStoreSave,
@@ -91,16 +91,12 @@ function isBrowserContextToolEnabled(settings: any): boolean {
   return settings?.assistantTools?.includes('browser_context') || false
 }
 
-// Disable hardware acceleration on Windows 7 and Windows in general
-if (os.release().startsWith('6.1') || process.platform === 'win32') {
-  app.disableHardwareAcceleration()
-}
-
 // CPU optimization for worker threads
 process.env.ONNX_WEB_WEBGPU_DISABLED = 'true'
 process.env.ONNX_WEB_INIT_TIMEOUT = '60000'
 process.env.ONNX_WEB_WASM_ENABLE_SIMD = 'true'
 process.env.UV_THREADPOOL_SIZE = '8'
+
 if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
 // Use Electron's built-in single instance lock

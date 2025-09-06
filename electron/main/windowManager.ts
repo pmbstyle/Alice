@@ -92,6 +92,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
 
 export async function createOverlayWindow(): Promise<BrowserWindow> {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
+  
   overlayWindow = new BrowserWindow({
     width,
     height,
@@ -112,10 +113,11 @@ export async function createOverlayWindow(): Promise<BrowserWindow> {
 
   const arg = 'overlay'
   if (VITE_DEV_SERVER_URL) {
-    overlayWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
+    await overlayWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
   } else {
-    overlayWindow.loadFile(getIndexHtmlPath(), { hash: arg })
+    await overlayWindow.loadFile(getIndexHtmlPath(), { hash: arg })
   }
+  
   overlayWindow.hide()
 
   overlayWindow.on('closed', () => {
@@ -125,11 +127,14 @@ export async function createOverlayWindow(): Promise<BrowserWindow> {
   return overlayWindow
 }
 
-export function showOverlay(): boolean {
+export async function showOverlay(): Promise<boolean> {
   if (!overlayWindow) {
-    createOverlayWindow()
+    await createOverlayWindow()
   }
-  overlayWindow?.show()
+  
+  overlayWindow.setOpacity(1.0)
+  overlayWindow.show()
+  
   return true
 }
 

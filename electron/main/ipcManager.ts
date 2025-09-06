@@ -363,8 +363,13 @@ export function registerIPCHandlers(): void {
   })
 
   // Overlay management
-  ipcMain.handle('show-overlay', () => {
-    return showOverlay()
+  ipcMain.handle('show-overlay', async () => {
+    try {
+      return await showOverlay()
+    } catch (error) {
+      console.error('[IPC] Error in show-overlay handler:', error)
+      return false
+    }
   })
 
   ipcMain.handle('hide-overlay', () => {

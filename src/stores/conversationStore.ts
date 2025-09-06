@@ -791,15 +791,23 @@ export const useConversationStore = defineStore('conversation', () => {
     } else {
       const latestUserMessage = chatHistory.value.find(m => m.role === 'user')
       if (latestUserMessage) {
+        const convertedContent: OpenAI.Responses.Request.ContentPartLike[] = []
+        
+        for (const item of latestUserMessage.content) {
+          if (item.type === 'app_text') {
+            convertedContent.push({ type: 'input_text', text: item.text })
+          } else if (item.type === 'app_image_uri' && item.uri) {
+            convertedContent.push({
+              type: 'input_image',
+              image_url: item.uri,
+            })
+          }
+        }
+        
         finalApiInput = [
           {
             role: 'user',
-            content: latestUserMessage.content.map((item: any) => {
-              if (item.type === 'app_text') {
-                return { type: 'input_text', text: item.text }
-              }
-              return item
-            }),
+            content: convertedContent,
           },
         ]
       }

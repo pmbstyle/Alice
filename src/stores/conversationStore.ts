@@ -87,8 +87,9 @@ export const useConversationStore = defineStore('conversation', () => {
       llmAbortController.value.abort()
       llmAbortController.value = null
       console.log(
-        '[LLM Abort] Stream cancelled but preserving currentResponseId for conversation continuity.'
+        '[LLM Abort] Stream cancelled, clearing currentResponseId to prevent stale reference.'
       )
+      currentResponseId.value = null
     }
   }
 
@@ -342,7 +343,15 @@ export const useConversationStore = defineStore('conversation', () => {
         apiItemPartial.content =
           messageContentParts.length > 0
             ? messageContentParts
-            : [{ type: 'input_text', text: '' }]
+            : [
+                {
+                  type:
+                    currentApiRole === 'assistant'
+                      ? 'output_text'
+                      : 'input_text',
+                  text: '',
+                },
+              ]
 
         if (
           currentApiRole === 'assistant' &&
@@ -659,6 +668,17 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error in continued stream after tool call:', error)
+
+        if (
+          error.message?.includes('Previous response with id') &&
+          error.message?.includes('not found')
+        ) {
+          console.log(
+            '[Error Recovery] Previous response ID not found in tool continuation, clearing and starting new chain'
+          )
+          currentResponseId.value = null
+        }
+
         const errorContent = parseErrorMessage(error)
         generalStore.updateMessageContentByTempId(afterToolPlaceholderTempId, [
           errorContent,
@@ -763,6 +783,15 @@ export const useConversationStore = defineStore('conversation', () => {
             placeholderTempId,
             'I apologize, there was an issue with the previous function call. Let me help you with a fresh start.'
           )
+        } else if (
+          error.message?.includes('Previous response with id') &&
+          error.message?.includes('not found')
+        ) {
+          console.log(
+            '[Error Recovery] Previous response ID not found (likely due to interruption), clearing and retrying'
+          )
+          currentResponseId.value = null
+          return await chat()
         } else {
           const errorContent = parseErrorMessage(error)
           generalStore.updateMessageContentByTempId(placeholderTempId, [
@@ -965,6 +994,18 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error starting OpenAI response stream:', error)
+
+        if (
+          error.message?.includes('Previous response with id') &&
+          error.message?.includes('not found')
+        ) {
+          console.log(
+            '[Error Recovery] Previous response ID not found, clearing and retrying'
+          )
+          currentResponseId.value = null
+          return await chatWithContextAction(prompt)
+        }
+
         const errorContent = parseErrorMessage(error)
         generalStore.updateMessageContentByTempId(placeholderTempId, [
           errorContent,

@@ -79,7 +79,7 @@ async function onMouseUp(e) {
       rect.width,
       rect.height
     )
-    const dataURL = canvas.toDataURL()
+    const dataURL = canvas.toDataURL('image/jpeg', 0.8)
     window.ipcRenderer.invoke('save-screenshot', dataURL)
     window.ipcRenderer.invoke('hide-overlay')
   } catch (error) {

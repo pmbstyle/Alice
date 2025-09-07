@@ -73,6 +73,43 @@ export const useConversationStore = defineStore('conversation', () => {
   const llmAbortController = ref<AbortController | null>(null)
   const ephemeralEmotionalContext = ref<string | null>(null)
 
+  const chatWithCleanHistory = async () => {
+    console.log(
+      '[Clean Recovery] Starting fresh conversation without tool-related messages'
+    )
+    const cleanHistory = chatHistory.value.filter(msg => {
+      if (msg.role === 'user') return true
+
+      if (msg.role === 'assistant') {
+        if (msg.tool_calls && msg.tool_calls.length > 0) return false
+
+        if (
+          !msg.content ||
+          (Array.isArray(msg.content) &&
+            msg.content.every((c: any) => !c.text || c.text.trim() === ''))
+        )
+          return false
+
+        return true
+      }
+
+      return false
+    })
+
+    console.log(
+      `[Clean Recovery] Filtered conversation from ${chatHistory.value.length} to ${cleanHistory.length} messages`
+    )
+
+    const originalHistory = [...chatHistory.value]
+    chatHistory.value = cleanHistory
+
+    try {
+      return await chat()
+    } finally {
+      chatHistory.value = originalHistory
+    }
+  }
+
   const handleCancelTTS = () => {
     if (ttsAbortController.value) {
       console.log('[TTS Abort] Cancelling in-flight TTS request.')
@@ -87,7 +124,8 @@ export const useConversationStore = defineStore('conversation', () => {
       llmAbortController.value.abort()
       llmAbortController.value = null
       console.log(
-        '[LLM Abort] Stream cancelled but preserving currentResponseId for conversation continuity.'
+        '[LLM Abort] Stream cancelled. Keeping currentResponseId for conversation continuity:',
+        currentResponseId.value
       )
     }
   }
@@ -342,7 +380,15 @@ export const useConversationStore = defineStore('conversation', () => {
         apiItemPartial.content =
           messageContentParts.length > 0
             ? messageContentParts
-            : [{ type: 'input_text', text: '' }]
+            : [
+                {
+                  type:
+                    currentApiRole === 'assistant'
+                      ? 'output_text'
+                      : 'input_text',
+                  text: '',
+                },
+              ]
 
         if (
           currentApiRole === 'assistant' &&
@@ -607,31 +653,6 @@ export const useConversationStore = defineStore('conversation', () => {
       content: resultString,
     })
 
-    const isSimpleAction = [
-      'open_path',
-      'manage_clipboard',
-      'execute_command',
-    ].includes(functionName)
-    const isSuccessfulResult =
-      resultString.includes('success') || resultString.includes('Successfully')
-
-    if (isSimpleAction && isSuccessfulResult) {
-      console.log(
-        `[ConversationStore] Adding completion message for successful ${functionName} action`
-      )
-
-      const completionMessage: ChatMessage = {
-        role: 'assistant',
-        content: [
-          { type: 'app_text', text: getCompletionMessage(functionName) },
-        ],
-      }
-      generalStore.addMessageToHistory(completionMessage)
-
-      setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-      return
-    }
-
     const isNewChainAfterTool = currentResponseId.value === null
     const nextApiInput = await buildApiInput(isNewChainAfterTool)
 
@@ -659,6 +680,38 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error in continued stream after tool call:', error)
+
+        if (
+          error.message?.includes('Previous response with id') &&
+          error.message?.includes('not found')
+        ) {
+          console.log(
+            '[Error Recovery] Previous response ID not found in tool continuation, clearing and starting new chain'
+          )
+          currentResponseId.value = null
+
+          try {
+            console.log(
+              '[Error Recovery] Retrying tool continuation without previous response ID'
+            )
+            const retryStream = await api.createOpenAIResponse(
+              nextApiInput,
+              null,
+              true,
+              settingsStore.config.assistantSystemPrompt,
+              llmAbortController.value.signal
+            )
+            await _processStreamLogic(
+              retryStream,
+              afterToolPlaceholderTempId,
+              true
+            )
+            return
+          } catch (retryError: any) {
+            console.error('[Error Recovery] Retry also failed:', retryError)
+          }
+        }
+
         const errorContent = parseErrorMessage(error)
         generalStore.updateMessageContentByTempId(afterToolPlaceholderTempId, [
           errorContent,
@@ -677,57 +730,88 @@ export const useConversationStore = defineStore('conversation', () => {
     setAudioState('WAITING_FOR_RESPONSE')
 
     const isNewChain = currentResponseId.value === null
-    const constructedApiInput = await buildApiInput(isNewChain)
-
-    const contextMessages: OpenAI.Responses.Request.InputItemLike[] = []
-
-    const summaryResult = await window.ipcRenderer.invoke(
-      'summaries:get-latest-summary',
-      {}
+    console.log(
+      `[Chat] ${isNewChain ? 'Starting new conversation chain' : 'Continuing existing chain'}, responseId:`,
+      currentResponseId.value
     )
-    if (summaryResult.success && summaryResult.data?.summary_text) {
-      const summaryContent = `[CONVERSATION_SUMMARY_START]\nContext from a previous part of our conversation:\n${summaryResult.data.summary_text}\n[CONVERSATION_SUMMARY_END]`
-      contextMessages.push({
-        role: 'user',
-        content: [{ type: 'input_text', text: summaryContent }],
-      })
-    }
 
-    if (ephemeralEmotionalContext.value) {
-      const emotionalContextContent = `[SYSTEM_NOTE: Based on our recent interaction, the user's emotional state seems to be: ${ephemeralEmotionalContext.value}]`
-      contextMessages.push({
-        role: 'user',
-        content: [{ type: 'input_text', text: emotionalContextContent }],
-      })
-      ephemeralEmotionalContext.value = null
-    }
+    let finalApiInput: OpenAI.Responses.Request.InputItemLike[] = []
 
-    const latestUserMessageContent = chatHistory.value.find(
-      m => m.role === 'user'
-    )?.content
-    if (latestUserMessageContent && Array.isArray(latestUserMessageContent)) {
-      const textForThoughtRetrieval = latestUserMessageContent
-        .filter(p => p.type === 'app_text' && p.text)
-        .map(p => p.text)
-        .join(' ')
+    if (isNewChain) {
+      const contextMessages: OpenAI.Responses.Request.InputItemLike[] = []
 
-      if (textForThoughtRetrieval) {
-        const relevantThoughts = await api.retrieveRelevantThoughtsForPrompt(
-          textForThoughtRetrieval
-        )
-        if (relevantThoughts.length > 0) {
-          const thoughtsBlock =
-            'Relevant thoughts from our past conversation (for context):\n' +
-            relevantThoughts.map(t => `- ${t}`).join('\n')
-          contextMessages.push({
-            role: 'user',
-            content: [{ type: 'input_text', text: thoughtsBlock }],
-          })
+      const summaryResult = await window.ipcRenderer.invoke(
+        'summaries:get-latest-summary',
+        {}
+      )
+      if (summaryResult.success && summaryResult.data?.summary_text) {
+        const summaryContent = `[CONVERSATION_SUMMARY_START]\nContext from a previous part of our conversation:\n${summaryResult.data.summary_text}\n[CONVERSATION_SUMMARY_END]`
+        contextMessages.push({
+          role: 'user',
+          content: [{ type: 'input_text', text: summaryContent }],
+        })
+      }
+
+      if (ephemeralEmotionalContext.value) {
+        const emotionalContextContent = `[SYSTEM_NOTE: Based on our recent interaction, the user's emotional state seems to be: ${ephemeralEmotionalContext.value}]`
+        contextMessages.push({
+          role: 'user',
+          content: [{ type: 'input_text', text: emotionalContextContent }],
+        })
+        ephemeralEmotionalContext.value = null
+      }
+
+      const latestUserMessageContent = chatHistory.value.find(
+        m => m.role === 'user'
+      )?.content
+      if (latestUserMessageContent && Array.isArray(latestUserMessageContent)) {
+        const textForThoughtRetrieval = latestUserMessageContent
+          .filter(p => p.type === 'app_text' && p.text)
+          .map(p => p.text)
+          .join(' ')
+
+        if (textForThoughtRetrieval) {
+          const relevantThoughts = await api.retrieveRelevantThoughtsForPrompt(
+            textForThoughtRetrieval
+          )
+          if (relevantThoughts.length > 0) {
+            const thoughtsBlock =
+              'Relevant thoughts from our past conversation (for context):\n' +
+              relevantThoughts.map(t => `- ${t}`).join('\n')
+            contextMessages.push({
+              role: 'user',
+              content: [{ type: 'input_text', text: thoughtsBlock }],
+            })
+          }
         }
       }
-    }
 
-    const finalApiInput = [...contextMessages, ...constructedApiInput]
+      const constructedApiInput = await buildApiInput(true)
+      finalApiInput = [...contextMessages, ...constructedApiInput]
+    } else {
+      const latestUserMessage = chatHistory.value.find(m => m.role === 'user')
+      if (latestUserMessage) {
+        const convertedContent: OpenAI.Responses.Request.ContentPartLike[] = []
+        
+        for (const item of latestUserMessage.content) {
+          if (item.type === 'app_text') {
+            convertedContent.push({ type: 'input_text', text: item.text })
+          } else if (item.type === 'app_image_uri' && item.uri) {
+            convertedContent.push({
+              type: 'input_image',
+              image_url: item.uri,
+            })
+          }
+        }
+        
+        finalApiInput = [
+          {
+            role: 'user',
+            content: convertedContent,
+          },
+        ]
+      }
+    }
     const finalInstructions = settingsStore.config.assistantSystemPrompt
 
     const assistantMessagePlaceholder: ChatMessage = {
@@ -753,16 +837,24 @@ export const useConversationStore = defineStore('conversation', () => {
         console.error('Error starting OpenAI response stream:', error)
 
         if (
+          error.message?.includes('Previous response with id') &&
+          error.message?.includes('not found')
+        ) {
+          console.log(
+            '[Error Recovery] Previous response ID not found, starting fresh conversation chain'
+          )
+          currentResponseId.value = null
+
+          return await chatWithCleanHistory()
+        } else if (
+          error.message?.includes('No tool output found for function call') ||
           error.message?.includes('No tool call found for function call output')
         ) {
           console.log(
-            '[Error Recovery] Function call context lost, resetting conversation chain'
+            '[Error Recovery] Tool call mismatch detected, starting fresh conversation chain'
           )
           currentResponseId.value = null
-          generalStore.updateMessageContentByTempId(
-            placeholderTempId,
-            'I apologize, there was an issue with the previous function call. Let me help you with a fresh start.'
-          )
+          return await chatWithCleanHistory()
         } else {
           const errorContent = parseErrorMessage(error)
           generalStore.updateMessageContentByTempId(placeholderTempId, [
@@ -965,6 +1057,18 @@ export const useConversationStore = defineStore('conversation', () => {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error starting OpenAI response stream:', error)
+
+        if (
+          error.message?.includes('Previous response with id') &&
+          error.message?.includes('not found')
+        ) {
+          console.log(
+            '[Error Recovery] Previous response ID not found, clearing and retrying'
+          )
+          currentResponseId.value = null
+          return await chatWithContextAction(prompt)
+        }
+
         const errorContent = parseErrorMessage(error)
         generalStore.updateMessageContentByTempId(placeholderTempId, [
           errorContent,

@@ -74,7 +74,8 @@ import { useAudioPlayback } from '../composables/useAudioPlayback'
 import { useScreenshot } from '../composables/useScreenshot'
 import eventBus from '../utils/eventBus'
 
-const { toggleRecordingRequest } = useAudioProcessing()
+const audioProcessing = useAudioProcessing()
+const { toggleRecordingRequest } = audioProcessing
 const { toggleTTSPreference } = useAudioPlayback()
 const {
   screenShot,

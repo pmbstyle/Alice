@@ -7,6 +7,8 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { storeToRefs } from 'pinia'
 import eventBus from '../utils/eventBus'
 
+let ipcListenersRegistered = false
+
 export function useAudioProcessing() {
   const generalStore = useGeneralStore()
   const conversationStore = useConversationStore()
@@ -26,17 +28,14 @@ export function useAudioProcessing() {
   const vadAssetBasePath = ref<string>('./')
 
   const handleGlobalMicToggle = () => {
-    console.log('[AudioProcessing] Global hotkey for mic toggle received.')
     toggleRecordingRequest()
   }
 
   const handleGlobalMutePlayback = () => {
-    console.log('[AudioProcessing] Global hotkey for mute playback received.')
     eventBus.emit('mute-playback-toggle')
   }
 
   const handleGlobalTakeScreenshot = () => {
-    console.log('[AudioProcessing] Global hotkey for take screenshot received.')
     eventBus.emit('take-screenshot')
   }
 
@@ -82,7 +81,7 @@ export function useAudioProcessing() {
       )
       vadAssetBasePath.value = './'
     }
-    if (window.ipcRenderer) {
+    if (window.ipcRenderer && !ipcListenersRegistered) {
       window.ipcRenderer.on('global-hotkey-mic-toggle', handleGlobalMicToggle)
       window.ipcRenderer.on(
         'global-hotkey-mute-playback',
@@ -92,6 +91,7 @@ export function useAudioProcessing() {
         'global-hotkey-take-screenshot',
         handleGlobalTakeScreenshot
       )
+      ipcListenersRegistered = true
     }
   })
 

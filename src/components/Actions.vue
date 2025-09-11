@@ -161,6 +161,8 @@ const {
   openSidebar,
   takingScreenShot,
   sideBarView,
+  isRecordingRequested,
+  audioState: storeAudioState,
 } = storeToRefs(generalStore)
 
 const statusMessageId = ref(
@@ -214,13 +216,13 @@ watch(isMinimized, () => {
 
 const micIconSrc = computed(() => {
   return props.audioState === 'LISTENING' ||
-    (generalStore.isRecordingRequested && props.audioState !== 'IDLE')
+    (isRecordingRequested.value && props.audioState !== 'IDLE')
     ? micIconActive
     : micIcon
 })
 
 const micAriaLabel = computed(() => {
-  return generalStore.isRecordingRequested
+  return isRecordingRequested.value
     ? 'Stop Microphone'
     : 'Start Microphone'
 })
@@ -280,7 +282,7 @@ const toggleMinimize = async () => {
 }
 
 const isConfigState = computed(() => {
-  return generalStore.audioState === 'CONFIG'
+  return storeAudioState.value === 'CONFIG'
 })
 
 onMounted(() => {

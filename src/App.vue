@@ -36,7 +36,8 @@
         class="btn btn-sm btn-primary btn-active"
         @click="installUpdate()"
       >
-        Install & Restart
+        <template v-if="!generalStore.isMinimized">Install & Restart</template>
+        <template v-else>Install</template>
       </button>
     </div>
   </div>

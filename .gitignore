@@ -41,6 +41,8 @@ resources/python/alice-ai-backend.exe
 /python/__pycache__
 /resources
 /backend/bin
+/backend/lib
+/backend/models
 /bin
 /models
 AGENTS.md

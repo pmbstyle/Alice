@@ -9,4 +9,7 @@ require (
 	github.com/rs/cors v1.11.0
 )
 
-require github.com/ggerganov/whisper.cpp/bindings/go v0.0.0-20250824163423-7745fcf32846 // indirect
+require (
+	github.com/daulet/tokenizers v1.23.0 // indirect
+	github.com/yalue/onnxruntime_go v1.21.0 // indirect
+)

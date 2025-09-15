@@ -17,7 +17,7 @@ type Manager struct {
 	config           *config.Config
 	sttService       *whisper.STTService
 	ttsService       *piper.TTSService
-	embeddingService *minilm.EmbeddingService
+	embeddingService *minilm.OnnxEmbeddingService
 	mu               sync.RWMutex
 }
 
@@ -77,7 +77,8 @@ func (m *Manager) Initialize(ctx context.Context) error {
 			Dimension: 384,
 		}
 
-		m.embeddingService = minilm.NewEmbeddingService(embeddingConfig)
+		// Always use ONNX implementation with automatic model downloading
+		m.embeddingService = minilm.NewOnnxEmbeddingService(embeddingConfig)
 		if err := m.embeddingService.Initialize(ctx); err != nil {
 			return fmt.Errorf("failed to initialize embeddings service: %w", err)
 		}
@@ -103,7 +104,7 @@ func (m *Manager) GetTTSService() *piper.TTSService {
 }
 
 // GetEmbeddingService returns the embeddings service
-func (m *Manager) GetEmbeddingService() *minilm.EmbeddingService {
+func (m *Manager) GetEmbeddingService() *minilm.OnnxEmbeddingService {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.embeddingService

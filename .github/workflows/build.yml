@@ -100,6 +100,47 @@ jobs:
         run: mkdir -p resources/backend
         shell: bash
 
+      - name: Install tokenizers library for Go backend
+        run: |
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            # Install tokenizers library for Linux
+            sudo apt-get update
+            sudo apt-get install -y curl build-essential
+
+            # Download and install tokenizers library
+            wget -q https://github.com/huggingface/tokenizers/releases/download/v0.23.0/libtokenizers-linux-x86_64.tar.gz
+            tar -xzf libtokenizers-linux-x86_64.tar.gz
+            sudo cp libtokenizers.so /usr/local/lib/
+            sudo ldconfig
+
+            # Set environment variables for CGO
+            echo "CGO_LDFLAGS=-L/usr/local/lib -ltokenizers" >> $GITHUB_ENV
+            echo "LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH" >> $GITHUB_ENV
+
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # For Windows, install MinGW and download Windows tokenizers library
+            choco install mingw -y
+
+            # Download Windows tokenizers library
+            curl -L -o tokenizers-windows.zip https://github.com/huggingface/tokenizers/releases/download/v0.23.0/libtokenizers-windows-x86_64.zip
+            unzip tokenizers-windows.zip
+
+            # Set up environment for Windows cross-compilation
+            echo "CC=gcc" >> $GITHUB_ENV
+            echo "CGO_LDFLAGS=-L$(pwd) -l:tokenizers.lib" >> $GITHUB_ENV
+
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            # For macOS, download the dylib
+            curl -L -o tokenizers-macos.tar.gz https://github.com/huggingface/tokenizers/releases/download/v0.23.0/libtokenizers-darwin-x86_64.tar.gz
+            tar -xzf tokenizers-macos.tar.gz
+            sudo cp libtokenizers.dylib /usr/local/lib/
+
+            # Set environment variables for CGO
+            echo "CGO_LDFLAGS=-L/usr/local/lib -ltokenizers" >> $GITHUB_ENV
+            echo "DYLD_LIBRARY_PATH=/usr/local/lib:$DYLD_LIBRARY_PATH" >> $GITHUB_ENV
+          fi
+        shell: bash
+
       - name: Build Go Backend and Download Models
         run: npm run build:go
         shell: bash

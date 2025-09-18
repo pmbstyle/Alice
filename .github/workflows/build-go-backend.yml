@@ -53,6 +53,44 @@ jobs:
             ${{ runner.os }}-go-${{ matrix.goos }}-${{ matrix.goarch }}-
             ${{ runner.os }}-go-
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y curl build-essential unzip
+
+          # Create lib directory for tokenizers
+          sudo mkdir -p /usr/local/lib/tokenizers
+
+          # Download tokenizers libraries for all platforms
+          cd /tmp
+
+          # Linux x86_64
+          wget -q https://github.com/huggingface/tokenizers/releases/download/v0.23.0/libtokenizers-linux-x86_64.tar.gz
+          tar -xzf libtokenizers-linux-x86_64.tar.gz
+          sudo cp libtokenizers.so /usr/local/lib/tokenizers/libtokenizers-linux-x86_64.so
+
+          # Windows x86_64
+          wget -q https://github.com/huggingface/tokenizers/releases/download/v0.23.0/libtokenizers-windows-x86_64.zip
+          unzip -q libtokenizers-windows-x86_64.zip
+          sudo cp tokenizers.dll /usr/local/lib/tokenizers/tokenizers-windows-x86_64.dll
+          sudo cp tokenizers.lib /usr/local/lib/tokenizers/tokenizers-windows-x86_64.lib
+
+          # macOS x86_64
+          wget -q https://github.com/huggingface/tokenizers/releases/download/v0.23.0/libtokenizers-darwin-x86_64.tar.gz
+          tar -xzf libtokenizers-darwin-x86_64.tar.gz
+          sudo cp libtokenizers.dylib /usr/local/lib/tokenizers/libtokenizers-darwin-x86_64.dylib
+
+          # macOS arm64
+          wget -q https://github.com/huggingface/tokenizers/releases/download/v0.23.0/libtokenizers-darwin-arm64.tar.gz
+          tar -xzf libtokenizers-darwin-arm64.tar.gz
+          sudo cp libtokenizers.dylib /usr/local/lib/tokenizers/libtokenizers-darwin-arm64.dylib
+
+          # Set up Linux library path for test phase
+          sudo cp /usr/local/lib/tokenizers/libtokenizers-linux-x86_64.so /usr/local/lib/libtokenizers.so
+          sudo ldconfig
+
+          echo "TOKENIZERS_LIB_DIR=/usr/local/lib/tokenizers" >> $GITHUB_ENV
+
       - name: Install dependencies
         working-directory: backend
         run: go mod download
@@ -74,13 +112,34 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
         run: |
-          # Install cross-compilation tools if needed
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            sudo apt-get update
+          # Set up cross-compilation toolchain and tokenizers library path
+          if [ "${{ matrix.goos }}" = "windows" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
             sudo apt-get install -y gcc-mingw-w64
             export CC=x86_64-w64-mingw32-gcc
             export CXX=x86_64-w64-mingw32-g++
+            export CGO_LDFLAGS="-L${TOKENIZERS_LIB_DIR} -l:tokenizers-windows-x86_64.lib"
+            echo "Building Windows binary with tokenizers library"
+
+          elif [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
+            # For macOS x86_64, set up osxcross if available, otherwise build without CGO
+            export CGO_ENABLED=0
+            echo "Building macOS x86_64 binary without CGO (cross-compilation limitation)"
+
+          elif [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "arm64" ]; then
+            # For macOS arm64, set up osxcross if available, otherwise build without CGO
+            export CGO_ENABLED=0
+            echo "Building macOS arm64 binary without CGO (cross-compilation limitation)"
+
+          else
+            # Linux build - use the installed library
+            export CGO_LDFLAGS="-L/usr/local/lib -ltokenizers"
+            export LD_LIBRARY_PATH="/usr/local/lib:$LD_LIBRARY_PATH"
+            echo "Building Linux binary with tokenizers library"
           fi
+
+          echo "Build environment:"
+          echo "GOOS=$GOOS GOARCH=$GOARCH CGO_ENABLED=$CGO_ENABLED"
+          echo "CGO_LDFLAGS=$CGO_LDFLAGS"
 
           go build -v -ldflags="-s -w" -o ${{ matrix.output }} .
 

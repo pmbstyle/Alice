@@ -1,7 +1,11 @@
 package minilm
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"compress/gzip"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -10,22 +14,24 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
-	"github.com/daulet/tokenizers"
 	ort "github.com/yalue/onnxruntime_go"
 )
 
-// OnnxEmbeddingService provides text embedding functionality using ONNX Runtime
+// OnnxEmbeddingService provides text embedding functionality using ONNX Runtime with pure Go tokenizer
 type OnnxEmbeddingService struct {
 	mu        sync.RWMutex
 	ready     bool
 	config    *Config
 	info      *ServiceInfo
-	tokenizer *tokenizers.Tokenizer
-	session   *ort.AdvancedSession
+	tokenizer *wordPiece
+	session   *ort.DynamicAdvancedSession
+	maxLen    int
 }
 
 // Ensure OnnxEmbeddingService implements EmbeddingProvider
@@ -35,9 +41,10 @@ var _ EmbeddingProvider = (*OnnxEmbeddingService)(nil)
 func NewOnnxEmbeddingService(config *Config) *OnnxEmbeddingService {
 	return &OnnxEmbeddingService{
 		config: config,
+		maxLen: 128, // Standard max length for MiniLM
 		info: &ServiceInfo{
 			Name:        "ONNX MiniLM Embeddings",
-			Version:     "1.0.0",
+			Version:     "2.0.0",
 			Status:      "initializing",
 			Model:       "all-MiniLM-L6-v2",
 			Dimension:   config.Dimension,
@@ -52,161 +59,74 @@ func (s *OnnxEmbeddingService) Initialize(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	log.Println("Initializing ONNX embeddings service...")
+	log.Println("Initializing ONNX embeddings service with pure Go tokenizer...")
 
-	// Initialize ONNX Runtime environment
-	err := ort.InitializeEnvironment()
-	if err != nil {
-		return fmt.Errorf("failed to initialize ONNX Runtime environment: %w", err)
-	}
-
-	// Set library path based on platform
-	// This will be updated once we bundle the libraries
-	libPath := s.getLibraryPath()
-	if libPath != "" {
-		ort.SetSharedLibraryPath(libPath)
-		log.Printf("Set ONNX Runtime library path: %s", libPath)
-	}
-
-	// Ensure model files are available (download if needed)
-	err = s.ensureModelFiles()
-	if err != nil {
-		return fmt.Errorf("failed to ensure model files: %w", err)
-	}
-
-	// Initialize tokenizer
-	tokenizerPath := filepath.Join(s.config.ModelPath, "tokenizer.json")
-	s.tokenizer, err = tokenizers.FromFile(tokenizerPath)
-	if err != nil {
-		// Try to load from HuggingFace Hub as fallback
-		log.Printf("Failed to load tokenizer from file %s, trying HuggingFace Hub...", tokenizerPath)
-		s.tokenizer, err = tokenizers.FromPretrained("sentence-transformers/all-MiniLM-L6-v2")
-		if err != nil {
-			return fmt.Errorf("failed to load tokenizer: %w", err)
-		}
-		log.Println("Loaded tokenizer from HuggingFace Hub")
-	} else {
-		log.Printf("Loaded tokenizer from file: %s", tokenizerPath)
+	// Ensure runtime and model files
+	if err := s.ensureRuntimeAndModel(); err != nil {
+		return fmt.Errorf("failed to ensure runtime and model: %w", err)
 	}
 
 	// Initialize ONNX session
-	modelPath := filepath.Join(s.config.ModelPath, "model.onnx")
-	inputNames := []string{"input_ids", "attention_mask", "token_type_ids"}
-	outputNames := []string{"last_hidden_state"}
-
-	// Create empty tensors for initialization
-	// We'll use dynamic shapes, so these are just placeholders
-	maxSeqLength := int64(512) // Maximum sequence length for BERT-based models
-	batchSize := int64(1)
-
-	// Create input tensors
-	inputShape := ort.NewShape(batchSize, maxSeqLength)
-	inputTensor, err := ort.NewEmptyTensor[int64](inputShape)
-	if err != nil {
-		return fmt.Errorf("failed to create input tensor: %w", err)
-	}
-	defer inputTensor.Destroy()
-
-	attentionTensor, err := ort.NewEmptyTensor[int64](inputShape)
-	if err != nil {
-		return fmt.Errorf("failed to create attention tensor: %w", err)
-	}
-	defer attentionTensor.Destroy()
-
-	tokenTypeTensor, err := ort.NewEmptyTensor[int64](inputShape)
-	if err != nil {
-		return fmt.Errorf("failed to create token type tensor: %w", err)
-	}
-	defer tokenTypeTensor.Destroy()
-
-	// Create output tensor
-	// For all-MiniLM-L6-v2, hidden size is 384
-	outputShape := ort.NewShape(batchSize, maxSeqLength, int64(s.config.Dimension))
-	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
-	if err != nil {
-		return fmt.Errorf("failed to create output tensor: %w", err)
-	}
-	defer outputTensor.Destroy()
-
-	// Create session
-	s.session, err = ort.NewAdvancedSession(modelPath,
-		inputNames, outputNames,
-		[]ort.Value{inputTensor, attentionTensor, tokenTypeTensor},
-		[]ort.Value{outputTensor}, nil)
-	if err != nil {
-		return fmt.Errorf("failed to create ONNX session: %w", err)
+	if err := s.initSession(); err != nil {
+		return fmt.Errorf("failed to initialize session: %w", err)
 	}
 
 	s.ready = true
 	s.info.Status = "ready"
 	s.info.LastUpdated = time.Now()
 	s.info.Metadata["onnx_runtime"] = "enabled"
-	s.info.Metadata["tokenizer"] = "sentence-transformers/all-MiniLM-L6-v2"
+	s.info.Metadata["tokenizer"] = "pure_go_wordpiece"
 
 	log.Println("ONNX embeddings service initialized successfully")
 	return nil
 }
 
-// getLibraryPath returns the platform-specific library path
-func (s *OnnxEmbeddingService) getLibraryPath() string {
-	// Determine platform-specific library name and path
-	var libName string
-	var platformDir string
-
-	switch {
-	case filepath.Base(os.Args[0]) == "main" || filepath.Base(os.Args[0]) == "main.exe":
-		// Development mode - libraries should be in backend/lib
-		switch {
-		case contains(os.Getenv("GOOS"), "windows") || contains(runtime.GOOS, "windows"):
-			libName = "onnxruntime.dll"
-			platformDir = "win32-x64"
-		case contains(os.Getenv("GOOS"), "darwin") || contains(runtime.GOOS, "darwin"):
-			libName = "libonnxruntime.dylib"
-			if contains(os.Getenv("GOARCH"), "arm64") || contains(runtime.GOARCH, "arm64") {
-				platformDir = "darwin-arm64"
-			} else {
-				platformDir = "darwin-x64"
-			}
-		default:
-			libName = "libonnxruntime.so"
-			platformDir = "linux-x64"
-		}
-		return filepath.Join("lib", platformDir, libName)
-	default:
-		// Production mode - libraries should be bundled with the app
-		execPath, err := os.Executable()
-		if err != nil {
-			log.Printf("Failed to get executable path: %v", err)
-			return ""
-		}
-
-		appDir := filepath.Dir(execPath)
-		// In Electron apps, libraries are typically in resources/backend/lib
-		baseDir := filepath.Join(appDir, "..", "resources", "backend", "lib")
-
-		switch runtime.GOOS {
-		case "windows":
-			libName = "onnxruntime.dll"
-			platformDir = "win32-x64"
-		case "darwin":
-			libName = "libonnxruntime.dylib"
-			if runtime.GOARCH == "arm64" {
-				platformDir = "darwin-arm64"
-			} else {
-				platformDir = "darwin-x64"
-			}
-		default:
-			libName = "libonnxruntime.so"
-			platformDir = "linux-x64"
-		}
-
-		return filepath.Join(baseDir, platformDir, libName)
+func (s *OnnxEmbeddingService) ensureRuntimeAndModel() error {
+	// Ensure model directory
+	if err := os.MkdirAll(s.config.ModelPath, 0o755); err != nil {
+		return err
 	}
+
+	// Download ORT shared library
+	libPath, err := ensureORTSharedLib()
+	if err != nil {
+		return fmt.Errorf("onnxruntime lib: %w", err)
+	}
+
+	// Point onnxruntime_go to the shared library
+	ort.SetSharedLibraryPath(libPath)
+
+	// Download model and vocab
+	_, vocabPath, err := ensureMiniLMModel(s.config.ModelPath)
+	if err != nil {
+		return err
+	}
+
+	// Load vocab-based WordPiece tokenizer (uncased)
+	tk, err := loadWordPiece(vocabPath)
+	if err != nil {
+		return err
+	}
+	s.tokenizer = tk
+	return nil
 }
 
-// contains checks if a string contains a substring (case-insensitive)
-func contains(s, substr string) bool {
-	return strings.Contains(strings.ToLower(s), strings.ToLower(substr))
+func (s *OnnxEmbeddingService) initSession() error {
+	if err := ort.InitializeEnvironment(); err != nil {
+		return err
+	}
+
+	// Input and output names we expect
+	inNames := []string{"input_ids", "attention_mask", "token_type_ids"}
+	outNames := []string{"last_hidden_state"}
+
+	modelPath := filepath.Join(s.config.ModelPath, "model.onnx")
+	sess, err := ort.NewDynamicAdvancedSession(modelPath, inNames, outNames, nil)
+	if err != nil {
+		return err
+	}
+	s.session = sess
+	return nil
 }
 
 // IsReady returns true if the service is ready
@@ -236,129 +156,13 @@ func (s *OnnxEmbeddingService) GenerateEmbedding(ctx context.Context, text strin
 		return nil, fmt.Errorf("text cannot be empty")
 	}
 
-	// Tokenize the input text
-	encoding := s.tokenizer.EncodeWithOptions(text, true,
-		tokenizers.WithReturnAttentionMask(),
-		tokenizers.WithReturnTypeIDs())
-
-	// Convert to int64 for ONNX
-	inputIDs := make([]int64, len(encoding.IDs))
-	attentionMask := make([]int64, len(encoding.AttentionMask))
-	tokenTypeIDs := make([]int64, len(encoding.TypeIDs))
-
-	for i, id := range encoding.IDs {
-		inputIDs[i] = int64(id)
-	}
-	for i, mask := range encoding.AttentionMask {
-		attentionMask[i] = int64(mask)
-	}
-	for i, typeID := range encoding.TypeIDs {
-		tokenTypeIDs[i] = int64(typeID)
-	}
-
-	// Create tensors for this specific input
-	seqLen := int64(len(inputIDs))
-	batchSize := int64(1)
-
-	inputShape := ort.NewShape(batchSize, seqLen)
-	inputTensor, err := ort.NewTensor(inputShape, inputIDs)
+	// Use batch function with single text
+	embeddings, err := s.GenerateEmbeddings(ctx, []string{text})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create input tensor: %w", err)
-	}
-	defer inputTensor.Destroy()
-
-	attentionTensor, err := ort.NewTensor(inputShape, attentionMask)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create attention tensor: %w", err)
-	}
-	defer attentionTensor.Destroy()
-
-	tokenTypeTensor, err := ort.NewTensor(inputShape, tokenTypeIDs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create token type tensor: %w", err)
-	}
-	defer tokenTypeTensor.Destroy()
-
-	// Create output tensor
-	outputShape := ort.NewShape(batchSize, seqLen, int64(s.config.Dimension))
-	outputTensor, err := ort.NewEmptyTensor[float32](outputShape)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create output tensor: %w", err)
-	}
-	defer outputTensor.Destroy()
-
-	// Create temporary session for this inference
-	inputNames := []string{"input_ids", "attention_mask", "token_type_ids"}
-	outputNames := []string{"last_hidden_state"}
-
-	modelPath := filepath.Join(s.config.ModelPath, "model.onnx")
-	session, err := ort.NewAdvancedSession(modelPath,
-		inputNames, outputNames,
-		[]ort.Value{inputTensor, attentionTensor, tokenTypeTensor},
-		[]ort.Value{outputTensor}, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create session: %w", err)
-	}
-	defer session.Destroy()
-
-	// Run inference
-	err = session.Run()
-	if err != nil {
-		return nil, fmt.Errorf("ONNX inference failed: %w", err)
+		return nil, err
 	}
 
-	// Get output data
-	outputData := outputTensor.GetData()
-
-	// Perform mean pooling with attention mask
-	embedding := s.meanPooling(outputData, attentionMask, int(seqLen), s.config.Dimension)
-
-	// Normalize the embedding
-	embedding = s.normalize(embedding)
-
-	return embedding, nil
-}
-
-// meanPooling performs mean pooling on the token embeddings with attention mask
-func (s *OnnxEmbeddingService) meanPooling(hiddenStates []float32, attentionMask []int64, seqLen, hiddenSize int) []float32 {
-	embedding := make([]float32, hiddenSize)
-	sumMask := float32(0)
-
-	// Sum the embeddings for non-masked tokens
-	for i := 0; i < seqLen; i++ {
-		if attentionMask[i] == 1 {
-			for j := 0; j < hiddenSize; j++ {
-				embedding[j] += hiddenStates[i*hiddenSize+j]
-			}
-			sumMask += 1.0
-		}
-	}
-
-	// Average the embeddings
-	if sumMask > 0 {
-		for j := 0; j < hiddenSize; j++ {
-			embedding[j] /= sumMask
-		}
-	}
-
-	return embedding
-}
-
-// normalize applies L2 normalization to the embedding
-func (s *OnnxEmbeddingService) normalize(embedding []float32) []float32 {
-	norm := float32(0)
-	for _, val := range embedding {
-		norm += val * val
-	}
-	norm = float32(math.Sqrt(float64(norm)))
-
-	if norm > 0 {
-		for i := range embedding {
-			embedding[i] /= norm
-		}
-	}
-
-	return embedding
+	return embeddings[0], nil
 }
 
 // GenerateEmbeddings generates multiple embeddings
@@ -371,15 +175,134 @@ func (s *OnnxEmbeddingService) GenerateEmbeddings(ctx context.Context, texts []s
 		return nil, fmt.Errorf("texts cannot be empty")
 	}
 
-	embeddings := make([][]float32, len(texts))
-	for i, text := range texts {
-		embedding, err := s.GenerateEmbedding(ctx, text)
-		if err != nil {
-			return nil, fmt.Errorf("failed to generate embedding for text %d: %w", i, err)
-		}
-		embeddings[i] = embedding
+	// Tokenize all texts
+	ids, masks := s.batchTokenize(texts, s.maxLen)
+
+	// Create tensors
+	bsz := len(texts)
+	seq := s.maxLen
+	inputIDs := make([]int64, bsz*seq)
+	attMask := make([]int64, bsz*seq)
+
+	for i := 0; i < bsz; i++ {
+		copy(inputIDs[i*seq:(i+1)*seq], ids[i])
+		copy(attMask[i*seq:(i+1)*seq], masks[i])
 	}
-	return embeddings, nil
+
+	in1, err := ort.NewTensor[int64](ort.NewShape(int64(bsz), int64(seq)), inputIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create input tensor: %w", err)
+	}
+	defer in1.Destroy()
+
+	in2, err := ort.NewTensor[int64](ort.NewShape(int64(bsz), int64(seq)), attMask)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create attention tensor: %w", err)
+	}
+	defer in2.Destroy()
+
+	// Token type IDs (all zeros)
+	ttiData := make([]int64, bsz*seq)
+	tti, err := ort.NewTensor[int64](ort.NewShape(int64(bsz), int64(seq)), ttiData)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create token type tensor: %w", err)
+	}
+	defer tti.Destroy()
+
+	inputsVals := []ort.Value{in1, in2, tti}
+	outputsVals := make([]ort.Value, 1)
+
+	if err := s.session.Run(inputsVals, outputsVals); err != nil {
+		return nil, fmt.Errorf("ONNX inference failed: %w", err)
+	}
+
+	// Process output
+	out0 := outputsVals[0]
+	t, ok := out0.(*ort.Tensor[float32])
+	if !ok {
+		return nil, errors.New("unexpected output type")
+	}
+
+	dataF := t.GetData()
+	shape := t.GetShape()
+	if len(shape) != 3 {
+		return nil, fmt.Errorf("unexpected output shape: %v", shape)
+	}
+
+	seqLen := int(shape[1])
+	hiddenSize := int(shape[2])
+
+	// Mean pooling with attention mask
+	out := make([][]float32, bsz)
+	for i := 0; i < bsz; i++ {
+		start := i * seqLen * hiddenSize
+		vec := make([]float32, hiddenSize)
+		var count float32
+
+		for j := 0; j < seqLen; j++ {
+			if attMask[i*seq+j] == 0 {
+				continue
+			}
+			base := start + j*hiddenSize
+			for d := 0; d < hiddenSize; d++ {
+				vec[d] += dataF[base+d]
+			}
+			count += 1
+		}
+
+		if count > 0 {
+			inv := 1.0 / count
+			var norm float64
+			for d := 0; d < hiddenSize; d++ {
+				vec[d] *= float32(inv)
+				norm += float64(vec[d] * vec[d])
+			}
+			if norm > 0 {
+				invn := float32(1.0 / math.Sqrt(norm))
+				for d := 0; d < hiddenSize; d++ {
+					vec[d] *= invn
+				}
+			}
+		}
+		out[i] = vec
+	}
+
+	return out, nil
+}
+
+// batchTokenize tokenizes multiple texts
+func (s *OnnxEmbeddingService) batchTokenize(texts []string, maxLen int) ([][]int64, [][]int64) {
+	ids := make([][]int64, len(texts))
+	masks := make([][]int64, len(texts))
+	for i, t := range texts {
+		ii, mm := s.encode(t, maxLen)
+		ids[i], masks[i] = ii, mm
+	}
+	return ids, masks
+}
+
+func (s *OnnxEmbeddingService) encode(text string, maxLen int) ([]int64, []int64) {
+	toks := basicTokens(text)
+	var pieces []int
+	for _, w := range toks {
+		pieces = append(pieces, s.tokenizer.tokenizeWord(w)...)
+	}
+	seq := []int{s.tokenizer.clsID}
+	seq = append(seq, pieces...)
+	seq = append(seq, s.tokenizer.sepID)
+	if len(seq) > maxLen {
+		seq = seq[:maxLen]
+	}
+	ids := make([]int64, maxLen)
+	mask := make([]int64, maxLen)
+	for i, v := range seq {
+		ids[i] = int64(v)
+		mask[i] = 1
+	}
+	for i := len(seq); i < maxLen; i++ {
+		ids[i] = 0
+	}
+	return ids, mask
 }
 
 // ComputeSimilarity computes cosine similarity between two embeddings
@@ -451,11 +374,6 @@ func (s *OnnxEmbeddingService) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.tokenizer != nil {
-		s.tokenizer.Close()
-		s.tokenizer = nil
-	}
-
 	if s.session != nil {
 		s.session.Destroy()
 		s.session = nil
@@ -472,140 +390,342 @@ func (s *OnnxEmbeddingService) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// ensureModelFiles ensures that model files are available, downloading them if necessary
-func (s *OnnxEmbeddingService) ensureModelFiles() error {
-	log.Println("Checking for model files...")
+// Downloads and model management (adapted from GoLLMCore)
 
-	// Ensure ONNX Runtime libraries are available first
-	if err := s.ensureOnnxLibraries(); err != nil {
-		return fmt.Errorf("failed to ensure ONNX libraries: %w", err)
-	}
+func ensureMiniLMModel(dir string) (modelPath, vocabPath string, err error) {
+	modelPath = filepath.Join(dir, "model.onnx")
+	vocabPath = filepath.Join(dir, "vocab.txt")
 
-	// Create model directory if it doesn't exist
-	if err := os.MkdirAll(s.config.ModelPath, 0755); err != nil {
-		return fmt.Errorf("failed to create model directory: %w", err)
-	}
-
-	// Check if files already exist
-	modelPath := filepath.Join(s.config.ModelPath, "model.onnx")
-	tokenizerPath := filepath.Join(s.config.ModelPath, "tokenizer.json")
-
-	modelExists := fileExists(modelPath)
-	tokenizerExists := fileExists(tokenizerPath)
-
-	if modelExists && tokenizerExists {
-		log.Println("Model files already exist, skipping download")
-		return nil
-	}
-
-	log.Println("Model files missing, downloading...")
-
-	// Download model files from HuggingFace
-	baseURL := "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main"
-
-	if !modelExists {
-		log.Println("Downloading ONNX model...")
-		if err := s.downloadFile(baseURL+"/onnx/model.onnx", modelPath); err != nil {
-			return fmt.Errorf("failed to download ONNX model: %w", err)
+	if _, e := os.Stat(modelPath); e != nil {
+		urls := []string{
+			// ONNX export of MiniLM (Transformers.js format)
+			"https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx",
+			// Alternate path (some mirrors place model at root)
+			"https://huggingface.co/Xenova/all-MiniLM-L6-v2/resolve/main/model.onnx",
+			// Community ONNX mirrors
+			"https://huggingface.co/onnx-community/all-MiniLM-L6-v2/resolve/main/model.onnx",
 		}
-		log.Println("ONNX model downloaded successfully")
-	}
-
-	if !tokenizerExists {
-		log.Println("Downloading tokenizer...")
-		if err := s.downloadFile(baseURL+"/tokenizer.json", tokenizerPath); err != nil {
-			return fmt.Errorf("failed to download tokenizer: %w", err)
+		if err = tryDownload(urls, modelPath, 3, 180*time.Second); err != nil {
+			return "", "", err
 		}
-		log.Println("Tokenizer downloaded successfully")
 	}
 
-	log.Println("All model files are now available")
-	return nil
+	if _, e := os.Stat(vocabPath); e != nil {
+		urls := []string{
+			"https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/vocab.txt",
+		}
+		if err = tryDownload(urls, vocabPath, 3, 60*time.Second); err != nil {
+			return "", "", err
+		}
+	}
+
+	return modelPath, vocabPath, nil
 }
 
-// downloadFile downloads a file from a URL
-func (s *OnnxEmbeddingService) downloadFile(url, dest string) error {
-	// Create the destination file
-	out, err := os.Create(dest)
-	if err != nil {
-		return fmt.Errorf("failed to create destination file: %w", err)
+func ensureORTSharedLib() (string, error) {
+	baseDir := filepath.Join(os.TempDir(), "onnxruntime")
+	ortVersion := "v1.22.0"
+	versionDir := filepath.Join(baseDir, ortVersion)
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
+		return "", err
 	}
-	defer out.Close()
-
-	// Make HTTP request
-	resp, err := http.Get(url)
-	if err != nil {
-		return fmt.Errorf("failed to download file: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Check response status
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad status: %s", resp.Status)
-	}
-
-	// Copy data
-	_, err = io.Copy(out, resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
-	}
-
-	return nil
-}
-
-// ensureOnnxLibraries ensures ONNX Runtime libraries are available
-func (s *OnnxEmbeddingService) ensureOnnxLibraries() error {
-	// Get library path for current platform
-	libPath := s.getLibraryPath()
-	if libPath == "" {
-		log.Println("No library path configured, skipping library check")
-		return nil
-	}
-
-	// Check if library already exists
-	if fileExists(libPath) {
-		log.Printf("ONNX Runtime library already exists: %s", libPath)
-		return nil
-	}
-
-	log.Println("ONNX Runtime library missing, downloading...")
-
-	// Create lib directory structure
-	libDir := filepath.Dir(libPath)
-	if err := os.MkdirAll(libDir, 0755); err != nil {
-		return fmt.Errorf("failed to create lib directory: %w", err)
-	}
-
-	// Determine platform and download URL
-	var downloadURL string
-	version := "1.21.0"
 
 	switch runtime.GOOS {
 	case "windows":
-		downloadURL = fmt.Sprintf("https://github.com/microsoft/onnxruntime/releases/download/v%s/onnxruntime-win-x64-%s.zip", version, version)
-	case "darwin":
-		if runtime.GOARCH == "arm64" {
-			downloadURL = fmt.Sprintf("https://github.com/microsoft/onnxruntime/releases/download/v%s/onnxruntime-osx-arm64-%s.tgz", version, version)
-		} else {
-			downloadURL = fmt.Sprintf("https://github.com/microsoft/onnxruntime/releases/download/v%s/onnxruntime-osx-x64-%s.tgz", version, version)
+		dll := filepath.Join(versionDir, "onnxruntime.dll")
+		if fileExists(dll) {
+			return dll, nil
 		}
+		urls := []string{
+			"https://github.com/microsoft/onnxruntime/releases/download/" + ortVersion + "/onnxruntime-win-x64-" + strings.TrimPrefix(ortVersion, "v") + ".zip",
+		}
+		zipPath := filepath.Join(versionDir, "ort.zip")
+		if err := tryDownload(urls, zipPath, 3, 240*time.Second); err != nil {
+			return "", err
+		}
+		if err := unzipOne(zipPath, versionDir, "onnxruntime.dll"); err != nil {
+			return "", err
+		}
+		return dll, nil
+
+	case "darwin":
+		dylib := filepath.Join(versionDir, "libonnxruntime.dylib")
+		if fileExists(dylib) {
+			return dylib, nil
+		}
+		// arm64 vs x64 both extract libonnxruntime.dylib
+		urls := []string{
+			"https://github.com/microsoft/onnxruntime/releases/download/" + ortVersion + "/onnxruntime-osx-universal2-" + strings.TrimPrefix(ortVersion, "v") + ".tgz",
+			"https://github.com/microsoft/onnxruntime/releases/download/" + ortVersion + "/onnxruntime-osx-arm64-" + strings.TrimPrefix(ortVersion, "v") + ".tgz",
+			"https://github.com/microsoft/onnxruntime/releases/download/" + ortVersion + "/onnxruntime-osx-x64-" + strings.TrimPrefix(ortVersion, "v") + ".tgz",
+		}
+		tgz := filepath.Join(versionDir, "ort.tgz")
+		if err := tryDownload(urls, tgz, 3, 240*time.Second); err != nil {
+			return "", err
+		}
+		if err := untarSelect(tgz, versionDir, []string{"libonnxruntime.dylib"}); err != nil {
+			return "", err
+		}
+		return dylib, nil
+
 	case "linux":
-		downloadURL = fmt.Sprintf("https://github.com/microsoft/onnxruntime/releases/download/v%s/onnxruntime-linux-x64-%s.tgz", version, version)
+		so := filepath.Join(versionDir, "libonnxruntime.so")
+		if fileExists(so) {
+			return so, nil
+		}
+		urls := []string{
+			"https://github.com/microsoft/onnxruntime/releases/download/" + ortVersion + "/onnxruntime-linux-x64-" + strings.TrimPrefix(ortVersion, "v") + ".tgz",
+		}
+		tgz := filepath.Join(versionDir, "ort.tgz")
+		if err := tryDownload(urls, tgz, 3, 240*time.Second); err != nil {
+			return "", err
+		}
+		if err := untarSelect(tgz, versionDir, []string{"libonnxruntime.so"}); err != nil {
+			return "", err
+		}
+		return so, nil
+
 	default:
-		return fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+		return "", fmt.Errorf("unsupported platform for ORT: %s", runtime.GOOS)
 	}
-
-	// For now, just log that manual setup is required
-	// In a production implementation, you'd add archive extraction logic here
-	log.Printf("To download ONNX Runtime libraries automatically, please run: npm run setup:embeddings")
-	log.Printf("Or manually download from: %s", downloadURL)
-	log.Printf("Extract the library file to: %s", libPath)
-
-	return fmt.Errorf("ONNX Runtime library not found at %s. Please run 'npm run setup:embeddings' to download it", libPath)
 }
 
-// fileExists checks if a file exists
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
+func tryDownload(urls []string, dst string, retries int, timeout time.Duration) error {
+	var last error
+	for i, u := range urls {
+		log.Printf("Downloading: %s (%d/%d)", u, i+1, len(urls))
+		if err := downloadFile(u, dst, timeout); err != nil {
+			last = err
+			continue
+		}
+		return nil
+	}
+	return last
+}
+
+func downloadFile(url, dst string, timeout time.Duration) error {
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("User-Agent", "AliceAI/1.0")
+	client := &http.Client{Timeout: timeout}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("bad status: %s", resp.Status)
+	}
+	tmp := dst + ".part"
+	out, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(out, resp.Body); err != nil {
+		out.Close()
+		return err
+	}
+	out.Close()
+	return os.Rename(tmp, dst)
+}
+
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
 	return err == nil
+}
+
+// unzipOne extracts a specific file from a zip archive to dstDir
+func unzipOne(zipPath, dstDir, wanted string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	for _, f := range r.File {
+		if filepath.Base(f.Name) == wanted {
+			rc, err := f.Open()
+			if err != nil {
+				return err
+			}
+			defer rc.Close()
+			out := filepath.Join(dstDir, wanted)
+			fo, err := os.Create(out)
+			if err != nil {
+				return err
+			}
+			if _, err := io.Copy(fo, rc); err != nil {
+				fo.Close()
+				return err
+			}
+			fo.Close()
+			if runtime.GOOS != "windows" {
+				_ = os.Chmod(out, 0o755)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("file %s not found in zip", wanted)
+}
+
+// untarSelect extracts specific files from a .tgz into dstDir
+func untarSelect(tgzPath, dstDir string, names []string) error {
+	set := make(map[string]bool)
+	for _, n := range names {
+		set[n] = true
+	}
+	f, err := os.Open(tgzPath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		base := filepath.Base(hdr.Name)
+		if !set[base] || hdr.FileInfo().IsDir() {
+			continue
+		}
+		out := filepath.Join(dstDir, base)
+		of, err := os.Create(out)
+		if err != nil {
+			return err
+		}
+		if _, err := io.Copy(of, tr); err != nil {
+			of.Close()
+			return err
+		}
+		of.Close()
+		if runtime.GOOS != "windows" {
+			_ = os.Chmod(out, 0o755)
+		}
+		delete(set, base)
+		if len(set) == 0 {
+			break
+		}
+	}
+	if len(set) > 0 {
+		return fmt.Errorf("missing files: %v", keys(set))
+	}
+	return nil
+}
+
+func keys(m map[string]bool) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return ks
+}
+
+// WordPiece tokenizer (pure Go implementation from GoLLMCore)
+
+type wordPiece struct {
+	vocab map[string]int
+	unkID int
+	clsID int
+	sepID int
+	padID int
+}
+
+func loadWordPiece(path string) (*wordPiece, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(string(b), "\n")
+	vp := make(map[string]int, len(lines))
+	for i, line := range lines {
+		tok := strings.TrimSpace(line)
+		if tok == "" {
+			continue
+		}
+		if _, ok := vp[tok]; !ok {
+			vp[tok] = i
+		}
+	}
+	get := func(tok string, def int) int {
+		if id, ok := vp[tok]; ok {
+			return id
+		}
+		return def
+	}
+	return &wordPiece{
+		vocab: vp,
+		unkID: get("[UNK]", 100),
+		clsID: get("[CLS]", 101),
+		sepID: get("[SEP]", 102),
+		padID: get("[PAD]", 0),
+	}, nil
+}
+
+func basicTokens(s string) []string {
+	s = strings.ToLower(s)
+	var out []string
+	var b strings.Builder
+	flush := func() {
+		if b.Len() > 0 {
+			out = append(out, b.String())
+			b.Reset()
+		}
+	}
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			b.WriteRune(r)
+		} else {
+			flush()
+		}
+	}
+	flush()
+	return out
+}
+
+func (w *wordPiece) tokenizeWord(tok string) []int {
+	if tok == "" {
+		return nil
+	}
+	var out []int
+	for len(tok) > 0 {
+		end := len(tok)
+		var cur string
+		var id int
+		found := false
+		for end > 0 {
+			sub := tok[:end]
+			candidate := sub
+			if len(out) > 0 {
+				candidate = "##" + sub
+			}
+			if vid, ok := w.vocab[candidate]; ok {
+				cur = candidate
+				id = vid
+				found = true
+				break
+			}
+			end--
+		}
+		if !found {
+			out = append(out, w.unkID)
+			break
+		}
+		out = append(out, id)
+		if strings.HasPrefix(cur, "##") {
+			cur = cur[2:]
+		}
+		tok = tok[len(cur):]
+	}
+	return out
 }

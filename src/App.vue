@@ -149,7 +149,13 @@ onMounted(async () => {
       if (data.type === 'settings-saved' && data.success && data.validationComplete) {
         try {
           generalStore.statusMessage = 'Applying new settings...'
-          window.location.reload()
+          const isProduction = await window.ipcRenderer.invoke('app:is-packaged')
+
+          if (isProduction) {
+            await window.ipcRenderer.invoke('app:restart')
+          } else {
+            window.location.reload()
+          }
         } catch (error) {
           console.error('[App] Error handling settings change:', error)
           generalStore.statusMessage = 'Error: Failed to apply new settings'

@@ -430,6 +430,23 @@ export function registerIPCHandlers(): void {
     }
   })
 
+  // App restart
+  ipcMain.handle('app:restart', async () => {
+    try {
+      app.relaunch()
+      app.exit(0)
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC app:restart] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Check if app is packaged
+  ipcMain.handle('app:is-packaged', () => {
+    return app.isPackaged
+  })
+
   // Settings management
   ipcMain.handle('settings:load', async () => {
     return await loadSettings()

@@ -814,6 +814,9 @@ export const useSettingsStore = defineStore('settings', () => {
         'Settings validation failed. Check API Key(s).'
     }
     isSaving.value = false
+    setTimeout(() => {
+      successMessage.value = null
+    }, 5000)
   }
 
   async function completeOnboarding(onboardingData: {

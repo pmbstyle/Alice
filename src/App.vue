@@ -1,5 +1,6 @@
 <template>
   <OnboardingWizard v-if="showOnboarding" />
+  <SettingsWindow v-else-if="showSettings" />
   <Main v-else-if="!showOverlay" />
   <Overlay v-else />
   <CommandApprovalDialog
@@ -48,6 +49,7 @@ import { useRoute } from 'vue-router'
 import Main from './components/Main.vue'
 import Overlay from './components/Overlay.vue'
 import OnboardingWizard from './components/wizard/OnboardingWizard.vue'
+import SettingsWindow from './components/SettingsWindow.vue'
 import CommandApprovalDialog from './components/CommandApprovalDialog.vue'
 import { useSettingsStore } from './stores/settingsStore'
 import { useGeneralStore } from './stores/generalStore'
@@ -61,6 +63,10 @@ const conversationStore = useConversationStore()
 
 const showOverlay = computed(() => {
   return route.hash === '#overlay'
+})
+
+const showSettings = computed(() => {
+  return route.hash === '#settings'
 })
 
 const showOnboarding = computed(() => {
@@ -139,23 +145,18 @@ onMounted(async () => {
       handleContextAction(data)
     })
 
-    // Handle TTS progress updates to show the app is responsive
-    window.ipcRenderer.on('kokoro-tts-progress', (event, data) => {
-      const { message, progress } = data
-      if (progress >= 0) {
-        generalStore.statusMessage = `TTS: ${message}`
-      } else {
-        generalStore.statusMessage = 'TTS generation failed'
-      }
-    })
-
-    // Handle local embedding progress updates
-    window.ipcRenderer.on('local-embedding-progress', (event, data) => {
-      const { message, progress } = data
-      if (progress >= 0) {
-        generalStore.statusMessage = `Embedding: ${message}`
-      } else {
-        generalStore.statusMessage = 'Embedding generation failed'
+    window.ipcRenderer.on('settings-changed', async (event, data) => {
+      if (data.type === 'settings-saved' && data.success && data.validationComplete) {
+        try {
+          generalStore.statusMessage = 'Applying new settings...'
+          window.location.reload()
+        } catch (error) {
+          console.error('[App] Error handling settings change:', error)
+          generalStore.statusMessage = 'Error: Failed to apply new settings'
+        }
+      } else if (data.type === 'settings-saved' && !data.success) {
+        console.log('[App] Settings validation failed, not applying changes')
+        generalStore.statusMessage = 'Settings validation failed'
       }
     })
   }
@@ -167,6 +168,7 @@ onUnmounted(() => {
     window.ipcRenderer.removeAllListeners('context-action')
     window.ipcRenderer.removeAllListeners('kokoro-tts-progress')
     window.ipcRenderer.removeAllListeners('local-embedding-progress')
+    window.ipcRenderer.removeAllListeners('settings-changed')
   }
 })
 </script>

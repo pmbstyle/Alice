@@ -38,9 +38,8 @@ router.beforeEach(async (to, from, next) => {
     !settingsStore.areEssentialSettingsProvided
   ) {
     console.log(
-      'Router: Essential settings missing in production. Signaling sidebar to show settings.'
+      'Router: Essential settings missing in production. Will open settings window.'
     )
-    generalStore.sideBarView = 'settings'
   }
   next()
 })

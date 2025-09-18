@@ -333,11 +333,8 @@
       <legend class="fieldset-legend">Enabled Tools</legend>
       <div class="space-y-4 p-2">
         <div>
-          <label class="block mb-2 text-sm font-medium"
-            >Enabled Assistant Tools</label
-          >
           <div
-            class="space-y-2 p-3 border border-neutral-content/20 rounded-md max-h-60 overflow-y-auto bg-gray-800/50"
+            class="space-y-2 p-3 border border-neutral-content/20 rounded-md bg-gray-800/50"
           >
             <div
               v-if="availableTools.length === 0"
@@ -364,8 +361,8 @@
                   :disabled="!isToolConfigured(tool.name)"
                 />
                 <span
-                  class="label-text"
-                  :title="
+                  class="label-text tooltip tooltip-right"
+                  :data-tip="
                     tool.description +
                     (!isToolConfigured(tool.name)
                       ? ' (API key for this tool not configured in Optional Tool APIs section)'

@@ -36,6 +36,7 @@ function getIndexHtmlPath(): string {
 
 let win: BrowserWindow | null = null
 let overlayWindow: BrowserWindow | null = null
+let settingsWindow: BrowserWindow | null = null
 
 export function getMainWindow(): BrowserWindow | null {
   return win
@@ -43,6 +44,10 @@ export function getMainWindow(): BrowserWindow | null {
 
 export function getOverlayWindow(): BrowserWindow | null {
   return overlayWindow
+}
+
+export function getSettingsWindow(): BrowserWindow | null {
+  return settingsWindow
 }
 
 export async function createMainWindow(): Promise<BrowserWindow> {
@@ -178,9 +183,64 @@ export function focusMainWindow(): boolean {
   return false
 }
 
+export async function createSettingsWindow(): Promise<BrowserWindow> {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show()
+    settingsWindow.focus()
+    return settingsWindow
+  }
+
+  settingsWindow = new BrowserWindow({
+    title: 'Alice Settings',
+    icon: path.join(getVitePublic(), 'app_logo.png'),
+    width: 900,
+    height: 700,
+    minWidth: 600,
+    minHeight: 500,
+    frame: false,
+    resizable: true,
+    alwaysOnTop: false,
+    parent: win,
+    modal: false,
+    backgroundColor: '#1f2937',
+    webPreferences: {
+      preload: getPreloadPath(),
+      offscreen: false,
+      backgroundThrottling: false,
+    },
+  })
+
+  const arg = 'settings'
+  if (VITE_DEV_SERVER_URL) {
+    await settingsWindow.loadURL(`${VITE_DEV_SERVER_URL}#${arg}`)
+  } else {
+    await settingsWindow.loadFile(getIndexHtmlPath(), { hash: arg })
+  }
+
+  settingsWindow.on('closed', () => {
+    settingsWindow = null
+  })
+
+  settingsWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('https:') || url.startsWith('http:')) {
+      shell.openExternal(url)
+    }
+    return { action: 'deny' }
+  })
+
+  return settingsWindow
+}
+
+export function closeSettingsWindow(): void {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close()
+  }
+}
+
 export function cleanupWindows(): void {
   win = null
   overlayWindow = null
+  settingsWindow = null
 }
 
 export function registerCustomProtocol(generatedImagesPath: string): void {

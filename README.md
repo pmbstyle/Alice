@@ -1,5 +1,7 @@
 # Alice
 
+<img src="https://badgen.net/github/license/pmbstyle/Alice"> <img src="https://badgen.net/github/release/pmbstyle/Alice/stable"> <img src="https://badgen.net/static/Vue/3.4/green"> <img src="https://badgen.net/static/Electron/28.3/blue"> <img src="https://badgen.net/static/Go/1.23/cyan">
+
 Say "Hi" to Alice 👋, your open-source AI companion designed to live on your desktop.
 
 Alice brings together voice interaction, intelligent context awareness, powerful tooling, and a friendly personality to assist you with everything from daily tasks to deeper creative work. She’s more than a chatbot, she’s built to feel present, responsive, emotionally engaging, and deeply useful.

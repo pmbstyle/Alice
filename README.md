@@ -1,6 +1,6 @@
 # Alice
 
-<img src="https://badgen.net/github/license/pmbstyle/Alice"> <img src="https://badgen.net/github/release/pmbstyle/Alice/stable"> <img src="https://badgen.net/static/Vue/3.4/green"> <img src="https://badgen.net/static/Electron/28.3/blue"> <img src="https://badgen.net/static/Go/1.23/cyan">
+<img src="https://badgen.net/github/license/pmbstyle/Alice"> <img src="https://badgen.net/github/release/pmbstyle/Alice/stable"> <img src="https://img.shields.io/github/downloads/pmbstyle/Alice/total">
 
 Say "Hi" to Alice 👋, your open-source AI companion designed to live on your desktop.
 

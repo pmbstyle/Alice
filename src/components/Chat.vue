@@ -1,5 +1,5 @@
 <template>
-  <div class="flex-1 pr-2" @click="handleChatClick">
+  <div class="flex-1 pr-2">
     <transition-group name="list" tag="div">
       <div
         class="chat mb-2"
@@ -19,6 +19,7 @@
             'chat-bubble-info': message.role === 'system',
           }"
           v-html="getDisplayableMessageContent(message)"
+          @click="handleChatClick"
         ></div>
       </div>
     </transition-group>
@@ -208,6 +209,7 @@ const getDisplayableMessageContent = (message: ChatMessage): string => {
 const handleChatClick = (event: MouseEvent) => {
   let targetElement = event.target as HTMLElement
 
+  // Handle generated image clicks
   if (
     targetElement.tagName === 'IMG' &&
     targetElement.classList.contains('generated-alice-image')
@@ -224,6 +226,7 @@ const handleChatClick = (event: MouseEvent) => {
     }
   }
 
+  // Handle link clicks
   for (
     let i = 0;
     i < 3 && targetElement && targetElement !== event.currentTarget;
@@ -237,9 +240,22 @@ const handleChatClick = (event: MouseEvent) => {
           href.startsWith('https://') ||
           href.startsWith('mailto:'))
       ) {
-        console.log(
-          `Clicked on a standard link: ${href}. Electron's default handler should open it.`
-        )
+        event.preventDefault()
+        window.ipcRenderer
+          .invoke('electron:open-path', { target: href })
+          .then(result => {
+            if (!result.success) {
+              console.error(
+                "Failed to open external link via IPC ('electron:open-path'):",
+                result.message
+              )
+              window.open(href, '_blank', 'noopener,noreferrer')
+            }
+          })
+          .catch(err => {
+            console.error("Error invoking 'electron:open-path' for link:", err)
+            window.open(href, '_blank', 'noopener,noreferrer')
+          })
         return
       }
     }

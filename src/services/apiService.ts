@@ -1158,7 +1158,7 @@ export const transcribeWithOpenAI = async (
 }
 
 export const createEmbedding = async (textInput: any): Promise<number[]> => {
-  const settings = useSettingsStore().settings
+  const settings = useSettingsStore().config
   let textToEmbed = ''
 
   if (typeof textInput === 'string') {

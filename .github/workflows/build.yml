@@ -100,6 +100,20 @@ jobs:
         run: mkdir -p resources/backend
         shell: bash
 
+      - name: Install build dependencies
+        run: |
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential
+          elif [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Windows has build tools available by default
+            echo "Using Windows build tools"
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            # macOS has build tools available via Xcode Command Line Tools
+            echo "Using macOS build tools"
+          fi
+        shell: bash
+
       - name: Build Go Backend and Download Models
         run: npm run build:go
         shell: bash

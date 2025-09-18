@@ -12,6 +12,7 @@ import newTabIcon from '../assets/images/new-tab.svg'
 import heartIcon from '../assets/images/heart.svg'
 import pdfIcon from '../assets/images/pdf.svg'
 import infoIcon from '../assets/images/info.svg'
+import appLogo from '../assets/images/app_logo.png'
 
 export {
   bg,
@@ -28,4 +29,5 @@ export {
   heartIcon,
   pdfIcon,
   infoIcon,
+  appLogo,
 }

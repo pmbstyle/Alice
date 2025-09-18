@@ -40,6 +40,8 @@ import {
   hideOverlay,
   focusMainWindow,
   getRendererDist,
+  createSettingsWindow,
+  closeSettingsWindow,
 } from './windowManager'
 import {
   registerMicrophoneToggleHotkey,
@@ -390,6 +392,59 @@ export function registerIPCHandlers(): void {
 
   ipcMain.handle('focus-main-window', () => {
     return focusMainWindow()
+  })
+
+  // Settings window management
+  ipcMain.handle('settings-window:open', async () => {
+    try {
+      await createSettingsWindow()
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC settings-window:open] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('settings-window:close', () => {
+    try {
+      closeSettingsWindow()
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC settings-window:close] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Notify main window about settings changes
+  ipcMain.handle('settings:notify-main-window', (event, data) => {
+    try {
+      const mainWindow = getMainWindow()
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('settings-changed', data)
+        return { success: true }
+      }
+      return { success: false, error: 'Main window not available' }
+    } catch (error: any) {
+      console.error('[IPC settings:notify-main-window] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // App restart
+  ipcMain.handle('app:restart', async () => {
+    try {
+      app.relaunch()
+      app.exit(0)
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC app:restart] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  // Check if app is packaged
+  ipcMain.handle('app:is-packaged', () => {
+    return app.isPackaged
   })
 
   // Settings management

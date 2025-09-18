@@ -15,22 +15,26 @@ on:
 jobs:
   build-go:
     name: Build Go Backend
-    runs-on: ubuntu-latest
     strategy:
       matrix:
         include:
-          - goos: windows
+          - os: windows-latest
+            goos: windows
             goarch: amd64
             output: alice-backend.exe
-          - goos: darwin
+          - os: macos-13
+            goos: darwin
             goarch: amd64
             output: alice-backend
-          - goos: darwin
+          - os: macos-14
+            goos: darwin
             goarch: arm64
             output: alice-backend
-          - goos: linux
+          - os: ubuntu-latest
+            goos: linux
             goarch: amd64
             output: alice-backend
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout code
@@ -53,6 +57,12 @@ jobs:
             ${{ runner.os }}-go-${{ matrix.goos }}-${{ matrix.goarch }}-
             ${{ runner.os }}-go-
 
+      - name: Install system dependencies
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential
+
       - name: Install dependencies
         working-directory: backend
         run: go mod download
@@ -74,14 +84,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
           CGO_ENABLED: 1
         run: |
-          # Install cross-compilation tools if needed
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            sudo apt-get update
-            sudo apt-get install -y gcc-mingw-w64
-            export CC=x86_64-w64-mingw32-gcc
-            export CXX=x86_64-w64-mingw32-g++
-          fi
-
+          echo "Building Go backend for ${{ matrix.goos }}/${{ matrix.goarch }} on ${{ matrix.os }}..."
           go build -v -ldflags="-s -w" -o ${{ matrix.output }} .
 
       - name: Test binary

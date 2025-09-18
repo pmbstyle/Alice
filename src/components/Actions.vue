@@ -105,13 +105,8 @@
           class="dropdown-content menu bg-base-200 bg-opacity-80 rounded-box z-[1] w-36 p-2 shadow"
         >
           <li>
-            <a @click="!isConfigState ? changeSidebarView('settings') : null"
+            <a @click="!isConfigState ? openSettingsWindow() : null"
               >Settings</a
-            >
-          </li>
-          <li>
-            <a @click="!isConfigState ? changeSidebarView('memories') : null"
-              >Memories</a
             >
           </li>
           <li><a @click="closeWindow">Close app</a></li>
@@ -233,7 +228,17 @@ const closeWindow = () => {
   }
 }
 
-const changeSidebarView = (view: 'chat' | 'settings' | 'memories') => {
+const openSettingsWindow = async () => {
+  if (window.ipcRenderer) {
+    try {
+      await window.ipcRenderer.invoke('settings-window:open')
+    } catch (error) {
+      console.error('Failed to open settings window:', error)
+    }
+  }
+}
+
+const changeSidebarView = (view: 'chat' | 'settings') => {
   if (sideBarView.value === view && openSidebar.value) {
     toggleSidebar()
   } else if (sideBarView.value !== view || !openSidebar.value) {

@@ -29,6 +29,14 @@
         <button
           type="button"
           class="tab"
+          :class="{ 'tab-active': activeTab === 'memories' }"
+          @click="activeTab = 'memories'"
+        >
+          🧠 Memories
+        </button>
+        <button
+          type="button"
+          class="tab"
           :class="{ 'tab-active': activeTab === 'hotkeys' }"
           @click="activeTab = 'hotkeys'"
         >
@@ -92,6 +100,10 @@
           :session-approved-commands="settingsStore.sessionApprovedCommands"
           @remove-command="removeCommand"
         />
+
+        <MemoryManager
+          v-if="activeTab === 'memories'"
+        />
       </div>
 
       <div class="mt-8 flex flex-col sm:flex-row justify-center gap-4">
@@ -107,7 +119,7 @@
           {{
             settingsStore.isSaving
               ? 'Saving & Testing...'
-              : 'Save & Test Settings'
+              : 'Save & Reload'
           }}
         </button>
       </div>
@@ -201,6 +213,7 @@ import AssistantSettingsTab from './settings/AssistantSettingsTab.vue'
 import HotkeysTab from './settings/HotkeysTab.vue'
 import IntegrationsTab from './settings/IntegrationsTab.vue'
 import SecurityTab from './settings/SecurityTab.vue'
+import MemoryManager from './MemoryManager.vue'
 
 const appVersion = ref(import.meta.env.VITE_APP_VERSION || '')
 const settingsStore = useSettingsStore()
@@ -208,7 +221,7 @@ const conversationStore = useConversationStore()
 
 const currentSettings = ref<AliceSettings>({ ...settingsStore.config })
 const activeTab = ref<
-  'core' | 'assistant' | 'hotkeys' | 'integrations' | 'security'
+  'core' | 'assistant' | 'hotkeys' | 'integrations' | 'security' | 'memories'
 >('core')
 
 const isRefreshingModels = ref(false)
@@ -405,6 +418,21 @@ const handleSaveAndTestSettings = async () => {
   }
 
   await settingsStore.saveAndTestSettings()
+
+  if (window.ipcRenderer && window.location.hash === '#settings') {
+    try {
+      const success = !settingsStore.error && settingsStore.successMessage
+
+      await window.ipcRenderer.invoke('settings:notify-main-window', {
+        type: 'settings-saved',
+        success: success,
+        validationComplete: true,
+        settingsChanged: true
+      })
+    } catch (error) {
+      console.error('Failed to notify main window of settings changes:', error)
+    }
+  }
 }
 
 const removeCommand = async (command: string) => {

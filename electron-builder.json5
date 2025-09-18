@@ -26,6 +26,16 @@
       to: 'backend',
       filter: ['**/*'],
     },
+    {
+      from: 'backend/lib',
+      to: 'backend/lib',
+      filter: ['**/*'],
+    },
+    {
+      from: 'backend/models',
+      to: 'backend/models',
+      filter: ['**/*'],
+    },
   ],
   mac: {
     target: ['dmg'],

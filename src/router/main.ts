@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useSettingsStore } from '../stores/settingsStore'
-import { useGeneralStore } from '../stores/generalStore'
 import MainComponent from '../components/Main.vue'
 
 const routes = [
@@ -26,7 +25,6 @@ const router = createRouter({
 
 router.beforeEach(async (to, from, next) => {
   const settingsStore = useSettingsStore()
-  const generalStore = useGeneralStore()
 
   if (!settingsStore.initialLoadAttempted) {
     await settingsStore.loadSettings()
@@ -38,9 +36,8 @@ router.beforeEach(async (to, from, next) => {
     !settingsStore.areEssentialSettingsProvided
   ) {
     console.log(
-      'Router: Essential settings missing in production. Signaling sidebar to show settings.'
+      'Router: Essential settings missing in production. Will open settings window.'
     )
-    generalStore.sideBarView = 'settings'
   }
   next()
 })

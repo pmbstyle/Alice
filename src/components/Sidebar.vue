@@ -12,10 +12,6 @@
         @processRequest="$emit('processRequest')"
         v-if="sideBarView === 'chat'"
       />
-      <Settings
-        v-if="sideBarView === 'settings'"
-        @view-change="changeSidebarView"
-      />
       <MemoryManagerComponent v-if="sideBarView === 'memories'" />
 
       <div
@@ -51,7 +47,7 @@
           </button>
           <button
             v-if="generalStore.statusMessage.includes('Error:')"
-            @click="changeSidebarView('settings')"
+            @click="openSettingsWindow"
             class="mt-4 ml-2 btn btn-sm btn-info"
           >
             Check Settings
@@ -124,7 +120,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, nextTick, computed } from 'vue'
 import Chat from './Chat.vue'
-import Settings from './Settings.vue'
 import MemoryManagerComponent from './MemoryManager.vue'
 import { useGeneralStore } from '../stores/generalStore'
 import { useSettingsStore } from '../stores/settingsStore'
@@ -171,7 +166,17 @@ const clearAttachedFile = () => {
   }
 }
 
-const changeSidebarView = async (newView: 'chat' | 'settings') => {
+const openSettingsWindow = async () => {
+  if (window.ipcRenderer) {
+    try {
+      await window.ipcRenderer.invoke('settings-window:open')
+    } catch (error) {
+      console.error('Failed to open settings window:', error)
+    }
+  }
+}
+
+const changeSidebarView = async (newView: 'chat' | 'memories') => {
   sideBarView.value = newView
   if (newView === 'chat') {
     shouldAutoScroll.value = true // Ensure we scroll when switching to chat
@@ -270,9 +275,7 @@ onMounted(async () => {
     canInitializeAI && !conversationStore.isInitialized
 
   if (needsSettingsConfig) {
-    generalStore.openSidebar = true
-    resizeWindow(true)
-    changeSidebarView('settings')
+    openSettingsWindow()
     generalStore.setAudioState('CONFIG')
   } else if (aiNeedsInitialization) {
     generalStore.statusMessage = 'Initializing AI...'
@@ -323,7 +326,7 @@ onMounted(async () => {
 watch(
   () => settingsStore.successMessage,
   async newMessage => {
-    if (newMessage && sideBarView.value === 'settings') {
+    if (newMessage) {
       if (
         conversationStore.isInitialized &&
         settingsStore.areEssentialSettingsProvided
@@ -331,7 +334,11 @@ watch(
         settingsStore.successMessage = null
 
         setTimeout(() => {
+          // Ensure main window shows chat and close settings window
           changeSidebarView('chat')
+          if (window.ipcRenderer) {
+            window.ipcRenderer.invoke('settings-window:close').catch(console.error)
+          }
           if (generalStore.audioState === 'CONFIG') {
             if (generalStore.isRecordingRequested) {
               generalStore.setAudioState('LISTENING')
@@ -344,7 +351,7 @@ watch(
         console.warn(
           '[Sidebar] Settings saved (message: "',
           newMessage,
-          '"), but AI store initialization failed. Staying on settings page.'
+          '"), but AI store initialization failed.'
         )
       }
     }

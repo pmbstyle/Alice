@@ -5,14 +5,10 @@
 Say "Hi" to Alice 👋, your open-source AI companion designed to live on your desktop.
 
 Alice brings together voice interaction, intelligent context awareness, powerful tooling, and a friendly personality to assist you with everything from daily tasks to deeper creative work.
-Alice is more than a chatbot, she’s built to feel present, responsive, emotionally engaging, and deeply useful.
+Alice is more than a chatbot; she’s built to feel present, responsive, emotionally engaging, and deeply useful.
 
 <p align="center">
-  <img src="https://github.com/pmbstyle/Alice/blob/main/animation.gif?raw=true" alt="Alice Animation">
-</p>
-
-<p align="center">
-  <a href="https://www.youtube.com/watch?v=fDYUjh6UXqk"><img  alt="image" src="https://github.com/user-attachments/assets/ef5f01b6-376c-4730-8ac1-467d10947cce" /></a>
+  <a href="https://www.youtube.com/watch?v=fDYUjh6UXqk"><img  alt="image" src="https://github.com/user-attachments/assets/58959610-7d78-4573-bc38-88e9c3c18844" /></a>
 </p>
 
 ## ✨ Key Features

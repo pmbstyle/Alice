@@ -4,21 +4,24 @@
 
 Say "Hi" to Alice 👋, your open-source AI companion designed to live on your desktop.
 
-Alice brings together voice interaction, intelligent context awareness, powerful tooling, and a friendly personality to assist you with everything from daily tasks to deeper creative work. She’s more than a chatbot, she’s built to feel present, responsive, emotionally engaging, and deeply useful.
+Alice brings together voice interaction, intelligent context awareness, powerful tooling, and a friendly personality to assist you with everything from daily tasks to deeper creative work.
+Alice is more than a chatbot, she’s built to feel present, responsive, emotionally engaging, and deeply useful.
 
 <p align="center">
   <img src="https://github.com/pmbstyle/Alice/blob/main/animation.gif?raw=true" alt="Alice Animation">
 </p>
 
-
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=fDYUjh6UXqk"><img  alt="image" src="https://github.com/user-attachments/assets/ef5f01b6-376c-4730-8ac1-467d10947cce" /></a>
+</p>
 
 ## ✨ Key Features
 
 ### 💻 Local and Cloud use
 
-Alice designed to work with Cloud(OpenAI/OpenRouter) and Local LLMs (Ollama/LM Studio).
+Alice is designed to work with Cloud(OpenAI/OpenRouter) and Local LLMs (Ollama/LM Studio).
 Has built-in speech-to-text, text-to-speech, and embedding services.
-While the OpenAI cloud API is preferred and provides the best user experience, Alice can go **fully local** (experimental).
+While the OpenAI cloud API is preferred and provides the best user experience, Alice can also operate **fully locally** (experimental).
 
 ### 🗣️ Voice Interaction
 
@@ -37,13 +40,13 @@ While the OpenAI cloud API is preferred and provides the best user experience, A
 
 * Screenshot interpretation using Vision API
 * Image generation using `gpt-image-1`
-* Animated video states (standby / speaking / thinking)
+* Animated video states (standby/speaking/thinking)
 
 ### 🪄 Computer Use Tools
 
 Alice can now interact with your local system with user-approved permissions:
 
-* 📂 File system browsing (e.g. listing folders)
+* 📂 File system browsing (e.g., listing folders)
 * 💻 Shell command execution (`ls`, `mv`, `mkdir`, etc)
 * 🔐 Granular command approvals:
 

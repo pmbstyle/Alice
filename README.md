@@ -8,7 +8,9 @@ Alice brings together voice interaction, intelligent context awareness, powerful
 Alice is more than a chatbot; she’s built to feel present, responsive, emotionally engaging, and deeply useful.
 
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=fDYUjh6UXqk"><img  alt="image" src="https://github.com/user-attachments/assets/58959610-7d78-4573-bc38-88e9c3c18844" /></a>
+  <a href="https://www.youtube.com/watch?v=fDYUjh6UXqk">
+    <img width="817" height="504" alt="AliceVideo" src="https://github.com/user-attachments/assets/9e0ffee2-198a-43a0-9f9a-a003d221e31d" />
+  </a>
 </p>
 
 ## ✨ Key Features

@@ -37,7 +37,7 @@
     "@vitejs/plugin-vue": "^5.0.4",
     "@types/dompurify": "^3.0.5",
     "autoprefixer": "^10.4.21",
-    "axios": "^1.10.0",
+    "axios": "^1.12.2",
     "daisyui": "^5.0.50",
     "dotenv": "^16.4.5",
     "electron": "28.3.3",

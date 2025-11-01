@@ -34,7 +34,7 @@
     "format": "prettier --write ."
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.0.4",
+    "@vitejs/plugin-vue": "^6.0.1",
     "@types/dompurify": "^3.0.5",
     "autoprefixer": "^10.4.21",
     "axios": "^1.12.2",

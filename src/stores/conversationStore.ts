@@ -8,6 +8,8 @@ import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
 import eventBus from '../utils/eventBus'
 import { createStreamHandler } from '../modules/conversation/streamHandler'
+import { createToolCallHandler } from '../modules/conversation/toolCallHandler'
+import type { ToolCallHandlerDependencies } from '../modules/conversation/types'
 
 import type { AppChatMessageContentPart } from '../types/chat'
 export type { AppChatMessageContentPart }
@@ -424,81 +426,171 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  const createStreamDependencies = (placeholderTempId: string) => ({
-    appendAssistantDelta: delta =>
-      generalStore.appendMessageDeltaByTempId(placeholderTempId, delta),
-    setAssistantResponseId: responseId => {
-      currentResponseId.value = responseId
-      generalStore.updateMessageApiResponseIdByTempId(
-        placeholderTempId,
-        responseId
-      )
-    },
-    setAssistantMessageId: messageId => {
-      generalStore.updateMessageApiIdByTempId(placeholderTempId, messageId)
-    },
-    addToolCall: toolCall =>
-      generalStore.addToolCallToMessageByTempId(placeholderTempId, toolCall),
-    handleToolCall: async toolCall => {
-      await handleToolCall(toolCall, currentResponseId.value)
-    },
-    handleImagePartial: async (generationId, base64, partialIndex) => {
-      try {
-        const saveResult = await window.ipcRenderer.invoke(
-          'save-image-from-base64',
-          {
-            base64Data: base64,
-            fileName: `partial_${generationId}_${partialIndex}_${Date.now()}.png`,
-            isPartial: true,
-          }
-        )
+  const toolCallHandler = createToolCallHandler(
+    createToolCallDependencies()
+  )
 
-        if (saveResult.success) {
-          updateImageContentPartByGenerationId(
-            placeholderTempId,
-            generationId,
-            saveResult.relativePath,
-            saveResult.absolutePath,
-            true,
-            partialIndex
-          )
+  function createToolCallDependencies(): ToolCallHandlerDependencies {
+    return {
+      getToolStatusMessage: (toolName, args) =>
+        getToolStatusMessage(toolName, args),
+      addSystemMessage: messageText => {
+        generalStore.addMessageToHistory({
+          role: 'system',
+          content: [{ type: 'app_text', text: messageText }],
+        })
+      },
+      addToolMessage: ({ toolCallId, functionName, content }) => {
+        generalStore.addMessageToHistory({
+          role: 'tool',
+          tool_call_id: toolCallId,
+          name: functionName,
+          content,
+        })
+      },
+      executeFunction: (functionName, args) =>
+        executeFunction(functionName, args, settingsStore.config),
+      buildApiInput,
+      createAssistantPlaceholder: () => {
+        const placeholder: ChatMessage = {
+          role: 'assistant',
+          content: [{ type: 'app_text', text: '' }],
         }
-      } catch (error) {
-        console.error('Failed to save partial image:', error)
-      }
-    },
-    handleImageFinal: async (generationId, base64) => {
-      try {
-        const saveResult = await window.ipcRenderer.invoke(
-          'save-image-from-base64',
-          {
-            base64Data: base64,
-            fileName: `final_${generationId}_${Date.now()}.png`,
-            isPartial: false,
-          }
-        )
+        return generalStore.addMessageToHistory(placeholder)
+      },
+      createAbortController: () => new AbortController(),
+      setLlmAbortController: controller => {
+        llmAbortController.value = controller
+      },
+      createOpenAIResponse: (
+        input,
+        responseId,
+        isContinuationAfterTool,
+        systemPrompt,
+        signal
+      ) =>
+        api.createOpenAIResponse(
+          input,
+          responseId,
+          isContinuationAfterTool,
+          systemPrompt,
+          signal
+        ),
+      processStream,
+      parseErrorMessage: error => parseErrorMessage(error),
+      updateMessageContent: (placeholderTempId, content) =>
+        generalStore.updateMessageContentByTempId(
+          placeholderTempId,
+          content
+        ),
+      setAudioState: state => setAudioState(state as AudioState),
+      isRecordingRequested: () => isRecordingRequested.value,
+      getAssistantSystemPrompt: () =>
+        settingsStore.config.assistantSystemPrompt,
+      getCurrentResponseId: () => currentResponseId.value,
+      setCurrentResponseId: responseId => {
+        currentResponseId.value = responseId
+      },
+      logError: (...args: any[]) => console.error(...args),
+      logInfo: (...args: any[]) => console.log(...args),
+    }
+  }
 
-        if (saveResult.success) {
-          updateImageContentPartByGenerationId(
-            placeholderTempId,
-            generationId,
-            saveResult.relativePath,
-            saveResult.absolutePath,
-            false
+  function createStreamDependencies(placeholderTempId: string) {
+    return {
+      appendAssistantDelta: (delta: string) =>
+        generalStore.appendMessageDeltaByTempId(
+          placeholderTempId,
+          delta
+        ),
+      setAssistantResponseId: (responseId: string) => {
+        currentResponseId.value = responseId
+        generalStore.updateMessageApiResponseIdByTempId(
+          placeholderTempId,
+          responseId
+        )
+      },
+      setAssistantMessageId: (messageId: string) => {
+        generalStore.updateMessageApiIdByTempId(
+          placeholderTempId,
+          messageId
+        )
+      },
+      addToolCall: (toolCall: any) =>
+        generalStore.addToolCallToMessageByTempId(
+          placeholderTempId,
+          toolCall
+        ),
+      handleToolCall: async (
+        toolCall: OpenAI.Responses.FunctionCall
+      ) => {
+        await toolCallHandler.handleToolCall({
+          toolCall,
+          originalResponseIdForTool: currentResponseId.value,
+        })
+      },
+      handleImagePartial: async (
+        generationId: string,
+        base64: string,
+        partialIndex: number
+      ) => {
+        try {
+          const saveResult = await window.ipcRenderer.invoke(
+            'save-image-from-base64',
+            {
+              base64Data: base64,
+              fileName: `partial_${generationId}_${partialIndex}_${Date.now()}.png`,
+              isPartial: true,
+            }
           )
+
+          if (saveResult.success) {
+            updateImageContentPartByGenerationId(
+              placeholderTempId,
+              generationId,
+              saveResult.relativePath,
+              saveResult.absolutePath,
+              true,
+              partialIndex
+            )
+          }
+        } catch (error) {
+          console.error('Failed to save partial image:', error)
         }
-      } catch (error) {
-        console.error('Failed to save final image:', error)
-      }
-    },
-    enqueueSpeech,
-    setAudioState: state => setAudioState(state as AudioState),
-    getAudioState: () => audioState.value,
-    handleStreamError: error => {
-      if ((error as any)?.name === 'AbortError') return
-      console.error('Error processing stream:', error)
-    },
-  })
+      },
+      handleImageFinal: async (generationId: string, base64: string) => {
+        try {
+          const saveResult = await window.ipcRenderer.invoke(
+            'save-image-from-base64',
+            {
+              base64Data: base64,
+              fileName: `final_${generationId}_${Date.now()}.png`,
+              isPartial: false,
+            }
+          )
+
+          if (saveResult.success) {
+            updateImageContentPartByGenerationId(
+              placeholderTempId,
+              generationId,
+              saveResult.relativePath,
+              saveResult.absolutePath,
+              false
+            )
+          }
+        } catch (error) {
+          console.error('Failed to save final image:', error)
+        }
+      },
+      enqueueSpeech,
+      setAudioState: (state: string) => setAudioState(state as AudioState),
+      getAudioState: () => audioState.value,
+      handleStreamError: (error: unknown) => {
+        if ((error as any)?.name === 'AbortError') return
+        console.error('Error processing stream:', error)
+      },
+    }
+  }
 
   const finalizeStreamProcessing = (
     streamEndedNormally: boolean,
@@ -525,11 +617,11 @@ export const useConversationStore = defineStore('conversation', () => {
     }, 250)
   }
 
-  const processStream = async (
+  async function processStream(
     stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
     placeholderTempId: string,
     isContinuationAfterTool: boolean
-  ) => {
+  ) {
     const handler = createStreamHandler(
       createStreamDependencies(placeholderTempId)
     )
@@ -546,107 +638,6 @@ export const useConversationStore = defineStore('conversation', () => {
 
     return result
   }
-
-  async function handleToolCall(
-    toolCall: OpenAI.Responses.FunctionCall,
-    originalResponseIdForTool: string | null
-  ) {
-    const functionName = toolCall.name
-    const functionArgs = toolCall.arguments as object
-
-    const toolStatusMessage = getToolStatusMessage(functionName, functionArgs)
-    generalStore.addMessageToHistory({
-      role: 'system',
-      content: [{ type: 'app_text', text: toolStatusMessage }],
-    })
-
-    let resultString: string
-    try {
-      resultString = await executeFunction(
-        functionName,
-        functionArgs,
-        settingsStore.config
-      )
-    } catch (error) {
-      console.error('Tool execution failed:', error)
-      resultString = `Error: Tool execution failed - ${error.message || 'Unknown error'}`
-    }
-
-    generalStore.addMessageToHistory({
-      role: 'tool',
-      tool_call_id: toolCall.call_id,
-      name: functionName,
-      content: resultString,
-    })
-
-    const isNewChainAfterTool = currentResponseId.value === null
-    const nextApiInput = await buildApiInput(isNewChainAfterTool)
-
-    const afterToolPlaceholder: ChatMessage = {
-      role: 'assistant',
-      content: [{ type: 'app_text', text: '' }],
-    }
-    const afterToolPlaceholderTempId =
-      generalStore.addMessageToHistory(afterToolPlaceholder)
-
-    llmAbortController.value = new AbortController()
-    try {
-      const continuedStream = await api.createOpenAIResponse(
-        nextApiInput,
-        originalResponseIdForTool,
-        true,
-        settingsStore.config.assistantSystemPrompt,
-        llmAbortController.value.signal
-      )
-      await processStream(
-        continuedStream,
-        afterToolPlaceholderTempId,
-        true
-      )
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error in continued stream after tool call:', error)
-
-        if (
-          error.message?.includes('Previous response with id') &&
-          error.message?.includes('not found')
-        ) {
-          console.log(
-            '[Error Recovery] Previous response ID not found in tool continuation, clearing and starting new chain'
-          )
-          currentResponseId.value = null
-
-          try {
-            console.log(
-              '[Error Recovery] Retrying tool continuation without previous response ID'
-            )
-            const retryStream = await api.createOpenAIResponse(
-              nextApiInput,
-              null,
-              true,
-              settingsStore.config.assistantSystemPrompt,
-              llmAbortController.value.signal
-            )
-            await processStream(
-              retryStream,
-              afterToolPlaceholderTempId,
-              true
-            )
-            return
-          } catch (retryError: any) {
-            console.error('[Error Recovery] Retry also failed:', retryError)
-          }
-        }
-
-        const errorContent = parseErrorMessage(error)
-        generalStore.updateMessageContentByTempId(afterToolPlaceholderTempId, [
-          errorContent,
-        ])
-        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-      }
-    }
-  }
-
   const chat = async () => {
     if (!isInitialized.value) {
       console.warn('Conversation store not initialized.')

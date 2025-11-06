@@ -2,6 +2,10 @@
  * Lifecycle events emitted while we consume the streaming response from the LLM.
  * The store will translate these events into Pinia state updates.
  */
+import type OpenAI from 'openai'
+import type { AppChatMessageContentPart } from '../../types/chat'
+import type { AudioState } from '../../stores/generalStore'
+
 export type ConversationStreamEvent =
   | {
       type: 'response-created'
@@ -88,4 +92,52 @@ export interface ConversationStreamHandler {
     stream: AsyncIterable<any>
     options?: StreamProcessingOptions
   }): Promise<StreamProcessingResult>
+}
+
+export interface ToolCallHandlerDependencies {
+  getToolStatusMessage(toolName: string, args?: object): string
+  addSystemMessage(messageText: string): void
+  addToolMessage(params: {
+    toolCallId: string
+    functionName: string
+    content: string
+  }): void
+  executeFunction(functionName: string, args: object): Promise<string>
+  buildApiInput(
+    isNewChainAfterTool: boolean
+  ): Promise<OpenAI.Responses.Request.InputItemLike[]>
+  createAssistantPlaceholder(): string
+  createAbortController(): AbortController
+  setLlmAbortController(controller: AbortController): void
+  createOpenAIResponse(
+    input: OpenAI.Responses.Request.InputItemLike[],
+    responseId: string | null,
+    isContinuationAfterTool: boolean,
+    systemPrompt: string,
+    signal: AbortSignal
+  ): Promise<AsyncIterable<OpenAI.Responses.StreamEvent>>
+  processStream(
+    stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
+    placeholderTempId: string,
+    isContinuationAfterTool: boolean
+  ): Promise<void>
+  parseErrorMessage(error: unknown): AppChatMessageContentPart
+  updateMessageContent(
+    placeholderTempId: string,
+    content: AppChatMessageContentPart[]
+  ): void
+  setAudioState(state: AudioState): void
+  isRecordingRequested(): boolean
+  getAssistantSystemPrompt(): string
+  getCurrentResponseId(): string | null
+  setCurrentResponseId(responseId: string | null): void
+  logError(...args: any[]): void
+  logInfo(...args: any[]): void
+}
+
+export interface ToolCallHandler {
+  handleToolCall(params: {
+    toolCall: OpenAI.Responses.FunctionCall
+    originalResponseIdForTool: string | null
+  }): Promise<void>
 }

@@ -3,9 +3,11 @@ import { defineStore, storeToRefs } from 'pinia'
 import type OpenAI from 'openai'
 import * as api from '../services/apiService'
 import { useGeneralStore } from './generalStore'
+import type { AudioState } from './generalStore'
 import { useSettingsStore } from './settingsStore'
 import { executeFunction } from '../utils/functionCaller'
 import eventBus from '../utils/eventBus'
+import { createStreamHandler } from '../modules/conversation/streamHandler'
 
 import type { AppChatMessageContentPart } from '../types/chat'
 export type { AppChatMessageContentPart }
@@ -18,7 +20,7 @@ export interface ChatMessage {
   content: string | AppChatMessageContentPart[]
   tool_call_id?: string
   name?: string
-  tool_calls?: OpenAI.Responses.FunctionCall[]
+  tool_calls?: any[]
 }
 
 interface RawMessageForSummarization {
@@ -403,222 +405,146 @@ export const useConversationStore = defineStore('conversation', () => {
     return apiInput
   }
 
-  async function _processStreamLogic(
+  const enqueueSpeech = async (text: string) => {
+    if (!text.trim()) return
+
+    ttsAbortController.value = new AbortController()
+    try {
+      const ttsResponse = await api.ttsStream(
+        text,
+        ttsAbortController.value.signal
+      )
+      if (queueAudioForPlayback(ttsResponse) && audioState.value !== 'SPEAKING') {
+        setAudioState('SPEAKING')
+      }
+    } catch (error: any) {
+      if (error?.name !== 'AbortError') {
+        console.error('TTS stream creation failed:', error)
+      }
+    }
+  }
+
+  const createStreamDependencies = (placeholderTempId: string) => ({
+    appendAssistantDelta: delta =>
+      generalStore.appendMessageDeltaByTempId(placeholderTempId, delta),
+    setAssistantResponseId: responseId => {
+      currentResponseId.value = responseId
+      generalStore.updateMessageApiResponseIdByTempId(
+        placeholderTempId,
+        responseId
+      )
+    },
+    setAssistantMessageId: messageId => {
+      generalStore.updateMessageApiIdByTempId(placeholderTempId, messageId)
+    },
+    addToolCall: toolCall =>
+      generalStore.addToolCallToMessageByTempId(placeholderTempId, toolCall),
+    handleToolCall: async toolCall => {
+      await handleToolCall(toolCall, currentResponseId.value)
+    },
+    handleImagePartial: async (generationId, base64, partialIndex) => {
+      try {
+        const saveResult = await window.ipcRenderer.invoke(
+          'save-image-from-base64',
+          {
+            base64Data: base64,
+            fileName: `partial_${generationId}_${partialIndex}_${Date.now()}.png`,
+            isPartial: true,
+          }
+        )
+
+        if (saveResult.success) {
+          updateImageContentPartByGenerationId(
+            placeholderTempId,
+            generationId,
+            saveResult.relativePath,
+            saveResult.absolutePath,
+            true,
+            partialIndex
+          )
+        }
+      } catch (error) {
+        console.error('Failed to save partial image:', error)
+      }
+    },
+    handleImageFinal: async (generationId, base64) => {
+      try {
+        const saveResult = await window.ipcRenderer.invoke(
+          'save-image-from-base64',
+          {
+            base64Data: base64,
+            fileName: `final_${generationId}_${Date.now()}.png`,
+            isPartial: false,
+          }
+        )
+
+        if (saveResult.success) {
+          updateImageContentPartByGenerationId(
+            placeholderTempId,
+            generationId,
+            saveResult.relativePath,
+            saveResult.absolutePath,
+            false
+          )
+        }
+      } catch (error) {
+        console.error('Failed to save final image:', error)
+      }
+    },
+    enqueueSpeech,
+    setAudioState: state => setAudioState(state as AudioState),
+    getAudioState: () => audioState.value,
+    handleStreamError: error => {
+      if ((error as any)?.name === 'AbortError') return
+      console.error('Error processing stream:', error)
+    },
+  })
+
+  const finalizeStreamProcessing = (
+    streamEndedNormally: boolean,
+    isContinuationAfterTool: boolean
+  ) => {
+    if (!streamEndedNormally) return
+
+    const finalizationInterval = setInterval(() => {
+      if (generalStore.audioPlayer && !generalStore.audioPlayer.paused) return
+      if (generalStore.audioQueue.length > 0) return
+
+      if (
+        audioState.value === 'SPEAKING' ||
+        audioState.value === 'WAITING_FOR_RESPONSE'
+      ) {
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
+      }
+
+      clearInterval(finalizationInterval)
+
+      if (!isContinuationAfterTool) {
+        triggerConversationSummarization()
+      }
+    }, 250)
+  }
+
+  const processStream = async (
     stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
     placeholderTempId: string,
     isContinuationAfterTool: boolean
-  ): Promise<{ streamEndedNormally: boolean }> {
-    let currentSentence = ''
-    let currentAssistantApiMessageId: string | null = null
-    const functionCallArgsBuffer: Record<string, string> = {}
-    let streamEndedNormally = true
+  ) => {
+    const handler = createStreamHandler(
+      createStreamDependencies(placeholderTempId)
+    )
 
-    const sendToTTS = async (text: string) => {
-      if (text.trim()) {
-        ttsAbortController.value = new AbortController()
-        try {
-          const ttsResponse = await api.ttsStream(
-            text,
-            ttsAbortController.value.signal
-          )
-          if (
-            queueAudioForPlayback(ttsResponse) &&
-            audioState.value !== 'SPEAKING'
-          ) {
-            setAudioState('SPEAKING')
-          }
-        } catch (error: any) {
-          if (error.name !== 'AbortError') {
-            console.error('TTS stream creation failed:', error)
-          }
-        }
-      }
-    }
+    const result = await handler.process({
+      stream,
+      options: { isContinuationAfterTool },
+    })
 
-    try {
-      for await (const event of stream) {
-        if (event.type === 'response.created') {
-          currentResponseId.value = event.response.id
-          generalStore.updateMessageApiResponseIdByTempId(
-            placeholderTempId,
-            event.response.id
-          )
-        }
+    finalizeStreamProcessing(
+      result.streamEndedNormally,
+      isContinuationAfterTool
+    )
 
-        if (
-          event.type === 'response.output_item.added' ||
-          event.type === 'response.output_item.updated'
-        ) {
-          if (
-            event.item.type === 'message' &&
-            event.item.role === 'assistant'
-          ) {
-            currentAssistantApiMessageId = event.item.id
-            if (currentAssistantApiMessageId) {
-              generalStore.updateMessageApiIdByTempId(
-                placeholderTempId,
-                currentAssistantApiMessageId
-              )
-            }
-          }
-        }
-
-        if (
-          event.type === 'response.output_text.delta' &&
-          event.item_id === currentAssistantApiMessageId
-        ) {
-          const textChunk = event.delta || ''
-          currentSentence += textChunk
-          generalStore.appendMessageDeltaByTempId(placeholderTempId, textChunk)
-          if (textChunk.match(/[.!?]\s*$/) || textChunk.includes('\n')) {
-            await sendToTTS(currentSentence)
-            currentSentence = ''
-          }
-        }
-
-        if (event.type === 'response.function_call_arguments.delta') {
-          const itemId = event.item_id
-          functionCallArgsBuffer[itemId] =
-            (functionCallArgsBuffer[itemId] || '') + (event.delta || '')
-        }
-
-        if (
-          event.type === 'response.output_item.done' &&
-          event.item.type === 'function_call'
-        ) {
-          const functionCallPayload =
-            event.item as OpenAI.Responses.FunctionCall
-          let args = {}
-          try {
-            args = JSON.parse(
-              functionCallArgsBuffer[functionCallPayload.id] || '{}'
-            )
-          } catch (e) {
-            console.error('Error parsing function call arguments:', e)
-          }
-          functionCallPayload.arguments = args
-          generalStore.addToolCallToMessageByTempId(
-            placeholderTempId,
-            functionCallPayload
-          )
-          await handleToolCall(functionCallPayload, currentResponseId.value)
-          return { streamEndedNormally: true }
-        }
-
-        if (event.type === 'response.image_generation_call.in_progress') {
-          console.log('Image generation started:', event.item_id)
-          setAudioState('GENERATING_IMAGE')
-        }
-
-        if (event.type === 'response.image_generation_call.partial_image') {
-          const imageGenerationId = event.item_id
-          const base64Content = event.partial_image_b64
-          const partialIndex = event.partial_image_index + 1
-
-          console.log(
-            `Received partial image ${partialIndex} for generation ${imageGenerationId}`
-          )
-
-          try {
-            const saveResult = await window.ipcRenderer.invoke(
-              'save-image-from-base64',
-              {
-                base64Data: base64Content,
-                fileName: `partial_${imageGenerationId}_${partialIndex}_${Date.now()}.png`,
-                isPartial: true,
-              }
-            )
-
-            if (saveResult.success) {
-              updateImageContentPartByGenerationId(
-                placeholderTempId,
-                imageGenerationId,
-                saveResult.relativePath,
-                saveResult.absolutePath,
-                true,
-                partialIndex
-              )
-            }
-          } catch (error) {
-            console.error('Failed to save partial image:', error)
-          }
-        }
-
-        if (
-          event.type === 'response.output_item.done' &&
-          event.item?.type === 'image_generation_call'
-        ) {
-          const imageItem = event.item
-          if (imageItem.result) {
-            const imageGenerationId = imageItem.id
-            const finalBase64Content = imageItem.result
-
-            console.log(
-              `Received final image for generation ${imageGenerationId}`
-            )
-
-            try {
-              const saveResult = await window.ipcRenderer.invoke(
-                'save-image-from-base64',
-                {
-                  base64Data: finalBase64Content,
-                  fileName: `final_${imageGenerationId}_${Date.now()}.png`,
-                  isPartial: false,
-                }
-              )
-
-              if (saveResult.success) {
-                updateImageContentPartByGenerationId(
-                  placeholderTempId,
-                  imageGenerationId,
-                  saveResult.relativePath,
-                  saveResult.absolutePath,
-                  false
-                )
-              }
-            } catch (error) {
-              console.error('Failed to save final image:', error)
-            }
-
-            if (audioState.value === 'GENERATING_IMAGE') {
-              setAudioState('WAITING_FOR_RESPONSE')
-            }
-          }
-        }
-
-        if (event.type === 'error') {
-          streamEndedNormally = false
-          console.error('Streaming error event:', event.error)
-          break
-        }
-      }
-      await sendToTTS(currentSentence)
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        streamEndedNormally = false
-        console.error('Error processing stream:', error)
-      }
-    } finally {
-      if (streamEndedNormally) {
-        const finalizationInterval = setInterval(() => {
-          if (generalStore.audioPlayer && !generalStore.audioPlayer.paused)
-            return
-          if (generalStore.audioQueue.length > 0) return
-
-          if (
-            audioState.value === 'SPEAKING' ||
-            audioState.value === 'WAITING_FOR_RESPONSE'
-          ) {
-            setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-          }
-          clearInterval(finalizationInterval)
-          if (!isContinuationAfterTool) {
-            triggerConversationSummarization()
-          }
-        }, 250)
-      }
-    }
-    return { streamEndedNormally }
+    return result
   }
 
   async function handleToolCall(
@@ -672,7 +598,7 @@ export const useConversationStore = defineStore('conversation', () => {
         settingsStore.config.assistantSystemPrompt,
         llmAbortController.value.signal
       )
-      await _processStreamLogic(
+      await processStream(
         continuedStream,
         afterToolPlaceholderTempId,
         true
@@ -701,7 +627,7 @@ export const useConversationStore = defineStore('conversation', () => {
               settingsStore.config.assistantSystemPrompt,
               llmAbortController.value.signal
             )
-            await _processStreamLogic(
+            await processStream(
               retryStream,
               afterToolPlaceholderTempId,
               true
@@ -831,7 +757,7 @@ export const useConversationStore = defineStore('conversation', () => {
         finalInstructions,
         llmAbortController.value.signal
       )
-      await _processStreamLogic(streamResult, placeholderTempId, false)
+      await processStream(streamResult, placeholderTempId, false)
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error starting OpenAI response stream:', error)
@@ -1053,7 +979,7 @@ export const useConversationStore = defineStore('conversation', () => {
         finalInstructions,
         llmAbortController.value.signal
       )
-      await _processStreamLogic(streamResult, placeholderTempId, false)
+      await processStream(streamResult, placeholderTempId, false)
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error('Error starting OpenAI response stream:', error)

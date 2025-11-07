@@ -22,3 +22,14 @@ export interface AppChatMessageContentPart {
   errorParam?: string
   originalError?: any
 }
+
+export interface ChatMessage {
+  local_id_temp?: string
+  api_message_id?: string
+  api_response_id?: string
+  role: 'user' | 'assistant' | 'system' | 'developer' | 'tool'
+  content: string | AppChatMessageContentPart[]
+  tool_call_id?: string
+  name?: string
+  tool_calls?: any[]
+}

@@ -68,7 +68,7 @@ import {
 import type {
   ChatMessage,
   AppChatMessageContentPart,
-} from '../stores/conversationStore'
+} from '../types/chat'
 import { useAudioProcessing } from '../composables/useAudioProcessing'
 import { useAudioPlayback } from '../composables/useAudioPlayback'
 import { useScreenshot } from '../composables/useScreenshot'

@@ -12,26 +12,16 @@ import { createToolCallHandler } from '../modules/conversation/toolCallHandler'
 import { createApiInputBuilder } from '../modules/conversation/apiInputBuilder'
 import { createSummarizer } from '../modules/conversation/summarizer'
 import { createSpeechQueueManager } from '../modules/conversation/speechQueue'
+import { createTurnManager } from '../modules/conversation/turnManager'
 import type {
   ToolCallHandlerDependencies,
 } from '../modules/conversation/types'
 import type { ApiInputBuilderDependencies } from '../modules/conversation/apiInputBuilder'
 import type { SummarizerDependencies } from '../modules/conversation/summarizer'
 import type { SpeechQueueDependencies } from '../modules/conversation/speechQueue'
+import type { TurnManagerDependencies } from '../modules/conversation/turnManager'
 
-import type { AppChatMessageContentPart } from '../types/chat'
-export type { AppChatMessageContentPart }
-
-export interface ChatMessage {
-  local_id_temp?: string
-  api_message_id?: string
-  api_response_id?: string
-  role: 'user' | 'assistant' | 'system' | 'developer' | 'tool'
-  content: string | AppChatMessageContentPart[]
-  tool_call_id?: string
-  name?: string
-  tool_calls?: any[]
-}
+import type { AppChatMessageContentPart, ChatMessage } from '../types/chat'
 
 function parseErrorMessage(error: any): AppChatMessageContentPart {
   let errorMessage = error.message || 'Unknown error occurred'
@@ -67,8 +57,13 @@ export const useConversationStore = defineStore('conversation', () => {
     queueAudioForPlayback,
     updateImageContentPartByGenerationId,
   } = generalStore
-  const { isRecordingRequested, audioState, chatHistory } =
-    storeToRefs(generalStore)
+  const {
+    isRecordingRequested,
+    audioState,
+    chatHistory,
+    audioQueue,
+    audioPlayer,
+  } = storeToRefs(generalStore)
 
   const currentResponseId = ref<string | null>(null)
   const currentConversationTurnId = ref<string | null>(null)
@@ -116,34 +111,6 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  const handleCancelTTS = () => {
-    if (ttsAbortController.value) {
-      console.log('[TTS Abort] Cancelling in-flight TTS request.')
-      ttsAbortController.value.abort()
-      ttsAbortController.value = null
-    }
-  }
-
-  const handleCancelLLMStream = () => {
-    if (llmAbortController.value) {
-      console.log('[LLM Abort] Cancelling in-flight LLM stream request.')
-      llmAbortController.value.abort()
-      llmAbortController.value = null
-      console.log(
-        '[LLM Abort] Stream cancelled. Keeping currentResponseId for conversation continuity:',
-        currentResponseId.value
-      )
-    }
-  }
-
-  eventBus.on('cancel-tts', handleCancelTTS)
-  eventBus.on('cancel-llm-stream', handleCancelLLMStream)
-
-  onUnmounted(() => {
-    eventBus.off('cancel-tts', handleCancelTTS)
-    eventBus.off('cancel-llm-stream', handleCancelLLMStream)
-  })
-
   const initialize = async (): Promise<boolean> => {
     if (isInitialized.value) {
       return true
@@ -178,7 +145,7 @@ export const useConversationStore = defineStore('conversation', () => {
             reminderData
           )
           try {
-            const reminderMessage: AppChatMessage = {
+            const reminderMessage: ChatMessage = {
               id: `reminder-${Date.now()}`,
               role: 'assistant',
               content: [
@@ -292,6 +259,34 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
+  function createTurnManagerDependencies(): TurnManagerDependencies {
+    return {
+      getTtsAbortController: () => ttsAbortController.value,
+      setTtsAbortController: controller => {
+        ttsAbortController.value = controller
+      },
+      getLlmAbortController: () => llmAbortController.value,
+      setLlmAbortController: controller => {
+        llmAbortController.value = controller
+      },
+      getCurrentResponseId: () => currentResponseId.value,
+      getAudioPlayer: () => audioPlayer.value,
+      getAudioQueueLength: () => audioQueue.value.length,
+      getAudioState: () => audioState.value,
+      setAudioState: state => setAudioState(state),
+      isRecordingRequested: () => isRecordingRequested.value,
+      triggerSummarization: () => {
+        triggerConversationSummarization()
+      },
+      onCancelTts: handler => eventBus.on('cancel-tts', handler),
+      offCancelTts: handler => eventBus.off('cancel-tts', handler),
+      onCancelLlm: handler => eventBus.on('cancel-llm-stream', handler),
+      offCancelLlm: handler => eventBus.off('cancel-llm-stream', handler),
+      logInfo: (...args: any[]) => console.log(...args),
+      logError: (...args: any[]) => console.error(...args),
+    }
+  }
+
   const speechQueueManager = createSpeechQueueManager(
     createSpeechQueueDependencies()
   )
@@ -369,6 +364,12 @@ export const useConversationStore = defineStore('conversation', () => {
       logInfo: (...args: any[]) => console.log(...args),
     }
   }
+
+  const turnManager = createTurnManager(createTurnManagerDependencies())
+
+  onUnmounted(() => {
+    turnManager.dispose()
+  })
 
   function createStreamDependencies(placeholderTempId: string) {
     return {
@@ -466,31 +467,6 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  const finalizeStreamProcessing = (
-    streamEndedNormally: boolean,
-    isContinuationAfterTool: boolean
-  ) => {
-    if (!streamEndedNormally) return
-
-    const finalizationInterval = setInterval(() => {
-      if (generalStore.audioPlayer && !generalStore.audioPlayer.paused) return
-      if (generalStore.audioQueue.length > 0) return
-
-      if (
-        audioState.value === 'SPEAKING' ||
-        audioState.value === 'WAITING_FOR_RESPONSE'
-      ) {
-        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-      }
-
-      clearInterval(finalizationInterval)
-
-      if (!isContinuationAfterTool) {
-        triggerConversationSummarization()
-      }
-    }, 250)
-  }
-
   async function processStream(
     stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
     placeholderTempId: string,
@@ -505,10 +481,10 @@ export const useConversationStore = defineStore('conversation', () => {
       options: { isContinuationAfterTool },
     })
 
-    finalizeStreamProcessing(
-      result.streamEndedNormally,
-      isContinuationAfterTool
-    )
+    turnManager.finalizeAfterStream({
+      streamEndedNormally: result.streamEndedNormally,
+      isContinuationAfterTool,
+    })
 
     return result
   }

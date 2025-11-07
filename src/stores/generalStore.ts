@@ -2,7 +2,7 @@ import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { setVideo } from '../utils/videoProcess'
 import eventBus from '../utils/eventBus'
-import type { AppChatMessageContentPart } from '../types/chat'
+import type { AppChatMessageContentPart, ChatMessage } from '../types/chat'
 
 export type AudioState =
   | 'IDLE'
@@ -12,30 +12,6 @@ export type AudioState =
   | 'SPEAKING'
   | 'CONFIG'
   | 'GENERATING_IMAGE'
-
-export interface AppChatMessageContentPart {
-  type: 'app_text' | 'app_image_uri' | 'app_generated_image_path' | 'app_file'
-  text?: string
-  uri?: string
-  path?: string
-  absolutePathForOpening?: string
-  imageGenerationId?: string
-  isPartial?: boolean
-  partialIndex?: number
-  fileId?: string
-  fileName?: string
-}
-
-export interface ChatMessage {
-  local_id_temp?: string
-  api_message_id?: string
-  api_response_id?: string
-  role: 'user' | 'assistant' | 'system' | 'developer' | 'tool'
-  content: string | AppChatMessageContentPart[]
-  tool_call_id?: string
-  name?: string
-  tool_calls?: any[]
-}
 
 export const useGeneralStore = defineStore('general', () => {
   const audioState = ref<AudioState>('IDLE')

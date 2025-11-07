@@ -25,7 +25,6 @@ import type { SpeechQueueDependencies } from '../modules/conversation/speechQueu
 import type { TurnManagerDependencies } from '../modules/conversation/turnManager'
 import type { ReminderHandlerDependencies } from '../modules/conversation/reminderHandler'
 import type { ChatDependencies } from '../modules/conversation/chatOrchestrator'
-import { createBackendService } from '../modules/conversation/backendService'
 
 import type { AppChatMessageContentPart, ChatMessage } from '../types/chat'
 

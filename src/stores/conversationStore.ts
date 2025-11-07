@@ -14,6 +14,7 @@ import { createSummarizer } from '../modules/conversation/summarizer'
 import { createSpeechQueueManager } from '../modules/conversation/speechQueue'
 import { createTurnManager } from '../modules/conversation/turnManager'
 import { createReminderHandler } from '../modules/conversation/reminderHandler'
+import { createChatOrchestrator } from '../modules/conversation/chatOrchestrator'
 import type {
   ToolCallHandlerDependencies,
 } from '../modules/conversation/types'
@@ -22,6 +23,7 @@ import type { SummarizerDependencies } from '../modules/conversation/summarizer'
 import type { SpeechQueueDependencies } from '../modules/conversation/speechQueue'
 import type { TurnManagerDependencies } from '../modules/conversation/turnManager'
 import type { ReminderHandlerDependencies } from '../modules/conversation/reminderHandler'
+import type { ChatDependencies } from '../modules/conversation/chatOrchestrator'
 
 import type { AppChatMessageContentPart, ChatMessage } from '../types/chat'
 
@@ -282,6 +284,56 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
+  function createChatDependencies(): ChatDependencies {
+    return {
+      isInitialized: () => isInitialized.value,
+      setAudioState: state => setAudioState(state as AudioState),
+      getIsRecordingRequested: () => isRecordingRequested.value,
+      getCurrentResponseId: () => currentResponseId.value,
+      setCurrentResponseId: id => {
+        currentResponseId.value = id
+      },
+      getAssistantSystemPrompt: () => settingsStore.config.assistantSystemPrompt,
+      getEphemeralEmotionalContext: () => ephemeralEmotionalContext.value,
+      clearEphemeralEmotionalContext: () => {
+        ephemeralEmotionalContext.value = null
+      },
+      retrieveThoughtsForPrompt: prompt =>
+        api.retrieveRelevantThoughtsForPrompt(prompt),
+      fetchLatestSummary: () =>
+        window.ipcRenderer.invoke('summaries:get-latest-summary', {}),
+      getChatHistory: () => [...chatHistory.value],
+      buildApiInput,
+      addAssistantPlaceholder: () =>
+        generalStore.addMessageToHistory({
+          role: 'assistant',
+          content: [{ type: 'app_text', text: '' }],
+        }),
+      processStream,
+      createOpenAIResponse: (input, responseId, signal) =>
+        api.createOpenAIResponse(
+          input,
+          responseId,
+          true,
+          settingsStore.config.assistantSystemPrompt,
+          signal
+        ),
+      createAbortController: () => new AbortController(),
+      setLlmAbortController: controller => {
+        llmAbortController.value = controller
+      },
+      handleCleanHistoryRetry: chatWithCleanHistory,
+      handleStreamError: (placeholderTempId, error) => {
+        const errorContent = parseErrorMessage(error)
+        generalStore.updateMessageContentByTempId(placeholderTempId, [
+          errorContent,
+        ])
+      },
+      logInfo: (...args: any[]) => console.log(...args),
+      logError: (...args: any[]) => console.error(...args),
+    }
+  }
+
   function createTurnManagerDependencies(): TurnManagerDependencies {
     return {
       getTtsAbortController: () => ttsAbortController.value,
@@ -515,152 +567,13 @@ export const useConversationStore = defineStore('conversation', () => {
 
     return result
   }
+  const chatOrchestrator = createChatOrchestrator(
+    createChatDependencies()
+  )
+
   const chat = async () => {
-    if (!isInitialized.value) {
-      console.warn('Conversation store not initialized.')
-      return
-    }
     currentConversationTurnId.value = `turn-${Date.now()}`
-    setAudioState('WAITING_FOR_RESPONSE')
-
-    const isNewChain = currentResponseId.value === null
-    console.log(
-      `[Chat] ${isNewChain ? 'Starting new conversation chain' : 'Continuing existing chain'}, responseId:`,
-      currentResponseId.value
-    )
-
-    let finalApiInput: OpenAI.Responses.Request.InputItemLike[] = []
-
-    if (isNewChain) {
-      const contextMessages: OpenAI.Responses.Request.InputItemLike[] = []
-
-      const summaryResult = await window.ipcRenderer.invoke(
-        'summaries:get-latest-summary',
-        {}
-      )
-      if (summaryResult.success && summaryResult.data?.summary_text) {
-        const summaryContent = `[CONVERSATION_SUMMARY_START]\nContext from a previous part of our conversation:\n${summaryResult.data.summary_text}\n[CONVERSATION_SUMMARY_END]`
-        contextMessages.push({
-          role: 'user',
-          content: [{ type: 'input_text', text: summaryContent }],
-        })
-      }
-
-      if (ephemeralEmotionalContext.value) {
-        const emotionalContextContent = `[SYSTEM_NOTE: Based on our recent interaction, the user's emotional state seems to be: ${ephemeralEmotionalContext.value}]`
-        contextMessages.push({
-          role: 'user',
-          content: [{ type: 'input_text', text: emotionalContextContent }],
-        })
-        ephemeralEmotionalContext.value = null
-      }
-
-      const latestUserMessageContent = chatHistory.value.find(
-        m => m.role === 'user'
-      )?.content
-      if (latestUserMessageContent && Array.isArray(latestUserMessageContent)) {
-        const textForThoughtRetrieval = latestUserMessageContent
-          .filter(p => p.type === 'app_text' && p.text)
-          .map(p => p.text)
-          .join(' ')
-
-        if (textForThoughtRetrieval) {
-          const relevantThoughts = await api.retrieveRelevantThoughtsForPrompt(
-            textForThoughtRetrieval
-          )
-          if (relevantThoughts.length > 0) {
-            const thoughtsBlock =
-              'Relevant thoughts from our past conversation (for context):\n' +
-              relevantThoughts.map(t => `- ${t}`).join('\n')
-            contextMessages.push({
-              role: 'user',
-              content: [{ type: 'input_text', text: thoughtsBlock }],
-            })
-          }
-        }
-      }
-
-      const constructedApiInput = await buildApiInput(true)
-      finalApiInput = [...contextMessages, ...constructedApiInput]
-    } else {
-      const latestUserMessage = chatHistory.value.find(m => m.role === 'user')
-      if (latestUserMessage) {
-        const convertedContent: OpenAI.Responses.Request.ContentPartLike[] = []
-        
-        for (const item of latestUserMessage.content) {
-          if (item.type === 'app_text') {
-            convertedContent.push({ type: 'input_text', text: item.text })
-          } else if (item.type === 'app_image_uri' && item.uri) {
-            convertedContent.push({
-              type: 'input_image',
-              image_url: item.uri,
-            })
-          }
-        }
-        
-        finalApiInput = [
-          {
-            role: 'user',
-            content: convertedContent,
-          },
-        ]
-      }
-    }
-    const finalInstructions = settingsStore.config.assistantSystemPrompt
-
-    const assistantMessagePlaceholder: ChatMessage = {
-      role: 'assistant',
-      content: [{ type: 'app_text', text: '' }],
-    }
-    const placeholderTempId = generalStore.addMessageToHistory(
-      assistantMessagePlaceholder
-    )
-
-    try {
-      llmAbortController.value = new AbortController()
-      const streamResult = await api.createOpenAIResponse(
-        finalApiInput,
-        currentResponseId.value,
-        true,
-        finalInstructions,
-        llmAbortController.value.signal
-      )
-      await processStream(streamResult, placeholderTempId, false)
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error('Error starting OpenAI response stream:', error)
-
-        if (
-          error.message?.includes('Previous response with id') &&
-          error.message?.includes('not found')
-        ) {
-          console.log(
-            '[Error Recovery] Previous response ID not found, starting fresh conversation chain'
-          )
-          currentResponseId.value = null
-
-          return await chatWithCleanHistory()
-        } else if (
-          error.message?.includes('No tool output found for function call') ||
-          error.message?.includes('No tool call found for function call output')
-        ) {
-          console.log(
-            '[Error Recovery] Tool call mismatch detected, starting fresh conversation chain'
-          )
-          currentResponseId.value = null
-          return await chatWithCleanHistory()
-        } else {
-          const errorContent = parseErrorMessage(error)
-          generalStore.updateMessageContentByTempId(placeholderTempId, [
-            errorContent,
-          ])
-        }
-
-        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-
-        llmAbortController.value = null
-      }
-    }
+    await chatOrchestrator.runChat()
   }
 
   const transcribeAudioMessage = async (

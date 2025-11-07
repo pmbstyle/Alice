@@ -34,4 +34,5 @@ export interface ChatMessage {
   name?: string
   tool_calls?: any[]
   created_at?: number
+  content_summary?: string
 }

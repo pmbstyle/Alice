@@ -9,7 +9,15 @@ import { executeFunction } from '../utils/functionCaller'
 import eventBus from '../utils/eventBus'
 import { createStreamHandler } from '../modules/conversation/streamHandler'
 import { createToolCallHandler } from '../modules/conversation/toolCallHandler'
-import type { ToolCallHandlerDependencies } from '../modules/conversation/types'
+import { createApiInputBuilder } from '../modules/conversation/apiInputBuilder'
+import { createSummarizer } from '../modules/conversation/summarizer'
+import { createSpeechQueueManager } from '../modules/conversation/speechQueue'
+import type {
+  ToolCallHandlerDependencies,
+} from '../modules/conversation/types'
+import type { ApiInputBuilderDependencies } from '../modules/conversation/apiInputBuilder'
+import type { SummarizerDependencies } from '../modules/conversation/summarizer'
+import type { SpeechQueueDependencies } from '../modules/conversation/speechQueue'
 
 import type { AppChatMessageContentPart } from '../types/chat'
 export type { AppChatMessageContentPart }
@@ -23,12 +31,6 @@ export interface ChatMessage {
   tool_call_id?: string
   name?: string
   tool_calls?: any[]
-}
-
-interface RawMessageForSummarization {
-  role: string
-  text_content: string
-  created_at: string
 }
 
 function parseErrorMessage(error: any): AppChatMessageContentPart {
@@ -221,209 +223,81 @@ export const useConversationStore = defineStore('conversation', () => {
     return true
   }
 
+  const summarizer = createSummarizer(createSummarizerDependencies())
+
   const triggerConversationSummarization = async () => {
-    if (isSummarizing.value) return
-    isSummarizing.value = true
-
-    try {
-      const messagesResult = await window.ipcRenderer.invoke(
-        'summaries:get-recent-messages',
-        { limit: settingsStore.config.SUMMARIZATION_MESSAGE_COUNT }
-      )
-
-      if (messagesResult.success && messagesResult.data?.length > 0) {
-        const rawMessages = messagesResult.data as RawMessageForSummarization[]
-        const formattedMessages = rawMessages.map(m => ({
-          role: m.role,
-          content: m.text_content || '[content missing]',
-        }))
-
-        const [emotionalContext, factualSummary] = await Promise.all([
-          api.createContextAnalysisResponse(
-            formattedMessages,
-            settingsStore.config.SUMMARIZATION_MODEL
-          ),
-          api.createSummarizationResponse(
-            formattedMessages,
-            settingsStore.config.SUMMARIZATION_MODEL,
-            settingsStore.config.SUMMARIZATION_SYSTEM_PROMPT
-          ),
-        ])
-
-        if (emotionalContext) {
-          ephemeralEmotionalContext.value = emotionalContext
-        }
-
-        if (factualSummary) {
-          await window.ipcRenderer.invoke('summaries:save-summary', {
-            summaryText: factualSummary,
-            summarizedMessagesCount: rawMessages.length,
-          })
-        }
-      }
-    } catch (error) {
-      console.error('[Summarizer] Error during summarization:', error)
-    } finally {
-      isSummarizing.value = false
-    }
+    await summarizer.triggerSummarization()
   }
+
+  const apiInputBuilder = createApiInputBuilder(
+    createApiInputDependencies()
+  )
 
   const buildApiInput = async (
     isNewChain: boolean
   ): Promise<OpenAI.Responses.Request.InputItemLike[]> => {
-    const historyToBuildFrom = [...chatHistory.value]
-    const apiInput: OpenAI.Responses.Request.InputItemLike[] = []
-    const recentHistory = historyToBuildFrom
-      .slice(0, settingsStore.config.MAX_HISTORY_MESSAGES_FOR_API)
-      .reverse()
-
-    const lastUserMessageInFullHistoryId = historyToBuildFrom
-      .filter(msg => msg.role === 'user')
-      .slice(-1)[0]?.local_id_temp
-
-    for (const msg of recentHistory) {
-      let apiItemPartial: any
-
-      if (msg.role === 'tool') {
-        apiItemPartial = {
-          type: 'function_call_output',
-          call_id: msg.tool_call_id || `unknown_call_id_${Date.now()}`,
-          output:
-            typeof msg.content === 'string'
-              ? msg.content
-              : JSON.stringify(msg.content),
-        }
-      } else if (msg.role === 'system') {
-        apiItemPartial = {
-          role: 'system',
-          content: [
-            {
-              type: 'input_text',
-              text:
-                typeof msg.content === 'string'
-                  ? msg.content
-                  : JSON.stringify(msg.content),
-            },
-          ],
-        }
-      } else {
-        const currentApiRole = msg.role as 'user' | 'assistant' | 'developer'
-        apiItemPartial = { role: currentApiRole, content: [] }
-        if (msg.name) apiItemPartial.name = msg.name
-
-        let messageContentParts: OpenAI.Responses.Request.ContentPartLike[] = []
-        if (typeof msg.content === 'string') {
-          const typeForPart =
-            currentApiRole === 'user' || currentApiRole === 'developer'
-              ? 'input_text'
-              : 'output_text'
-          messageContentParts = [{ type: typeForPart, text: msg.content }]
-        } else if (Array.isArray(msg.content)) {
-          const isThisTheLastUserMessageWithPotentialNewImage =
-            currentApiRole === 'user' &&
-            msg.local_id_temp === lastUserMessageInFullHistoryId
-
-          messageContentParts = msg.content
-            .map((appPart: AppChatMessageContentPart) => {
-              if (appPart.type === 'app_text') {
-                const typeForPart =
-                  currentApiRole === 'user' || currentApiRole === 'developer'
-                    ? 'input_text'
-                    : 'output_text'
-                return { type: typeForPart, text: appPart.text || '' }
-              } else if (appPart.type === 'app_image_uri') {
-                if (!appPart.uri) return null
-                if (
-                  isThisTheLastUserMessageWithPotentialNewImage &&
-                  (currentApiRole === 'user' || currentApiRole === 'developer')
-                ) {
-                  return {
-                    type: 'input_image',
-                    image_url: appPart.uri,
-                  } as OpenAI.Responses.Request.InputImagePart
-                } else if (
-                  currentApiRole === 'user' ||
-                  currentApiRole === 'developer'
-                ) {
-                  return {
-                    type: 'input_text',
-                    text: '[User previously sent an image]',
-                  }
-                }
-                return null
-              } else if (appPart.type === 'app_file') {
-                if (!appPart.fileId) return null
-                if (
-                  currentApiRole === 'user' ||
-                  currentApiRole === 'developer'
-                ) {
-                  return {
-                    type: 'input_file',
-                    file_id: appPart.fileId,
-                  } as OpenAI.Responses.Request.InputFilePart
-                }
-                return null
-              } else if (appPart.type === 'app_generated_image_path') {
-                if (
-                  currentApiRole !== 'user' &&
-                  currentApiRole !== 'developer'
-                ) {
-                  return {
-                    type: 'output_text',
-                    text: '[Assistant previously generated an image]',
-                  }
-                }
-                return null
-              }
-              return null
-            })
-            .filter(
-              p => p !== null
-            ) as OpenAI.Responses.Request.ContentPartLike[]
-        }
-        apiItemPartial.content =
-          messageContentParts.length > 0
-            ? messageContentParts
-            : [
-                {
-                  type:
-                    currentApiRole === 'assistant'
-                      ? 'output_text'
-                      : 'input_text',
-                  text: '',
-                },
-              ]
-
-        if (
-          currentApiRole === 'assistant' &&
-          msg.tool_calls &&
-          settingsStore.config.aiProvider === 'openrouter'
-        ) {
-          apiItemPartial.tool_calls = msg.tool_calls
-        }
-      }
-      apiInput.push(apiItemPartial)
-    }
-    return apiInput
+    return apiInputBuilder.build({ isNewChain })
   }
 
-  const enqueueSpeech = async (text: string) => {
-    if (!text.trim()) return
-
-    ttsAbortController.value = new AbortController()
-    try {
-      const ttsResponse = await api.ttsStream(
-        text,
-        ttsAbortController.value.signal
-      )
-      if (queueAudioForPlayback(ttsResponse) && audioState.value !== 'SPEAKING') {
-        setAudioState('SPEAKING')
-      }
-    } catch (error: any) {
-      if (error?.name !== 'AbortError') {
-        console.error('TTS stream creation failed:', error)
-      }
+  function createApiInputDependencies(): ApiInputBuilderDependencies {
+    return {
+      getChatHistory: () => [...chatHistory.value],
+      getMaxHistoryMessagesForApi: () =>
+        settingsStore.config.MAX_HISTORY_MESSAGES_FOR_API,
+      getAiProvider: () => settingsStore.config.aiProvider,
     }
+  }
+
+  function createSummarizerDependencies(): SummarizerDependencies {
+    return {
+      isSummarizing: () => isSummarizing.value,
+      setSummarizing: value => {
+        isSummarizing.value = value
+      },
+      fetchRecentMessages: limit =>
+        window.ipcRenderer.invoke('summaries:get-recent-messages', { limit }),
+      analyzeContext: (formattedMessages, model) =>
+        api.createContextAnalysisResponse(formattedMessages, model),
+      createSummary: (formattedMessages, model, systemPrompt) =>
+        api.createSummarizationResponse(
+          formattedMessages,
+          model,
+          systemPrompt
+        ),
+      saveSummary: params =>
+        window.ipcRenderer.invoke('summaries:save-summary', params),
+      setEphemeralEmotionalContext: value => {
+        ephemeralEmotionalContext.value = value
+      },
+      getSummarizationConfig: () => ({
+        messageCount: settingsStore.config.SUMMARIZATION_MESSAGE_COUNT,
+        model: settingsStore.config.SUMMARIZATION_MODEL,
+        systemPrompt: settingsStore.config.SUMMARIZATION_SYSTEM_PROMPT,
+      }),
+      logError: (...args: any[]) => console.error(...args),
+    }
+  }
+
+  function createSpeechQueueDependencies(): SpeechQueueDependencies {
+    return {
+      createAbortController: () => new AbortController(),
+      setTtsAbortController: controller => {
+        ttsAbortController.value = controller
+      },
+      ttsStream: (text, signal) => api.ttsStream(text, signal),
+      queueAudioForPlayback: response => queueAudioForPlayback(response),
+      getAudioState: () => audioState.value as AudioState,
+      setAudioState: state => setAudioState(state),
+      logError: (...args: any[]) => console.error(...args),
+    }
+  }
+
+  const speechQueueManager = createSpeechQueueManager(
+    createSpeechQueueDependencies()
+  )
+
+  const enqueueSpeech = async (text: string) => {
+    await speechQueueManager.enqueueSpeech(text)
   }
 
   const toolCallHandler = createToolCallHandler(

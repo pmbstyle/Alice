@@ -24,6 +24,7 @@ export interface AppChatMessageContentPart {
 }
 
 export interface ChatMessage {
+  id?: string
   local_id_temp?: string
   api_message_id?: string
   api_response_id?: string
@@ -32,4 +33,5 @@ export interface ChatMessage {
   tool_call_id?: string
   name?: string
   tool_calls?: any[]
+  created_at?: number
 }

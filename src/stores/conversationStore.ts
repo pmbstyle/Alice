@@ -13,6 +13,7 @@ import { createApiInputBuilder } from '../modules/conversation/apiInputBuilder'
 import { createSummarizer } from '../modules/conversation/summarizer'
 import { createSpeechQueueManager } from '../modules/conversation/speechQueue'
 import { createTurnManager } from '../modules/conversation/turnManager'
+import { createReminderHandler } from '../modules/conversation/reminderHandler'
 import type {
   ToolCallHandlerDependencies,
 } from '../modules/conversation/types'
@@ -20,6 +21,7 @@ import type { ApiInputBuilderDependencies } from '../modules/conversation/apiInp
 import type { SummarizerDependencies } from '../modules/conversation/summarizer'
 import type { SpeechQueueDependencies } from '../modules/conversation/speechQueue'
 import type { TurnManagerDependencies } from '../modules/conversation/turnManager'
+import type { ReminderHandlerDependencies } from '../modules/conversation/reminderHandler'
 
 import type { AppChatMessageContentPart, ChatMessage } from '../types/chat'
 
@@ -259,6 +261,27 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
+  function createReminderHandlerDependencies(): ReminderHandlerDependencies {
+    return {
+      subscribe: handler => {
+        if (!window.ipcRenderer) {
+          return () => {}
+        }
+        const listener = (_event: any, reminderData: any) => {
+          handler(reminderData)
+        }
+        window.ipcRenderer.on('scheduler:reminder', listener)
+        return () => {
+          window.ipcRenderer?.off('scheduler:reminder', listener)
+        }
+      },
+      addMessage: message => generalStore.addMessageToHistory(message),
+      enqueueSpeech,
+      logInfo: (...args: any[]) => console.log(...args),
+      logError: (...args: any[]) => console.error(...args),
+    }
+  }
+
   function createTurnManagerDependencies(): TurnManagerDependencies {
     return {
       getTtsAbortController: () => ttsAbortController.value,
@@ -366,9 +389,13 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   const turnManager = createTurnManager(createTurnManagerDependencies())
+  const reminderHandler = createReminderHandler(
+    createReminderHandlerDependencies()
+  )
 
   onUnmounted(() => {
     turnManager.dispose()
+    reminderHandler.dispose()
   })
 
   function createStreamDependencies(placeholderTempId: string) {

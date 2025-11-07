@@ -15,6 +15,7 @@ import { createSpeechQueueManager } from '../modules/conversation/speechQueue'
 import { createTurnManager } from '../modules/conversation/turnManager'
 import { createReminderHandler } from '../modules/conversation/reminderHandler'
 import { createChatOrchestrator } from '../modules/conversation/chatOrchestrator'
+import { createBackendService } from '../modules/conversation/backendService'
 import type {
   ToolCallHandlerDependencies,
 } from '../modules/conversation/types'
@@ -24,6 +25,7 @@ import type { SpeechQueueDependencies } from '../modules/conversation/speechQueu
 import type { TurnManagerDependencies } from '../modules/conversation/turnManager'
 import type { ReminderHandlerDependencies } from '../modules/conversation/reminderHandler'
 import type { ChatDependencies } from '../modules/conversation/chatOrchestrator'
+import { createBackendService } from '../modules/conversation/backendService'
 
 import type { AppChatMessageContentPart, ChatMessage } from '../types/chat'
 
@@ -444,6 +446,7 @@ export const useConversationStore = defineStore('conversation', () => {
   const reminderHandler = createReminderHandler(
     createReminderHandlerDependencies()
   )
+  const backendService = createBackendService(createBackendDependencies())
 
   onUnmounted(() => {
     turnManager.dispose()
@@ -579,69 +582,13 @@ export const useConversationStore = defineStore('conversation', () => {
   const transcribeAudioMessage = async (
     audioArrayBuffer: ArrayBuffer
   ): Promise<string> => {
-    const { sttProvider } = settingsStore.config
-    try {
-      if (sttProvider === 'openai') {
-        return await api.transcribeWithOpenAI(audioArrayBuffer)
-      } else if (sttProvider === 'groq') {
-        return await api.transcribeWithGroq(audioArrayBuffer)
-      } else if (sttProvider === 'local') {
-        return await api.transcribeWithBackend(audioArrayBuffer)
-      } else {
-        throw new Error(`Unknown STT provider: ${sttProvider}`)
-      }
-    } catch (error: any) {
-      generalStore.statusMessage = 'Error: Transcription failed'
-      console.error('Transcription service error:', error)
-
-      if (
-        sttProvider === 'local' &&
-        error.message.includes('not initialized')
-      ) {
-        generalStore.statusMessage =
-          'Error: Local STT service not ready. Please check backend status.'
-      }
-
-      return ''
-    }
+    return backendService.transcribeAudioMessage(audioArrayBuffer)
   }
 
   async function fetchModels() {
-    const provider = settingsStore.config.aiProvider
-
-    if (provider === 'openai' && !settingsStore.config.VITE_OPENAI_API_KEY) {
-      console.warn('Cannot fetch models: OpenAI API Key is missing.')
-      return
-    } else if (
-      provider === 'openrouter' &&
-      !settingsStore.config.VITE_OPENROUTER_API_KEY
-    ) {
-      console.warn('Cannot fetch models: OpenRouter API Key is missing.')
-      return
-    } else if (provider === 'ollama' && !settingsStore.config.ollamaBaseUrl) {
-      console.warn('Cannot fetch models: Ollama Base URL is missing.')
-      return
-    } else if (
-      provider === 'lm-studio' &&
-      !settingsStore.config.lmStudioBaseUrl
-    ) {
-      console.warn('Cannot fetch models: LM Studio Base URL is missing.')
-      return
-    }
-
-    try {
-      availableModels.value = await api.fetchOpenAIModels()
-    } catch (error: any) {
-      console.error('Failed to fetch models:', error.message)
-      const providerNameMap = {
-        openai: 'OpenAI',
-        openrouter: 'OpenRouter',
-        ollama: 'Ollama',
-        'lm-studio': 'LM Studio',
-      }
-      const providerName = providerNameMap[provider] || provider
-      generalStore.statusMessage = `Error: Could not fetch ${providerName} models.`
-      availableModels.value = []
+    const models = await backendService.fetchModels()
+    if (models) {
+      availableModels.value = models
     }
   }
 
@@ -797,3 +744,20 @@ export const useConversationStore = defineStore('conversation', () => {
     triggerConversationSummarization,
   }
 })
+  function createBackendDependencies() {
+    return {
+      getConfig: () => settingsStore.config,
+      setStatusMessage: (message: string) => {
+        generalStore.statusMessage = message
+      },
+      fetchOpenAIModels: () => api.fetchOpenAIModels(),
+      transcribeWithOpenAI: (audio: ArrayBuffer) =>
+        api.transcribeWithOpenAI(audio),
+      transcribeWithGroq: (audio: ArrayBuffer) =>
+        api.transcribeWithGroq(audio),
+      transcribeWithBackend: (audio: ArrayBuffer) =>
+        api.transcribeWithBackend(audio),
+      logInfo: (...args: any[]) => console.log(...args),
+      logError: (...args: any[]) => console.error(...args),
+    }
+  }

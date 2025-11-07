@@ -80,6 +80,9 @@ jobs:
           PYTHON: ${{ steps.setup_python.outputs.python-path }}
           npm_config_python: ${{ steps.setup_python.outputs.python-path }}
 
+      - name: Run Unit Tests
+        run: npm run test
+
       - name: Get app version from package.json
         id: get_version
         run: echo "APP_VERSION=$(node -p "require('./package.json').version")" >> $GITHUB_ENV

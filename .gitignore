@@ -47,3 +47,11 @@ resources/python/alice-ai-backend.exe
 /models
 AGENTS.md
 backend/alice-backend
+
+# User customization sandbox (allow sample fixtures)
+user-customization/*
+!user-customization/.gitkeep
+!user-customization/custom-tools.sample.json
+!user-customization/custom-tool-scripts/
+user-customization/custom-tool-scripts/*
+!user-customization/custom-tool-scripts/sample_upload_tool.js

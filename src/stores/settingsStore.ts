@@ -73,6 +73,16 @@ export interface AliceSettings {
   onboardingCompleted: boolean
 }
 
+function hasMinimumConfigForOnboarding(config: AliceSettings): boolean {
+  return Boolean(
+    config.assistantModel?.trim() ||
+      config.VITE_OPENAI_API_KEY?.trim() ||
+      config.VITE_OPENROUTER_API_KEY?.trim() ||
+      config.ollamaBaseUrl?.trim() ||
+      config.lmStudioBaseUrl?.trim()
+  )
+}
+
 const defaultSettings: AliceSettings = {
   VITE_OPENAI_API_KEY: '',
   VITE_OPENROUTER_API_KEY: '',
@@ -401,6 +411,7 @@ export const useSettingsStore = defineStore('settings', () => {
             loaded as Partial<AliceSettings>
           )
           settings.value = result.settings
+          await ensureOnboardingStateConsistency()
 
           let needsSave = false
           if (result.migrated) {
@@ -480,6 +491,8 @@ export const useSettingsStore = defineStore('settings', () => {
             console.log('💾 Automatically saving migrated dev settings to file')
             await saveSettingsToFile()
           }
+
+          await ensureOnboardingStateConsistency()
         } catch (error) {
           console.error(
             '[SettingsStore] Settings validation failed, using unvalidated settings:',
@@ -507,6 +520,26 @@ export const useSettingsStore = defineStore('settings', () => {
       coreOpenAISettingsValid.value = false
     } finally {
       isLoading.value = false
+    }
+  }
+
+  async function ensureOnboardingStateConsistency() {
+    if (settings.value.onboardingCompleted) {
+      return
+    }
+
+    if (!hasMinimumConfigForOnboarding(settings.value)) {
+      return
+    }
+
+    settings.value.onboardingCompleted = true
+    try {
+      await saveSettingsToFile()
+    } catch (error) {
+      console.warn(
+        '[SettingsStore] Failed to persist onboarding completion state:',
+        error
+      )
     }
   }
 

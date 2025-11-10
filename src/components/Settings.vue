@@ -58,6 +58,14 @@
         >
           🔒 Permissions
         </button>
+        <button
+          type="button"
+          class="tab"
+          :class="{ 'tab-active': activeTab === 'customization' }"
+          @click="activeTab = 'customization'"
+        >
+          ✨ Customization
+        </button>
       </div>
 
       <div>
@@ -103,6 +111,10 @@
 
         <MemoryManager
           v-if="activeTab === 'memories'"
+        />
+
+        <UserCustomizationTab
+          v-if="activeTab === 'customization'"
         />
       </div>
 
@@ -213,6 +225,7 @@ import AssistantSettingsTab from './settings/AssistantSettingsTab.vue'
 import HotkeysTab from './settings/HotkeysTab.vue'
 import IntegrationsTab from './settings/IntegrationsTab.vue'
 import SecurityTab from './settings/SecurityTab.vue'
+import UserCustomizationTab from './settings/UserCustomizationTab.vue'
 import MemoryManager from './MemoryManager.vue'
 
 const appVersion = ref(import.meta.env.VITE_APP_VERSION || '')
@@ -221,7 +234,13 @@ const conversationStore = useConversationStore()
 
 const currentSettings = ref<AliceSettings>({ ...settingsStore.config })
 const activeTab = ref<
-  'core' | 'assistant' | 'hotkeys' | 'integrations' | 'security' | 'memories'
+  | 'core'
+  | 'assistant'
+  | 'hotkeys'
+  | 'integrations'
+  | 'security'
+  | 'memories'
+  | 'customization'
 >('core')
 
 const isRefreshingModels = ref(false)

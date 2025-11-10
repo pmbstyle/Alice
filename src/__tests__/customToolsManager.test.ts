@@ -129,6 +129,37 @@ describe('customToolsManager', () => {
     expect(snapshot.tools[0].parameters.type).toBe('object')
   })
 
+  it('clones parameter schemas so edits do not leak across tools', async () => {
+    await ensureDir(path.join(customizationRoot, 'custom-tool-scripts'))
+    await fs.writeFile(
+      path.join(customizationRoot, 'custom-tool-scripts/sample.js'),
+      'export const run = () => ({ success: true })'
+    )
+    const sharedParameters = { type: 'object', properties: {} }
+    await fs.writeFile(
+      toolsFilePath,
+      JSON.stringify(
+        [
+          {
+            id: 'shared-tool',
+            name: 'shared-tool',
+            description: 'test',
+            enabled: true,
+            handler: { type: 'script', entry: 'custom-tool-scripts/sample.js' },
+            parameters: sharedParameters,
+          },
+        ],
+        null,
+        2
+      )
+    )
+
+    const snapshot = await loadCustomToolsFromDisk()
+    expect(snapshot.tools[0].parameters).not.toBe(sharedParameters)
+    snapshot.tools[0].parameters.properties.foo = { type: 'string' }
+    expect(sharedParameters.properties).toEqual({})
+  })
+
   it('uploads, registers, and executes a custom tool script', async () => {
     const uploadResult = await uploadCustomToolScript(
       'weather.js',

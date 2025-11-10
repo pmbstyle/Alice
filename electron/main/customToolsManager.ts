@@ -158,24 +158,7 @@ function ensureToolDefaults(
       rawTool.description.trim()) ||
     'User provided custom tool.'
 
-  const parameters =
-    rawTool?.parameters && typeof rawTool.parameters === 'object'
-      ? rawTool.parameters
-      : { type: 'object', properties: {}, additionalProperties: false }
-
-  if (
-    !parameters ||
-    typeof parameters !== 'object' ||
-    parameters.type !== 'object'
-  ) {
-    parameters.type = 'object'
-  }
-  if (typeof parameters.properties !== 'object') {
-    parameters.properties = {}
-  }
-  if (parameters.additionalProperties === undefined) {
-    parameters.additionalProperties = false
-  }
+  const parameters = normalizeParameters(rawTool?.parameters)
 
   return {
     id,
@@ -220,6 +203,23 @@ function resolveEntryAbsolutePath(entry: string): string | null {
     return null
   }
   return candidatePath
+}
+
+function normalizeParameters(input: any) {
+  const cloned =
+    input && typeof input === 'object'
+      ? JSON.parse(JSON.stringify(input))
+      : {}
+  if (cloned.type !== 'object') {
+    cloned.type = 'object'
+  }
+  if (typeof cloned.properties !== 'object' || cloned.properties === null) {
+    cloned.properties = {}
+  }
+  if (cloned.additionalProperties === undefined) {
+    cloned.additionalProperties = false
+  }
+  return cloned
 }
 
 async function validateTool(

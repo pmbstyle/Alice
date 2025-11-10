@@ -731,18 +731,6 @@ export const useConversationStore = defineStore('conversation', () => {
     }
   }
 
-  return {
-    isInitialized,
-    availableModels,
-    initialize,
-    chat,
-    chatWithContextAction,
-    transcribeAudioMessage,
-    fetchModels,
-    currentResponseId,
-    triggerConversationSummarization,
-  }
-})
   function createBackendDependencies() {
     return {
       getConfig: () => settingsStore.config,
@@ -760,3 +748,16 @@ export const useConversationStore = defineStore('conversation', () => {
       logError: (...args: any[]) => console.error(...args),
     }
   }
+
+  return {
+    isInitialized,
+    availableModels,
+    initialize,
+    chat,
+    chatWithContextAction,
+    transcribeAudioMessage,
+    fetchModels,
+    currentResponseId,
+    triggerConversationSummarization,
+  }
+})

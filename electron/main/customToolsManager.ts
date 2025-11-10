@@ -425,7 +425,9 @@ export async function uploadCustomToolScript(
   const destinationPath = path.join(scriptsRoot, finalName)
   await fs.writeFile(destinationPath, buffer)
   return {
-    relativePath: path.relative(getCustomizationRoot(), destinationPath),
+    relativePath: path
+      .relative(getCustomizationRoot(), destinationPath)
+      .replace(/\\/g, '/'),
     absolutePath: destinationPath,
   }
 }

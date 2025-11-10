@@ -36,6 +36,7 @@ import {
 
 const customizationRoot = path.join(testRoot, 'user-customization')
 const toolsFilePath = path.join(customizationRoot, 'custom-tools.json')
+const packageJsonPath = path.join(customizationRoot, 'package.json')
 
 async function resetCustomizationDir() {
   await fs.rm(customizationRoot, { recursive: true, force: true })
@@ -70,6 +71,8 @@ describe('customToolsManager', () => {
       .then(() => true)
       .catch(() => false)
     expect(fileExists).toBe(true)
+    const pkg = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'))
+    expect(pkg.type).toBe('module')
   })
 
   it('reports validation errors for invalid entries', async () => {

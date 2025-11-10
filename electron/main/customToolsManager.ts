@@ -19,7 +19,7 @@ const DEMO_TOOL_SCRIPT_NAME = 'demo-greet-user.js'
 const DEMO_TOOL_RELATIVE_ENTRY = path.join(
   CUSTOM_TOOL_SCRIPT_DIR,
   DEMO_TOOL_SCRIPT_NAME
-)
+).replace(/\\/g, '/')
 
 function getCustomizationRoot(): string {
   if (app.isPackaged) {
@@ -47,12 +47,34 @@ async function ensureDirectoryExists(dirPath: string): Promise<void> {
 async function ensureCustomToolsFile(): Promise<string> {
   const customizationRoot = getCustomizationRoot()
   await ensureDirectoryExists(customizationRoot)
+  await ensureCustomizationPackage(customizationRoot)
   await ensureDirectoryExists(getScriptsRoot())
   const filePath = path.join(customizationRoot, CUSTOM_TOOL_FILE_NAME)
   if (!existsSync(filePath)) {
     await bootstrapDemoTool(filePath)
   }
   return filePath
+}
+
+async function ensureCustomizationPackage(customizationRoot: string) {
+  const packageJsonPath = path.join(customizationRoot, 'package.json')
+  try {
+    const contents = await fs.readFile(packageJsonPath, 'utf-8')
+    const parsed = JSON.parse(contents)
+    if (parsed?.type !== 'module') {
+      await fs.writeFile(
+        packageJsonPath,
+        JSON.stringify({ ...parsed, type: 'module' }, null, 2),
+        'utf-8'
+      )
+    }
+  } catch {
+    await fs.writeFile(
+      packageJsonPath,
+      JSON.stringify({ name: 'alice-custom-tools', type: 'module' }, null, 2),
+      'utf-8'
+    )
+  }
 }
 
 async function bootstrapDemoTool(filePath: string) {
@@ -101,7 +123,7 @@ async function bootstrapDemoTool(filePath: string) {
     enabled: false,
     handler: {
       type: 'script',
-      entry: DEMO_TOOL_RELATIVE_ENTRY.replace(/\\\\/g, '/'),
+      entry: DEMO_TOOL_RELATIVE_ENTRY,
       runtime: 'node',
     },
   }

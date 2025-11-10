@@ -13,6 +13,8 @@ interface OperationResult<T> {
   error?: string
 }
 
+let ipcSubscriptionRegistered = false
+
 export const useCustomToolsStore = defineStore('customTools', () => {
   const tools = ref<ValidatedCustomTool[]>([])
   const diagnostics = ref<string[]>([])
@@ -161,6 +163,14 @@ export const useCustomToolsStore = defineStore('customTools', () => {
       strict: tool.strict ?? false,
     }))
   )
+
+  // Subscribe once per renderer process to cross-window updates
+  if (window.ipcRenderer && !ipcSubscriptionRegistered) {
+    ipcSubscriptionRegistered = true
+    window.ipcRenderer.on('custom-tools:updated', () => {
+      refresh()
+    })
+  }
 
   return {
     tools,

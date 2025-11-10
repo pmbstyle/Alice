@@ -1,4 +1,11 @@
-import { ipcMain, desktopCapturer, shell, clipboard, app } from 'electron'
+import {
+  ipcMain,
+  desktopCapturer,
+  shell,
+  clipboard,
+  app,
+  BrowserWindow,
+} from 'electron'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import axios from 'axios'
@@ -70,6 +77,14 @@ const GENERATED_IMAGES_FULL_PATH = path.join(
 let screenshotDataURL: string | null = null
 
 let ipcHandlersRegistered = false
+
+function broadcastCustomToolsUpdate() {
+  BrowserWindow.getAllWindows().forEach(window => {
+    if (!window.isDestroyed()) {
+      window.webContents.send('custom-tools:updated')
+    }
+  })
+}
 
 export function registerIPCHandlers(): void {
   if (ipcHandlersRegistered) {
@@ -557,6 +572,7 @@ export function registerIPCHandlers(): void {
     async (event, payload: { rawJson: string }) => {
       try {
         const snapshot = await replaceCustomToolsJson(payload?.rawJson || '[]')
+        broadcastCustomToolsUpdate()
         return { success: true, data: snapshot }
       } catch (error: any) {
         console.error('[IPC custom-tools:replace-json] Error:', error)
@@ -592,6 +608,7 @@ export function registerIPCHandlers(): void {
     async (event, tool: Partial<CustomToolDefinition>) => {
       try {
         const snapshot = await upsertCustomTool(tool)
+        broadcastCustomToolsUpdate()
         return { success: true, data: snapshot }
       } catch (error: any) {
         console.error('[IPC custom-tools:upsert] Error:', error)
@@ -608,6 +625,7 @@ export function registerIPCHandlers(): void {
           throw new Error('Tool id is required.')
         }
         const snapshot = await toggleCustomTool(payload.id, !!payload.enabled)
+        broadcastCustomToolsUpdate()
         return { success: true, data: snapshot }
       } catch (error: any) {
         console.error('[IPC custom-tools:toggle] Error:', error)
@@ -624,6 +642,7 @@ export function registerIPCHandlers(): void {
           throw new Error('Tool id is required.')
         }
         const snapshot = await deleteCustomTool(payload.id)
+        broadcastCustomToolsUpdate()
         return { success: true, data: snapshot }
       } catch (error: any) {
         console.error('[IPC custom-tools:delete] Error:', error)

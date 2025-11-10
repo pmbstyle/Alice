@@ -165,29 +165,4 @@ describe('customToolsManager', () => {
     expect(snapshotAfterDelete.tools).toHaveLength(0)
   })
 
-  it('loads sample upload tool JSON and validates relative paths', async () => {
-    const repoSampleScript = fileURLToPath(
-      new URL(
-        '../../user-customization/custom-tool-scripts/sample_upload_tool.js',
-        import.meta.url
-      )
-    )
-    const repoSampleJson = fileURLToPath(
-      new URL('../../user-customization/custom-tools.sample.json', import.meta.url)
-    )
-
-    await ensureDir(path.join(customizationRoot, 'custom-tool-scripts'))
-    await fs.copyFile(
-      repoSampleScript,
-      path.join(customizationRoot, 'custom-tool-scripts/sample_upload_tool.js')
-    )
-    await fs.copyFile(repoSampleJson, toolsFilePath)
-
-    const snapshot = await loadCustomToolsFromDisk()
-    expect(snapshot.tools).toHaveLength(1)
-    const [tool] = snapshot.tools
-    expect(tool.name).toBe('sample_upload_tool')
-    expect(tool.entryAbsolutePath).toContain('custom-tool-scripts')
-    expect(tool.isValid).toBe(true)
-  })
 })

@@ -96,6 +96,9 @@ export default defineConfig(({ mode, command }) => {
       if (process.env.VSCODE_DEBUG) {
         const url = new URL(pkg.debug.env.VITE_DEV_SERVER_URL)
         return {
+          watch: {
+            ignored: ['**/user-customization/**'],
+          },
           host: url.hostname,
           port: +url.port,
           proxy: {
@@ -108,6 +111,9 @@ export default defineConfig(({ mode, command }) => {
         }
       } else {
         return {
+          watch: {
+            ignored: ['**/user-customization/**'],
+          },
           proxy: {
             '/api/v2': {
               target: QB_BASE_URL,

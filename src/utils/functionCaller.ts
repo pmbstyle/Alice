@@ -1,4 +1,5 @@
 import { createEmbedding } from '../services/apiService'
+import { useCustomToolsStore } from '../stores/customToolsStore'
 import { manage_clipboard } from './functions/clipboard'
 import {
   open_path,
@@ -65,6 +66,36 @@ interface SearXNGSearchArgs {
   language?: string
   time_range?: 'day' | 'month' | 'year'
   safesearch?: number
+}
+
+async function executeCustomToolViaIPC(
+  name: string,
+  args: Record<string, any>
+): Promise<string> {
+  if (!window.customToolsAPI) {
+    return `Error executing ${name}: Custom tools API unavailable.`
+  }
+
+  const response = await window.customToolsAPI.execute(name, args || {})
+  if (!response.success || !response.data) {
+    return `Error executing ${name}: ${response.error || 'Unknown error.'}`
+  }
+
+  const result = response.data
+  if (!result.success) {
+    return (
+      result.error ||
+      `Error executing ${name}: Custom tool reported a failure without a reason.`
+    )
+  }
+
+  if (typeof result.data === 'string') {
+    return result.data
+  }
+
+  return JSON.stringify(
+    result.data || { message: 'Custom tool completed successfully.' }
+  )
 }
 
 async function save_memory(args: SaveMemoryArgs) {
@@ -757,11 +788,6 @@ export async function executeFunction(
   const func = functionRegistry[name]
   const schema = functionSchemas[name as keyof typeof functionSchemas]
 
-  if (!func) {
-    console.error(`Function ${name} not found in registry.`)
-    return `Error: Function ${name} not found.`
-  }
-
   try {
     let args: any
     if (typeof argsString === 'string') {
@@ -770,6 +796,16 @@ export async function executeFunction(
       args = argsString
     } else {
       args = {}
+    }
+
+    if (!func) {
+      const customToolsStore = useCustomToolsStore()
+      await customToolsStore.ensureInitialized()
+      if (customToolsStore.toolsByName[name]) {
+        return await executeCustomToolViaIPC(name, args)
+      }
+      console.error(`Function ${name} not found in registry.`)
+      return `Error: Function ${name} not found.`
     }
 
     if (schema?.required) {

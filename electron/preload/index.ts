@@ -1,5 +1,4 @@
 import { ipcRenderer, contextBridge } from 'electron'
-
 contextBridge.exposeInMainWorld('electron', {
   resize: dimensions => ipcRenderer.send('resize', dimensions),
   mini: minimize => ipcRenderer.send('mini', minimize),
@@ -117,6 +116,25 @@ contextBridge.exposeInMainWorld('pythonAPI', {
     isReady: () => ipcRenderer.invoke('python:embeddings:ready'),
     getInfo: () => ipcRenderer.invoke('python:embeddings:info'),
   },
+})
+
+contextBridge.exposeInMainWorld('customToolsAPI', {
+  list: () => ipcRenderer.invoke('custom-tools:list'),
+  refresh: () => ipcRenderer.invoke('custom-tools:list'),
+  replaceJson: (rawJson: string) =>
+    ipcRenderer.invoke('custom-tools:replace-json', { rawJson }),
+  uploadScript: (fileName: string, data: ArrayBuffer | Uint8Array) =>
+    ipcRenderer.invoke('custom-tools:upload-script', {
+      fileName,
+      buffer: data,
+    }),
+  upsert: (tool: any) => ipcRenderer.invoke('custom-tools:upsert', tool),
+  toggle: (id: string, enabled: boolean) =>
+    ipcRenderer.invoke('custom-tools:toggle', { id, enabled }),
+  delete: (id: string) =>
+    ipcRenderer.invoke('custom-tools:delete', { id }),
+  execute: (name: string, args?: Record<string, any>) =>
+    ipcRenderer.invoke('custom-tools:execute', { name, args }),
 })
 
 // --------- Preload scripts loading ---------

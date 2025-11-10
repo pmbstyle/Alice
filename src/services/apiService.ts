@@ -1,6 +1,7 @@
 import OpenAI from 'openai'
 import { toFile, type FileLike } from 'openai/uploads'
 import { useSettingsStore } from '../stores/settingsStore'
+import { useCustomToolsStore } from '../stores/customToolsStore'
 import {
   getOpenAIClient,
   getOpenRouterClient,
@@ -574,6 +575,18 @@ export const createOpenAIResponse = async (
         })
       }
     }
+  }
+
+  const customToolsStore = useCustomToolsStore()
+  await customToolsStore.ensureInitialized()
+  for (const customTool of customToolsStore.enabledAndValidTools) {
+    finalToolsForApi.push({
+      type: 'function',
+      name: customTool.name,
+      description: customTool.description,
+      parameters: customTool.parameters,
+      strict: customTool.strict ?? false,
+    })
   }
 
   if (

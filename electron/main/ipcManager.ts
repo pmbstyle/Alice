@@ -49,6 +49,16 @@ import {
   registerTakeScreenshotHotkey,
 } from './hotkeyManager'
 import { backendManager } from './backendManager'
+import type { CustomToolDefinition } from '../../types/customTools'
+import {
+  loadCustomToolsFromDisk,
+  replaceCustomToolsJson,
+  uploadCustomToolScript,
+  toggleCustomTool,
+  deleteCustomTool,
+  upsertCustomTool,
+  executeCustomTool,
+} from './customToolsManager'
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_DIR_NAME = 'generated_images'
@@ -526,6 +536,113 @@ export function registerIPCHandlers(): void {
 
         return { success: true }
       } catch (error: any) {
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  // Custom tools management
+  ipcMain.handle('custom-tools:list', async () => {
+    try {
+      const snapshot = await loadCustomToolsFromDisk()
+      return { success: true, data: snapshot }
+    } catch (error: any) {
+      console.error('[IPC custom-tools:list] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle(
+    'custom-tools:replace-json',
+    async (event, payload: { rawJson: string }) => {
+      try {
+        const snapshot = await replaceCustomToolsJson(payload?.rawJson || '[]')
+        return { success: true, data: snapshot }
+      } catch (error: any) {
+        console.error('[IPC custom-tools:replace-json] Error:', error)
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'custom-tools:upload-script',
+    async (
+      event,
+      payload: { fileName: string; buffer: ArrayBuffer | Buffer }
+    ) => {
+      try {
+        if (!payload?.fileName || !payload?.buffer) {
+          throw new Error('File name and buffer are required.')
+        }
+        const buffer = Buffer.isBuffer(payload.buffer)
+          ? payload.buffer
+          : Buffer.from(payload.buffer as ArrayBuffer)
+        const result = await uploadCustomToolScript(payload.fileName, buffer)
+        return { success: true, data: result }
+      } catch (error: any) {
+        console.error('[IPC custom-tools:upload-script] Error:', error)
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'custom-tools:upsert',
+    async (event, tool: Partial<CustomToolDefinition>) => {
+      try {
+        const snapshot = await upsertCustomTool(tool)
+        return { success: true, data: snapshot }
+      } catch (error: any) {
+        console.error('[IPC custom-tools:upsert] Error:', error)
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'custom-tools:toggle',
+    async (event, payload: { id: string; enabled: boolean }) => {
+      try {
+        if (!payload?.id) {
+          throw new Error('Tool id is required.')
+        }
+        const snapshot = await toggleCustomTool(payload.id, !!payload.enabled)
+        return { success: true, data: snapshot }
+      } catch (error: any) {
+        console.error('[IPC custom-tools:toggle] Error:', error)
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'custom-tools:delete',
+    async (event, payload: { id: string }) => {
+      try {
+        if (!payload?.id) {
+          throw new Error('Tool id is required.')
+        }
+        const snapshot = await deleteCustomTool(payload.id)
+        return { success: true, data: snapshot }
+      } catch (error: any) {
+        console.error('[IPC custom-tools:delete] Error:', error)
+        return { success: false, error: error.message }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'custom-tools:execute',
+    async (event, payload: { name: string; args?: Record<string, any> }) => {
+      try {
+        if (!payload?.name) {
+          throw new Error('Tool name is required.')
+        }
+        const result = await executeCustomTool(payload.name, payload.args || {})
+        return { success: true, data: result }
+      } catch (error: any) {
+        console.error('[IPC custom-tools:execute] Error:', error)
         return { success: false, error: error.message }
       }
     }

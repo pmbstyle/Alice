@@ -1,5 +1,12 @@
 /// <reference types="vite/client" />
 
+import type {
+  CustomToolsSnapshot,
+  UploadCustomToolScriptResult,
+  CustomToolExecutionResult,
+  CustomToolDefinition,
+} from '../types/customTools'
+
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
   const component: DefineComponent<{}, {}, any>
@@ -140,5 +147,28 @@ interface Window {
       }>
       getInfo: () => Promise<{ success: boolean; data?: any; error?: string }>
     }
+  }
+  customToolsAPI: {
+    list: () => Promise<{ success: boolean; data?: CustomToolsSnapshot; error?: string }>
+    refresh: () => Promise<{ success: boolean; data?: CustomToolsSnapshot; error?: string }>
+    replaceJson: (
+      rawJson: string
+    ) => Promise<{ success: boolean; data?: CustomToolsSnapshot; error?: string }>
+    uploadScript: (
+      fileName: string,
+      data: ArrayBuffer | Uint8Array
+    ) => Promise<{ success: boolean; data?: UploadCustomToolScriptResult; error?: string }>
+    upsert: (
+      tool: Partial<CustomToolDefinition>
+    ) => Promise<{ success: boolean; data?: CustomToolsSnapshot; error?: string }>
+    toggle: (
+      id: string,
+      enabled: boolean
+    ) => Promise<{ success: boolean; data?: CustomToolsSnapshot; error?: string }>
+    delete: (id: string) => Promise<{ success: boolean; data?: CustomToolsSnapshot; error?: string }>
+    execute: (
+      name: string,
+      args?: Record<string, any>
+    ) => Promise<{ success: boolean; data?: CustomToolExecutionResult; error?: string }>
   }
 }

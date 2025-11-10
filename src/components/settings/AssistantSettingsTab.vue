@@ -380,6 +380,49 @@
               </label>
             </div>
           </div>
+
+          <div
+            class="mt-4 border border-dashed border-gray-600 rounded-md p-3 bg-gray-900/70"
+          >
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-semibold text-gray-200"
+                >Custom tools (managed in Customization tab)</span
+              >
+              <span class="text-xs text-gray-400"
+                >{{ customToolsStore.enabledAndValidTools.length }}/{{
+                  customToolsStore.tools.length
+                }}
+                active</span
+              >
+            </div>
+            <div
+              v-if="!customToolsStore.tools.length"
+              class="text-xs text-gray-500 mt-1"
+            >
+              No custom tools registered.
+            </div>
+            <ul v-else class="text-xs text-gray-300 mt-2 space-y-1">
+              <li
+                v-for="tool in customToolsStore.tools"
+                :key="tool.id"
+                class="flex items-center gap-2"
+              >
+                <span>{{ tool.name }}</span>
+                <span
+                  class="badge badge-xs"
+                  :class="tool.enabled ? 'badge-success' : 'badge-ghost'"
+                >
+                  {{ tool.enabled ? 'enabled' : 'disabled' }}
+                </span>
+                <span
+                  v-if="!tool.isValid"
+                  class="text-warning font-semibold"
+                >
+                  needs fix
+                </span>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </fieldset>
@@ -422,9 +465,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import type { AliceSettings } from '../../stores/settingsStore'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { useCustomToolsStore } from '../../stores/customToolsStore'
 import { infoIcon } from '../../utils/assetsImport'
 
 interface Tool {
@@ -447,6 +491,11 @@ defineEmits<{
 }>()
 
 const settingsStore = useSettingsStore()
+const customToolsStore = useCustomToolsStore()
+
+onMounted(() => {
+  customToolsStore.ensureInitialized()
+})
 
 const isBrowserContextToolActive = computed(() => {
   return props.currentSettings.assistantTools.includes('browser_context')

@@ -89,6 +89,9 @@ jobs:
           PYTHON: ${{ steps.setup_python.outputs.python-path }}
           npm_config_python: ${{ steps.setup_python.outputs.python-path }}
 
+      - name: Run Unit Tests
+        run: npm run test
+
       - name: Rebuild native modules for Electron
         run: npm run rebuild
         env:

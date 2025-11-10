@@ -8,7 +8,7 @@ import {
   getOllamaClient,
   getLMStudioClient,
 } from './apiClients'
-import type { AppChatMessageContentPart } from '../stores/conversationStore'
+import type { AppChatMessageContentPart } from '../types/chat'
 import {
   PREDEFINED_OPENAI_TOOLS,
   type ApiRequestBodyFunctionTool,

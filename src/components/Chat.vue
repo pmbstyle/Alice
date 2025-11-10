@@ -29,8 +29,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useGeneralStore } from '../stores/generalStore'
-import type { ChatMessage } from '../stores/conversationStore'
-import type { AppChatMessageContentPart } from '../types/chat'
+import type { ChatMessage, AppChatMessageContentPart } from '../types/chat'
 import { messageMarkdown } from '../utils/markdown'
 import { storeToRefs } from 'pinia'
 

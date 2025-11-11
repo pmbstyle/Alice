@@ -66,6 +66,10 @@ import {
   upsertCustomTool,
   executeCustomTool,
 } from './customToolsManager'
+import {
+  loadCustomAvatarsFromDisk,
+  refreshCustomAvatars,
+} from './customAvatarsManager'
 
 const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_DIR_NAME = 'generated_images'
@@ -666,6 +670,26 @@ export function registerIPCHandlers(): void {
       }
     }
   )
+
+  ipcMain.handle('custom-avatars:list', async () => {
+    try {
+      const snapshot = await loadCustomAvatarsFromDisk()
+      return { success: true, data: snapshot }
+    } catch (error: any) {
+      console.error('[IPC custom-avatars:list] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
+  ipcMain.handle('custom-avatars:refresh', async () => {
+    try {
+      const snapshot = await refreshCustomAvatars()
+      return { success: true, data: snapshot }
+    } catch (error: any) {
+      console.error('[IPC custom-avatars:refresh] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
 
   // Image management
   ipcMain.handle('image:save-generated', async (event, base64Data: string) => {

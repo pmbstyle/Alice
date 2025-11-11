@@ -115,6 +115,8 @@
 
         <UserCustomizationTab
           v-if="activeTab === 'customization'"
+          :current-settings="currentSettings"
+          @update:setting="(key, value) => (currentSettings[key] = value)"
         />
       </div>
 

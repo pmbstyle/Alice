@@ -1,9 +1,9 @@
 import { ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { setVideo } from '../utils/videoProcess'
 import eventBus from '../utils/eventBus'
 import type { ChatMessage } from '../types/chat'
 import { createHistoryManager } from '../modules/conversation/historyManager'
+import { useCustomAvatarsStore } from './customAvatarsStore'
 
 export type AudioState =
   | 'IDLE'
@@ -15,6 +15,7 @@ export type AudioState =
   | 'GENERATING_IMAGE'
 
 export const useGeneralStore = defineStore('general', () => {
+  const customAvatarsStore = useCustomAvatarsStore()
   const audioState = ref<AudioState>('IDLE')
   const isRecordingRequested = ref<boolean>(false)
   const isTTSEnabled = ref<boolean>(true)
@@ -39,7 +40,9 @@ export const useGeneralStore = defineStore('general', () => {
   const takingScreenShot = ref<boolean>(false)
   const audioPlayer = ref<HTMLAudioElement | null>(null)
   const aiVideo = ref<HTMLVideoElement | null>(null)
-  const videoSource = ref<string>(setVideo('STAND_BY'))
+  const videoSource = ref<string>(
+    customAvatarsStore.builtInAvatar.stateVideos.standby
+  )
   const audioQueue = ref<Response[]>([])
   const sideBarView = ref<string>('chat')
   const attachedFile = ref<File | null>(null)
@@ -81,45 +84,61 @@ export const useGeneralStore = defineStore('general', () => {
     }
   }
 
+  const getVideoForState = (state: AudioState) => {
+    const activeAvatar = customAvatarsStore.activeAvatar
+    switch (state) {
+      case 'SPEAKING':
+        return activeAvatar.stateVideos.speaking
+      case 'PROCESSING_AUDIO':
+      case 'WAITING_FOR_RESPONSE':
+      case 'GENERATING_IMAGE':
+        return activeAvatar.stateVideos.thinking
+      case 'CONFIG':
+        return (
+          activeAvatar.stateVideos.config ||
+          customAvatarsStore.builtInAvatar.stateVideos.config ||
+          activeAvatar.stateVideos.standby
+        )
+      case 'LISTENING':
+      case 'IDLE':
+      default:
+        return activeAvatar.stateVideos.standby
+    }
+  }
+
+  const syncVideoSource = (state: AudioState) => {
+    const newSource = getVideoForState(state)
+    if (!aiVideo.value) {
+      videoSource.value = newSource
+      return
+    }
+    if (videoSource.value !== newSource) {
+      videoSource.value = newSource
+      aiVideo.value.load()
+    }
+    aiVideo.value
+      .play()
+      .catch(e => console.warn('Video play interrupted or failed:', e))
+  }
+
   watch(
     audioState,
     newState => {
-      if (aiVideo.value) {
-        let targetVideoType = 'STAND_BY'
-        switch (newState) {
-          case 'SPEAKING':
-            targetVideoType = 'SPEAKING'
-            break
-          case 'PROCESSING_AUDIO':
-          case 'WAITING_FOR_RESPONSE':
-          case 'GENERATING_IMAGE':
-            targetVideoType = 'PROCESSING'
-            break
-          case 'CONFIG':
-            targetVideoType = 'CONFIG'
-            break
-          case 'LISTENING':
-          case 'IDLE':
-          default:
-            targetVideoType = 'STAND_BY'
-            break
-        }
-        const newSource = setVideo(targetVideoType)
-        if (videoSource.value !== newSource) {
-          videoSource.value = newSource
-          aiVideo.value.load()
-          aiVideo.value
-            .play()
-            .catch(e => console.warn('Video play interrupted or failed:', e))
-        } else if (aiVideo.value.paused) {
-          aiVideo.value
-            .play()
-            .catch(e => console.warn('Video play interrupted or failed:', e))
-        }
-      }
+      syncVideoSource(newState)
     },
     { immediate: true }
   )
+
+  watch(
+    () => customAvatarsStore.activeAvatarId,
+    () => {
+      syncVideoSource(audioState.value)
+    }
+  )
+
+  customAvatarsStore.ensureInitialized().catch(error => {
+    console.warn('Failed to initialize custom avatars store:', error)
+  })
 
   const queueAudioForPlayback = (audioResponse: Response): boolean => {
     if (!isTTSEnabled.value) return false

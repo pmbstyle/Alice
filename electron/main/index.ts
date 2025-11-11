@@ -31,6 +31,7 @@ import {
   registerCustomProtocol,
   getMainWindow,
 } from './windowManager'
+import { getCustomAvatarsRootPath } from './customAvatarsManager'
 import { registerIPCHandlers, registerGoogleIPCHandlers } from './ipcManager'
 import {
   registerMicrophoneToggleHotkey,
@@ -378,7 +379,10 @@ app.whenReady().then(async () => {
 
   initializeManagers()
 
-  registerCustomProtocol(GENERATED_IMAGES_FULL_PATH)
+  registerCustomProtocol(
+    GENERATED_IMAGES_FULL_PATH,
+    getCustomAvatarsRootPath()
+  )
 
   const initialSettings = await loadSettings()
   if (initialSettings) {

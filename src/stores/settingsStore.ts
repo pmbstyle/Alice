@@ -42,6 +42,7 @@ export interface AliceSettings {
   assistantReasoningEffort: 'minimal' | 'low' | 'medium' | 'high'
   assistantVerbosity: 'low' | 'medium' | 'high'
   assistantTools: string[]
+  assistantAvatar: string
   mcpServersConfig?: string
   MAX_HISTORY_MESSAGES_FOR_API: number
   SUMMARIZATION_MESSAGE_COUNT: number
@@ -111,6 +112,7 @@ const defaultSettings: AliceSettings = {
     'delete_memory',
     'recall_memories',
   ],
+  assistantAvatar: 'alice',
   mcpServersConfig: '[]',
   MAX_HISTORY_MESSAGES_FOR_API: 10,
   SUMMARIZATION_MESSAGE_COUNT: 20,
@@ -165,6 +167,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   assistantReasoningEffort: 'Reasoning Effort',
   assistantVerbosity: 'Response Verbosity',
   assistantTools: 'Enabled Assistant Tools',
+  assistantAvatar: 'Assistant Avatar',
   MAX_HISTORY_MESSAGES_FOR_API: 'Max History Messages for API',
   SUMMARIZATION_MESSAGE_COUNT: 'Summarization Message Count',
   SUMMARIZATION_MODEL: 'Summarization Model',
@@ -638,6 +641,7 @@ export const useSettingsStore = defineStore('settings', () => {
         assistantReasoningEffort: settings.value.assistantReasoningEffort,
         assistantVerbosity: settings.value.assistantVerbosity,
         assistantTools: Array.from(settings.value.assistantTools || []),
+        assistantAvatar: settings.value.assistantAvatar,
         mcpServersConfig: settings.value.mcpServersConfig,
         MAX_HISTORY_MESSAGES_FOR_API:
           settings.value.MAX_HISTORY_MESSAGES_FOR_API,

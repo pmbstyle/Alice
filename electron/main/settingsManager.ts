@@ -33,6 +33,7 @@ export interface AppSettings {
   assistantReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high'
   assistantVerbosity?: 'low' | 'medium' | 'high'
   assistantTools?: string[]
+  assistantAvatar?: string
   mcpServersConfig?: string
   MAX_HISTORY_MESSAGES_FOR_API?: number
   SUMMARIZATION_MESSAGE_COUNT?: number

@@ -137,6 +137,11 @@ contextBridge.exposeInMainWorld('customToolsAPI', {
     ipcRenderer.invoke('custom-tools:execute', { name, args }),
 })
 
+contextBridge.exposeInMainWorld('customAvatarsAPI', {
+  list: () => ipcRenderer.invoke('custom-avatars:list'),
+  refresh: () => ipcRenderer.invoke('custom-avatars:refresh'),
+})
+
 // --------- Preload scripts loading ---------
 function domReady(
   condition: DocumentReadyState[] = ['complete', 'interactive']

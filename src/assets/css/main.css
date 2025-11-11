@@ -5,7 +5,7 @@
   height: 200px;
 }
 .avatar-ring {
-  @apply rounded-full ring-2 ring-blue-500 bg-blue-500 ring-offset-base-100 ring-offset-2
+  @apply rounded-full ring-2 ring-blue-500 bg-gray-700 ring-offset-base-100 ring-offset-2
   relative overflow-hidden !flex justify-center items-center
   z-20 bg-no-repeat bg-cover bg-center shadow-md;
 }

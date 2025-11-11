@@ -4,6 +4,118 @@
       User Customization
     </h3>
     <fieldset
+      class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+    >
+      <legend class="fieldset-legend">Assistant Avatar</legend>
+      <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div class="flex gap-4">
+          <div
+            class="avatar-ring w-[180px] h-[180px] ring-2 ring-blue-400 flex items-center justify-center rounded-full from-slate-900 to-slate-800 flex-shrink-0"
+          >
+            <video
+              ref="avatarPreviewVideo"
+              class="rounded-full w-[180px] h-[180px] object-cover"
+              :src="previewVideoSource"
+              loop
+              muted
+              autoplay
+              playsinline
+            ></video>
+          </div>
+          <div class="space-y-2 text-sm text-gray-300">
+            <p>
+              Drop folders inside
+              <code class="text-xs bg-gray-800 px-1 py-0.5 rounded">{{
+                customizationPathDisplay
+              }}</code>
+              with three MP4 files:
+              <code>speaking.mp4</code>,
+              <code>thinking.mp4</code>, and
+              <code>standby.mp4</code>.
+            </p>
+            <p class="text-xs text-gray-400">
+              Folder name becomes the avatar name. Standby video renders inside the app and this preview.
+            </p>
+            <div class="flex flex-wrap items-center gap-2 pt-2">
+              <button
+                type="button"
+                class="btn btn-sm btn-outline"
+                :disabled="customAvatarsStore.isRefreshing"
+                @click="handleAvatarRefresh"
+              >
+                <span
+                  v-if="customAvatarsStore.isRefreshing"
+                  class="loading loading-spinner loading-xs mr-2"
+                ></span>
+                Refresh
+              </button>
+              <span class="text-xs text-gray-500">
+                {{ customAvatarsStore.customAvatarCount }} custom avatars detected
+              </span>
+            </div>
+          </div>
+        </div>
+        <div class="text-sm text-gray-200">
+          Currently selected:
+          <span class="font-semibold text-white">{{ selectedAvatar.name }}</span>
+        </div>
+      </div>
+      <div class="mt-4 space-y-3">
+        <div
+          v-if="customAvatarsStore.isLoading"
+          class="flex items-center gap-2 text-sm text-gray-300"
+        >
+          <span class="loading loading-spinner loading-sm"></span>
+          Loading avatars...
+        </div>
+        <div
+          v-else
+          class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3"
+        >
+          <label
+            v-for="avatar in customAvatarsStore.allAvatars"
+            :key="avatar.id"
+            class="p-3 rounded-lg border cursor-pointer transition-all bg-gray-900/70"
+            :class="{
+              'border-blue-400 ring-2 ring-blue-400':
+                selectedAvatarId === avatar.id,
+              'border-gray-700 hover:border-gray-500': selectedAvatarId !== avatar.id,
+            }"
+          >
+            <input
+              class="hidden"
+              type="radio"
+              name="assistant-avatar"
+              :value="avatar.id"
+              :checked="selectedAvatarId === avatar.id"
+              @change="() => handleAvatarSelect(avatar.id)"
+            />
+            <div class="flex flex-col gap-1">
+              <span class="font-semibold text-white">{{ avatar.name }}</span>
+              <span class="text-xs text-gray-400">
+                {{ avatar.source === 'builtin' ? 'Built-in' : avatar.folderName }}
+              </span>
+            </div>
+          </label>
+        </div>
+        <div
+          v-if="customAvatarsStore.error"
+          class="alert alert-error text-sm mt-2"
+        >
+          {{ customAvatarsStore.error }}
+        </div>
+        <p
+          v-else-if="!customAvatarsStore.customAvatarCount"
+          class="text-xs text-gray-400"
+        >
+          No custom avatars yet. Create a folder under
+          <code>{{ customizationPathDisplay }}</code>
+          and add the required videos to see it here.
+        </p>
+      </div>
+    </fieldset>
+
+    <fieldset
       class="fieldset bg-gray-900/90 border-green-500/50 rounded-box w-full border p-4"
     >
       <legend class="fieldset-legend">Custom Tools</legend>
@@ -308,11 +420,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useCustomToolsStore } from '../../stores/customToolsStore'
+import { useCustomAvatarsStore } from '../../stores/customAvatarsStore'
+import type { AliceSettings } from '../../stores/settingsStore'
+
+const props = defineProps<{
+  currentSettings: AliceSettings
+}>()
+
+const emit = defineEmits<{
+  'update:setting': [
+    key: keyof AliceSettings,
+    value: string | boolean | number | string[],
+  ]
+}>()
 
 const store = useCustomToolsStore()
+const customAvatarsStore = useCustomAvatarsStore()
 const { tools } = storeToRefs(store)
 
 const showAdvanced = ref(false)
@@ -347,13 +473,50 @@ const customizationRoot = computed(() => {
   return pathParts.length > 1 ? pathParts[0] : 'user-customization/'
 })
 
+const avatarPreviewVideo = ref<HTMLVideoElement | null>(null)
+const selectedAvatarId = computed(
+  () => props.currentSettings.assistantAvatar || customAvatarsStore.builtInAvatar.id
+)
+const selectedAvatar = computed(
+  () =>
+    customAvatarsStore.allAvatars.find(avatar => avatar.id === selectedAvatarId.value) ||
+    customAvatarsStore.builtInAvatar
+)
+const previewVideoSource = computed(() => selectedAvatar.value.stateVideos.standby)
+const customizationPathDisplay = computed(
+  () => customAvatarsStore.customizationRoot || 'user-customization/custom-avatars'
+)
+
+watch(previewVideoSource, async () => {
+  await nextTick()
+  if (avatarPreviewVideo.value) {
+    avatarPreviewVideo.value.load()
+    avatarPreviewVideo.value
+      .play()
+      .catch(() => {
+        /* Ignore autoplay issues inside settings */
+      })
+  }
+})
+
 function hydrateJsonEditor() {
   jsonEditorValue.value = JSON.stringify(tools.value, null, 2)
 }
 
 onMounted(async () => {
-  await store.ensureInitialized()
+  await Promise.all([
+    store.ensureInitialized(),
+    customAvatarsStore.ensureInitialized(),
+  ])
   hydrateJsonEditor()
+  await nextTick()
+  if (avatarPreviewVideo.value) {
+    avatarPreviewVideo.value
+      .play()
+      .catch(() => {
+        /* ignore */
+      })
+  }
 })
 
 watch(
@@ -474,6 +637,18 @@ async function saveJsonEditor() {
     jsonError.value = error?.message || 'Invalid JSON payload.'
   } finally {
     isSavingJson.value = false
+  }
+}
+
+function handleAvatarSelect(id: string) {
+  emit('update:setting', 'assistantAvatar', id)
+}
+
+async function handleAvatarRefresh() {
+  try {
+    await customAvatarsStore.refresh()
+  } catch {
+    // error surfaced via store.error
   }
 }
 </script>

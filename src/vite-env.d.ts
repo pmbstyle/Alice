@@ -6,6 +6,7 @@ import type {
   CustomToolExecutionResult,
   CustomToolDefinition,
 } from '../types/customTools'
+import type { CustomAvatarsSnapshot } from '../types/customAvatars'
 
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
@@ -170,5 +171,9 @@ interface Window {
       name: string,
       args?: Record<string, any>
     ) => Promise<{ success: boolean; data?: CustomToolExecutionResult; error?: string }>
+  }
+  customAvatarsAPI: {
+    list: () => Promise<{ success: boolean; data?: CustomAvatarsSnapshot; error?: string }>
+    refresh: () => Promise<{ success: boolean; data?: CustomAvatarsSnapshot; error?: string }>
   }
 }

@@ -243,7 +243,10 @@ export function cleanupWindows(): void {
   settingsWindow = null
 }
 
-export function registerCustomProtocol(generatedImagesPath: string): void {
+export function registerCustomProtocol(
+  generatedImagesPath: string,
+  customAvatarsPath?: string
+): void {
   protocol.registerFileProtocol('alice-image', (request, callback) => {
     const url = request.url.substring('alice-image://'.length)
     const decodedUrlPath = decodeURIComponent(url)
@@ -260,4 +263,23 @@ export function registerCustomProtocol(generatedImagesPath: string): void {
       callback({ error: -6 })
     }
   })
+
+  if (customAvatarsPath) {
+    protocol.registerFileProtocol('alice-avatar', (request, callback) => {
+      const url = request.url.substring('alice-avatar://'.length)
+      const decodedUrlPath = decodeURIComponent(url)
+      const filePath = path.normalize(
+        path.join(customAvatarsPath, decodedUrlPath)
+      )
+
+      if (filePath.startsWith(path.normalize(customAvatarsPath))) {
+        callback({ path: filePath })
+      } else {
+        console.error(
+          `[Protocol] Denied avatar access to unsafe path: ${filePath} from URL: ${request.url}`
+        )
+        callback({ error: -6 })
+      }
+    })
+  }
 }

@@ -17,10 +17,6 @@
             'w-[480px] h-[480px]': !isMinimized && isElectron,
             'w-[430px] h-[430px]': !isElectron,
           }"
-          :style="{
-            backgroundImage: `url('${bg}')`,
-            backgroundPositionY: !isMinimized ? '-62px' : '-25px',
-          }"
         >
           <audio ref="audioPlayerElement" class="hidden"></audio>
           <video
@@ -57,7 +53,6 @@ import { onMounted, onUnmounted, ref as vueRef } from 'vue'
 import { storeToRefs } from 'pinia'
 import Actions from './Actions.vue'
 import Sidebar from './Sidebar.vue'
-import { bg } from '../utils/assetsImport'
 
 import { useGeneralStore } from '../stores/generalStore'
 import { useConversationStore } from '../stores/conversationStore'

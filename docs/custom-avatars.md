@@ -39,6 +39,8 @@ Inside every avatar folder create the following MP4 files (lowercase names, `.mp
 
 The choice is persisted in `alice-settings.json`, so it survives restarts.
 
+<img src="https://github.com/pmbstyle/Alice/blob/main/docs/custom-avatars.gif"/>
+
 ## How it works
 
 - The renderer never reads from disk directly. Videos play through a custom `alice-avatar://` protocol that safely maps to the `custom-avatars` directory in the Electron main process.

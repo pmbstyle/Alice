@@ -90,7 +90,22 @@ Fully customizable settings interface:
 * Available tools & MCP configuration
 * Google integrations
 
+### 🔨 Custom Tools
 
+Alice supports [custom tools](https://github.com/pmbstyle/Alice/blob/main/docs/custom-tools.md) that are defined in JSON and backed by local scripts.
+
+1. Open *Settings → Customization → Custom tools*
+2. Upload or drop your script (writes to `custom-tool-scripts/`)
+3. Click **Add Tool**, fill in metadata, and paste the JSON schema. Saving updates `custom-tools.json`
+4. Toggle the tool on/off in the list. Only enabled + valid entries are offered to the model.
+
+### 🎭 Custom Avatars
+
+Swap Alice's appearance with [your own](https://github.com/pmbstyle/Alice/blob/main/docs/custom-avatars.md) video loops:
+
+1. Create a folder under `user-customization/custom-avatars/<AvatarName>/`.
+2. Drop `speaking.mp4`, `thinking.mp4`, and `standby.mp4` into that folder (all required).
+3. Open **Settings → Customization → Assistant Avatar**, hit **Refresh**, and pick the new avatar.
 
 ## 🚀 Download
 

@@ -40,6 +40,11 @@ export const useGeneralStore = defineStore('general', () => {
   const takingScreenShot = ref<boolean>(false)
   const audioPlayer = ref<HTMLAudioElement | null>(null)
   const aiVideo = ref<HTMLVideoElement | null>(null)
+  const avatarFallbackImage = ref<string | null>(null)
+  const mediaReadyStateThreshold =
+    typeof HTMLMediaElement !== 'undefined'
+      ? HTMLMediaElement.HAVE_CURRENT_DATA
+      : 2
   const videoSource = ref<string>(
     customAvatarsStore.builtInAvatar.stateVideos.standby
   )
@@ -106,6 +111,37 @@ export const useGeneralStore = defineStore('general', () => {
     }
   }
 
+  // Cache the current frame so the avatar circle never flashes empty between state swaps.
+  const captureCurrentVideoFrame = (): string | null => {
+    if (typeof document === 'undefined') return null
+    if (!aiVideo.value) return null
+    const videoEl = aiVideo.value
+    const width = videoEl.videoWidth
+    const height = videoEl.videoHeight
+    if (!width || !height) return null
+
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const context = canvas.getContext('2d')
+    if (!context) return null
+
+    try {
+      context.drawImage(videoEl, 0, 0, width, height)
+      return canvas.toDataURL('image/jpeg', 0.85)
+    } catch (error) {
+      console.warn('Failed to capture avatar frame:', error)
+      return null
+    }
+  }
+
+  const updateAvatarFallbackImage = () => {
+    const frame = captureCurrentVideoFrame()
+    if (frame) {
+      avatarFallbackImage.value = frame
+    }
+  }
+
   const syncVideoSource = (state: AudioState) => {
     const newSource = getVideoForState(state)
     if (!aiVideo.value) {
@@ -113,6 +149,7 @@ export const useGeneralStore = defineStore('general', () => {
       return
     }
     if (videoSource.value !== newSource) {
+      updateAvatarFallbackImage()
       videoSource.value = newSource
       aiVideo.value.load()
     }
@@ -120,6 +157,24 @@ export const useGeneralStore = defineStore('general', () => {
       .play()
       .catch(e => console.warn('Video play interrupted or failed:', e))
   }
+
+  const handleVideoLoadedData = () => {
+    updateAvatarFallbackImage()
+  }
+
+  watch(
+    aiVideo,
+    (newVideo, oldVideo) => {
+      oldVideo?.removeEventListener('loadeddata', handleVideoLoadedData)
+      if (newVideo) {
+        newVideo.addEventListener('loadeddata', handleVideoLoadedData)
+        if (newVideo.readyState >= mediaReadyStateThreshold) {
+          updateAvatarFallbackImage()
+        }
+      }
+    },
+    { immediate: true }
+  )
 
   watch(
     audioState,
@@ -174,6 +229,7 @@ export const useGeneralStore = defineStore('general', () => {
     audioPlayer,
     aiVideo,
     videoSource,
+    avatarFallbackImage,
     audioQueue,
     sideBarView,
     attachedFile,

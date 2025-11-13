@@ -142,6 +142,7 @@ onUnmounted(() => {
   if (isElectron) {
     cleanupScreenshotListeners()
   }
+  aiVideo.value = null
   eventBus.off('processing-complete', handleProcessingComplete)
   eventBus.off('mute-playback-toggle', handleToggleTTS)
   eventBus.off('take-screenshot', handleTakeScreenshot)

@@ -16,7 +16,7 @@ Alice is more than a chatbot; she’s built to feel present, responsive, emotion
 
 ## A full app overview with tutorials
 <p align="center">
-  <a href="https://www.youtube.com/watch?v=fDYUjh6UXqk">
+  <a href="https://www.youtube.com/watch?v=aFTjmTRTLUM">
     <img width="846" height="475" alt="image" src="https://github.com/user-attachments/assets/432211d2-d820-437d-9541-8cedbba1f770" />
   </a>
 </p>

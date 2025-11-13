@@ -7,6 +7,7 @@
       <div class="avatar" :class="{ open: openSidebar }">
         <div
           class="avatar-ring"
+          :style="avatarRingStyle"
           :class="{
             'ring-green-500!': audioState === 'SPEAKING',
             'ring-cyan-500!':
@@ -49,7 +50,8 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref as vueRef } from 'vue'
+import { computed, onMounted, onUnmounted, ref as vueRef } from 'vue'
+import type { CSSProperties } from 'vue'
 import { storeToRefs } from 'pinia'
 import Actions from './Actions.vue'
 import Sidebar from './Sidebar.vue'
@@ -94,6 +96,7 @@ const {
   isTTSEnabled,
   isRecordingRequested,
   takingScreenShot,
+  avatarFallbackImage,
 } = storeToRefs(generalStore)
 const { setAudioState } = generalStore
 
@@ -102,6 +105,19 @@ const audioPlayerElement = vueRef<HTMLAudioElement | null>(null)
 const aiVideoElement = vueRef<HTMLVideoElement | null>(null)
 
 let isProcessingRequest = false
+
+const avatarRingStyle = computed<CSSProperties>(() => {
+  const style: CSSProperties = {
+    backgroundColor: '#050505',
+  }
+  if (avatarFallbackImage.value) {
+    style.backgroundImage = `url(${avatarFallbackImage.value})`
+    style.backgroundSize = 'cover'
+    style.backgroundPosition = 'center'
+    style.backgroundRepeat = 'no-repeat'
+  }
+  return style
+})
 
 onMounted(async () => {
   audioPlayer.value = audioPlayerElement.value
@@ -126,6 +142,7 @@ onUnmounted(() => {
   if (isElectron) {
     cleanupScreenshotListeners()
   }
+  aiVideo.value = null
   eventBus.off('processing-complete', handleProcessingComplete)
   eventBus.off('mute-playback-toggle', handleToggleTTS)
   eventBus.off('take-screenshot', handleTakeScreenshot)

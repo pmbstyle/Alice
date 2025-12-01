@@ -42,7 +42,7 @@
     "axios": "^1.12.2",
     "daisyui": "^5.1.26",
     "dotenv": "^17.2.3",
-    "electron": "28.3.3",
+    "electron": "39.2.4",
     "electron-builder": "^24.13.3",
     "cross-env": "^7.0.3",
     "openai": "^6.0.0",

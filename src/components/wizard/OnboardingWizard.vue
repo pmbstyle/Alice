@@ -114,20 +114,28 @@ const canContinue = computed(() => {
       return isCurrentProviderTested()
     case 3:
       if (formData.useLocalModels) return true
+
+      // Check OpenAI Key requirement for non-OpenAI providers (for voice features)
       if (
         (formData.aiProvider === 'ollama' ||
           formData.aiProvider === 'lm-studio' ||
           formData.aiProvider === 'openrouter') &&
-        !formData.useLocalModels
+        !formData.VITE_OPENAI_API_KEY.trim()
       ) {
-        return formData.VITE_OPENAI_API_KEY.trim() !== ''
+        return false
       }
-      if (formData.sttProvider === 'groq') {
-        return formData.VITE_GROQ_API_KEY.trim() !== ''
+
+      // Check specific STT provider requirements
+      if (formData.sttProvider === 'groq' && !formData.VITE_GROQ_API_KEY.trim()) {
+        return false
       }
-      if (formData.sttProvider === 'google') {
-        return formData.VITE_GOOGLE_API_KEY.trim() !== ''
+      if (
+        formData.sttProvider === 'google' &&
+        !formData.VITE_GOOGLE_API_KEY.trim()
+      ) {
+        return false
       }
+
       return true
     case 4:
       return true

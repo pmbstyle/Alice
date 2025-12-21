@@ -366,6 +366,8 @@
             <option value="ja">Japanese</option>
             <option value="ko">Korean</option>
             <option value="zh">Chinese</option>
+            <option value="ar">Arabic</option>
+            <option value="hi">Hindi</option>
             <option value="tr">Turkish</option>
             <option value="pl">Polish</option>
             <option value="nl">Dutch</option>

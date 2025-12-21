@@ -309,6 +309,7 @@
           >
             <option value="openai">OpenAI (Good quality, integrated)</option>
             <option value="groq">Groq (Faster, requires separate key)</option>
+            <option value="google">Google (Cloud)</option>
           </select>
         </div>
 
@@ -329,6 +330,21 @@
             type="password"
             v-model="formData.VITE_GROQ_API_KEY"
             placeholder="gsk_..."
+            class="input input-bordered w-full focus:input-primary"
+          />
+        </div>
+
+        <div v-if="formData.sttProvider === 'google'" class="form-control">
+          <label class="label">
+            <span class="label-text">Google API Key</span>
+          </label>
+          <div class="text-sm text-base-content/70 mb-2">
+            Required for Google Cloud Speech-to-Text.
+          </div>
+          <input
+            type="password"
+            v-model="formData.VITE_GOOGLE_API_KEY"
+            placeholder="AIza..."
             class="input input-bordered w-full focus:input-primary"
           />
         </div>

@@ -23,7 +23,8 @@ export interface AliceSettings {
   VITE_OPENAI_API_KEY: string
   VITE_OPENROUTER_API_KEY: string
   VITE_GROQ_API_KEY: string
-  sttProvider: 'openai' | 'groq' | 'local'
+  VITE_GOOGLE_API_KEY: string
+  sttProvider: 'openai' | 'groq' | 'google' | 'local'
   aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
 
   // Local Go Backend STT settings
@@ -48,8 +49,9 @@ export interface AliceSettings {
   SUMMARIZATION_MESSAGE_COUNT: number
   SUMMARIZATION_MODEL: string
   SUMMARIZATION_SYSTEM_PROMPT: string
-  ttsProvider: 'openai' | 'local'
+  ttsProvider: 'openai' | 'google' | 'local'
   ttsVoice: 'alloy' | 'echo' | 'fable' | 'nova' | 'onyx' | 'shimmer'
+  googleTtsVoice: string
   localTtsVoice: string
   embeddingProvider: 'openai' | 'local'
 
@@ -88,6 +90,7 @@ const defaultSettings: AliceSettings = {
   VITE_OPENAI_API_KEY: '',
   VITE_OPENROUTER_API_KEY: '',
   VITE_GROQ_API_KEY: '',
+  VITE_GOOGLE_API_KEY: '',
   sttProvider: 'openai',
   aiProvider: 'openai',
 
@@ -120,6 +123,7 @@ const defaultSettings: AliceSettings = {
   SUMMARIZATION_SYSTEM_PROMPT: DEFAULT_SUMMARIZATION_SYSTEM_PROMPT,
   ttsProvider: 'openai',
   ttsVoice: 'nova',
+  googleTtsVoice: 'en-US-Journey-F',
   localTtsVoice: 'en_US-amy-medium',
   embeddingProvider: 'openai',
 
@@ -148,6 +152,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_OPENAI_API_KEY: 'OpenAI API Key',
   VITE_OPENROUTER_API_KEY: 'OpenRouter API Key',
   VITE_GROQ_API_KEY: 'Groq API Key (STT)',
+  VITE_GOOGLE_API_KEY: 'Google API Key',
   sttProvider: 'Speech-to-Text Provider',
   aiProvider: 'AI Provider',
 
@@ -174,6 +179,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   SUMMARIZATION_SYSTEM_PROMPT: 'Summarization System Prompt',
   ttsProvider: 'Text-to-Speech Provider',
   ttsVoice: 'OpenAI TTS Voice',
+  googleTtsVoice: 'Google TTS Voice',
   localTtsVoice: 'Local TTS Voice',
   embeddingProvider: 'Embedding Provider',
   microphoneToggleHotkey: 'Microphone Toggle Hotkey',
@@ -252,7 +258,7 @@ export const useSettingsStore = defineStore('settings', () => {
       console.log('✅ Settings migration completed successfully')
     }
 
-    const validSTTProviders = ['openai', 'groq', 'local'] as const
+    const validSTTProviders = ['openai', 'groq', 'google', 'local'] as const
     if (!validSTTProviders.includes(validated.sttProvider as any)) {
       validated.sttProvider = 'openai'
     }
@@ -309,6 +315,13 @@ export const useSettingsStore = defineStore('settings', () => {
 
     if (settings.value.sttProvider === 'groq') {
       essentialKeys.push('VITE_GROQ_API_KEY')
+    }
+
+    if (
+      settings.value.sttProvider === 'google' ||
+      settings.value.ttsProvider === 'google'
+    ) {
+      essentialKeys.push('VITE_GOOGLE_API_KEY')
     }
 
     if (settings.value.sttProvider === 'local') {
@@ -564,7 +577,7 @@ export const useSettingsStore = defineStore('settings', () => {
       ;(settings.value as any)[key] = String(value)
     }
     if (key === 'sttProvider') {
-      settings.value[key] = value as 'openai' | 'groq' | 'local'
+      settings.value[key] = value as 'openai' | 'groq' | 'google' | 'local'
     }
     if (key === 'aiProvider') {
       settings.value[key] = value as
@@ -589,9 +602,12 @@ export const useSettingsStore = defineStore('settings', () => {
       settings.value[key] = value as boolean
     }
     if (key === 'ttsProvider') {
-      settings.value[key] = value as 'openai' | 'local'
+      settings.value[key] = value as 'openai' | 'google' | 'local'
     }
     if (key === 'localTtsVoice') {
+      settings.value[key] = value as string
+    }
+    if (key === 'googleTtsVoice') {
       settings.value[key] = value as string
     }
     if (key === 'embeddingProvider') {
@@ -624,6 +640,7 @@ export const useSettingsStore = defineStore('settings', () => {
         VITE_OPENAI_API_KEY: settings.value.VITE_OPENAI_API_KEY,
         VITE_OPENROUTER_API_KEY: settings.value.VITE_OPENROUTER_API_KEY,
         VITE_GROQ_API_KEY: settings.value.VITE_GROQ_API_KEY,
+        VITE_GOOGLE_API_KEY: settings.value.VITE_GOOGLE_API_KEY,
         sttProvider: settings.value.sttProvider,
         aiProvider: settings.value.aiProvider,
 
@@ -650,6 +667,7 @@ export const useSettingsStore = defineStore('settings', () => {
         SUMMARIZATION_SYSTEM_PROMPT: settings.value.SUMMARIZATION_SYSTEM_PROMPT,
         ttsProvider: settings.value.ttsProvider,
         ttsVoice: settings.value.ttsVoice,
+        googleTtsVoice: settings.value.googleTtsVoice,
         localTtsVoice: settings.value.localTtsVoice,
         embeddingProvider: settings.value.embeddingProvider,
         microphoneToggleHotkey: settings.value.microphoneToggleHotkey,
@@ -759,6 +777,18 @@ export const useSettingsStore = defineStore('settings', () => {
     ) {
       error.value = `Groq STT is selected, but '${settingKeyToLabelMap.VITE_GROQ_API_KEY}' is missing.`
       generalStore.statusMessage = 'Groq API Key is required for Groq STT.'
+      isSaving.value = false
+      return
+    }
+
+    if (
+      (currentConfigForTest.sttProvider === 'google' ||
+        currentConfigForTest.ttsProvider === 'google') &&
+      !currentConfigForTest.VITE_GOOGLE_API_KEY?.trim()
+    ) {
+      error.value = `Google is selected, but '${settingKeyToLabelMap.VITE_GOOGLE_API_KEY}' is missing.`
+      generalStore.statusMessage =
+        'Google API Key is required for Google services.'
       isSaving.value = false
       return
     }

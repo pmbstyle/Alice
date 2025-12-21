@@ -742,6 +742,8 @@ export const useConversationStore = defineStore('conversation', () => {
         api.transcribeWithOpenAI(audio),
       transcribeWithGroq: (audio: ArrayBuffer) =>
         api.transcribeWithGroq(audio),
+      transcribeWithGoogle: (audio: ArrayBuffer) =>
+        api.transcribeWithGoogle(audio),
       transcribeWithBackend: (audio: ArrayBuffer) =>
         api.transcribeWithBackend(audio),
       logInfo: (...args: any[]) => console.log(...args),

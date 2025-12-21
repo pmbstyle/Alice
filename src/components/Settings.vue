@@ -438,6 +438,17 @@ const handleSaveAndTestSettings = async () => {
     return
   }
 
+  if (
+    (currentSettings.value.sttProvider === 'google' ||
+      currentSettings.value.ttsProvider === 'google') &&
+    !currentSettings.value.VITE_GOOGLE_API_KEY?.trim()
+  ) {
+    settingsStore.error = `Google is selected, but the Google API Key is missing.`
+    settingsStore.successMessage = null
+    settingsStore.isSaving = false
+    return
+  }
+
   await settingsStore.saveAndTestSettings()
 
   if (window.ipcRenderer && window.location.hash === '#settings') {

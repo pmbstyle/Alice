@@ -1056,9 +1056,70 @@ export const ttsStream = async (
     } catch (error: any) {
       return fallbackToOpenAITTS(cleanedText, signal)
     }
+  } else if (settings.ttsProvider === 'google') {
+    try {
+      return await googleTTS(cleanedText, signal)
+    } catch (error) {
+      console.error('Google TTS failed, falling back to OpenAI:', error)
+      return fallbackToOpenAITTS(cleanedText, signal)
+    }
   } else {
     return fallbackToOpenAITTS(cleanedText, signal)
   }
+}
+
+const googleTTS = async (
+  text: string,
+  signal: AbortSignal
+): Promise<Response> => {
+  const settingsStore = useSettingsStore()
+  const apiKey = settingsStore.config.VITE_GOOGLE_API_KEY
+
+  if (!apiKey) {
+    throw new Error('Google API Key is not configured')
+  }
+
+  // Extract language code from voice name (e.g., "en-US-Journey-F" -> "en-US")
+  const voiceName = settingsStore.config.googleTtsVoice || 'en-US-Journey-F'
+  const languageCode = voiceName.split('-').slice(0, 2).join('-')
+
+  const response = await fetch(
+    `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+    {
+      method: 'POST',
+      signal,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        input: { text },
+        voice: {
+          languageCode: languageCode,
+          name: voiceName,
+        },
+        audioConfig: {
+          audioEncoding: 'MP3',
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(
+      `Google TTS Error: ${error.error?.message || response.statusText}`
+    )
+  }
+
+  const data = await response.json()
+  // data.audioContent is base64 string
+  const binaryString = atob(data.audioContent)
+  const bytes = new Uint8Array(binaryString.length)
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i)
+  }
+  const blob = new Blob([bytes.buffer], { type: 'audio/mp3' })
+  return new Response(blob)
 }
 
 // Helper function for OpenAI TTS (extracted from original function)
@@ -1077,6 +1138,57 @@ const fallbackToOpenAITTS = async (
       response_format: 'mp3',
     },
     { signal }
+  )
+}
+
+export const transcribeWithGoogle = async (
+  audioBuffer: ArrayBuffer
+): Promise<string> => {
+  const settingsStore = useSettingsStore()
+  const apiKey = settingsStore.config.VITE_GOOGLE_API_KEY
+
+  if (!apiKey) {
+    throw new Error('Google API Key is not configured')
+  }
+
+  // Convert ArrayBuffer to Base64
+  const bytes = new Uint8Array(audioBuffer)
+  let binary = ''
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  const base64Audio = btoa(binary)
+
+  const response = await fetch(
+    `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        config: {
+          // If we don't specify encoding, Google attempts to detect it from the header (WAV)
+          languageCode:
+            settingsStore.config.localSttLanguage === 'auto'
+              ? 'en-US'
+              : settingsStore.config.localSttLanguage || 'en-US',
+        },
+        audio: {
+          content: base64Audio,
+        },
+      }),
+    }
+  )
+
+  if (!response.ok) {
+    const error = await response.json()
+    throw new Error(
+      `Google STT Error: ${error.error?.message || response.statusText}`
+    )
+  }
+
+  const data = await response.json()
+  return (
+    data.results?.map((r: any) => r.alternatives?.[0]?.transcript).join(' ') ||
+    ''
   )
 }
 

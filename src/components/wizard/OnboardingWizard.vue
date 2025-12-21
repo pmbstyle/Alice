@@ -72,10 +72,12 @@ const formData = reactive({
   ttsProvider: 'openai' as 'openai' | 'local',
   embeddingProvider: 'openai' as 'openai' | 'local',
   VITE_GROQ_API_KEY: '',
+  VITE_GOOGLE_API_KEY: '',
   ollamaBaseUrl: 'http://localhost:11434',
   lmStudioBaseUrl: 'http://localhost:1234',
   useLocalModels: false,
   availableModels: [] as string[],
+  localSttLanguage: 'auto',
 })
 
 const isTesting = reactive({
@@ -122,6 +124,9 @@ const canContinue = computed(() => {
       }
       if (formData.sttProvider === 'groq') {
         return formData.VITE_GROQ_API_KEY.trim() !== ''
+      }
+      if (formData.sttProvider === 'google') {
+        return formData.VITE_GOOGLE_API_KEY.trim() !== ''
       }
       return true
     case 4:

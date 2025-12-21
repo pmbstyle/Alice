@@ -366,6 +366,13 @@
             <option value="ja">Japanese</option>
             <option value="ko">Korean</option>
             <option value="zh">Chinese</option>
+            <option value="tr">Turkish</option>
+            <option value="pl">Polish</option>
+            <option value="nl">Dutch</option>
+            <option value="sv">Swedish</option>
+            <option value="da">Danish</option>
+            <option value="no">Norwegian</option>
+            <option value="fi">Finnish</option>
           </select>
         </div>
 

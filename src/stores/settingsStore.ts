@@ -889,16 +889,18 @@ export const useSettingsStore = defineStore('settings', () => {
   async function completeOnboarding(onboardingData: {
     VITE_OPENAI_API_KEY: string
     VITE_OPENROUTER_API_KEY: string
-    sttProvider: 'openai' | 'groq' | 'local'
-    ttsProvider?: 'openai' | 'local'
+    sttProvider: 'openai' | 'groq' | 'google' | 'local'
+    ttsProvider?: 'openai' | 'google' | 'local'
     embeddingProvider?: 'openai' | 'local'
     aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
     assistantModel?: string
     summarizationModel?: string
     VITE_GROQ_API_KEY: string
+    VITE_GOOGLE_API_KEY: string
     ollamaBaseUrl?: string
     lmStudioBaseUrl?: string
     useLocalModels?: boolean
+    localSttLanguage?: string
   }) {
     settings.value.VITE_OPENAI_API_KEY = onboardingData.VITE_OPENAI_API_KEY
     settings.value.VITE_OPENROUTER_API_KEY =
@@ -906,6 +908,7 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value.sttProvider = onboardingData.sttProvider
     settings.value.aiProvider = onboardingData.aiProvider
     settings.value.VITE_GROQ_API_KEY = onboardingData.VITE_GROQ_API_KEY
+    settings.value.VITE_GOOGLE_API_KEY = onboardingData.VITE_GOOGLE_API_KEY
 
     // Set models if provided
     if (onboardingData.assistantModel) {
@@ -915,13 +918,19 @@ export const useSettingsStore = defineStore('settings', () => {
       settings.value.SUMMARIZATION_MODEL = onboardingData.summarizationModel
     }
 
+    if (onboardingData.localSttLanguage) {
+      settings.value.localSttLanguage = onboardingData.localSttLanguage
+    }
+
     // Set TTS and embedding providers based on local models preference
     if (onboardingData.useLocalModels) {
       settings.value.ttsProvider = 'local'
       settings.value.embeddingProvider = 'local'
     } else {
-      settings.value.ttsProvider = 'openai'
-      settings.value.embeddingProvider = 'openai'
+      // Respect the user's choice from the wizard if available, otherwise default to openai
+      settings.value.ttsProvider = onboardingData.ttsProvider || 'openai'
+      settings.value.embeddingProvider =
+        onboardingData.embeddingProvider || 'openai'
     }
 
     if (onboardingData.ollamaBaseUrl) {

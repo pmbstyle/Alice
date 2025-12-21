@@ -72,10 +72,12 @@ const formData = reactive({
   ttsProvider: 'openai' as 'openai' | 'local',
   embeddingProvider: 'openai' as 'openai' | 'local',
   VITE_GROQ_API_KEY: '',
+  VITE_GOOGLE_API_KEY: '',
   ollamaBaseUrl: 'http://localhost:11434',
   lmStudioBaseUrl: 'http://localhost:1234',
   useLocalModels: false,
   availableModels: [] as string[],
+  localSttLanguage: 'auto',
 })
 
 const isTesting = reactive({
@@ -112,17 +114,28 @@ const canContinue = computed(() => {
       return isCurrentProviderTested()
     case 3:
       if (formData.useLocalModels) return true
+
+      // Check OpenAI Key requirement for non-OpenAI providers (for voice features)
       if (
         (formData.aiProvider === 'ollama' ||
           formData.aiProvider === 'lm-studio' ||
           formData.aiProvider === 'openrouter') &&
-        !formData.useLocalModels
+        !formData.VITE_OPENAI_API_KEY.trim()
       ) {
-        return formData.VITE_OPENAI_API_KEY.trim() !== ''
+        return false
       }
-      if (formData.sttProvider === 'groq') {
-        return formData.VITE_GROQ_API_KEY.trim() !== ''
+
+      // Check specific STT provider requirements
+      if (formData.sttProvider === 'groq' && !formData.VITE_GROQ_API_KEY.trim()) {
+        return false
       }
+      if (
+        formData.sttProvider === 'google' &&
+        !formData.VITE_GOOGLE_API_KEY.trim()
+      ) {
+        return false
+      }
+
       return true
     case 4:
       return true

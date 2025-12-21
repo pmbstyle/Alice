@@ -37,8 +37,53 @@
           >
             <option value="openai">OpenAI (gpt-4o-transcribe)</option>
             <option value="groq">Groq (whisper-large-v3)</option>
+            <option value="google">Google (Cloud)</option>
             <option value="local">Local (Go Backend)</option>
           </select>
+        </div>
+        <div
+          v-if="
+            currentSettings.sttProvider === 'google' ||
+            currentSettings.sttProvider === 'local'
+          "
+        >
+          <label for="stt-language" class="block mb-1 text-sm">Language *</label>
+          <select
+            id="stt-language"
+            v-model="currentSettings.localSttLanguage"
+            class="select select-bordered w-full focus:select-primary"
+            @change="
+              e => $emit('update:setting', 'localSttLanguage', e.target.value)
+            "
+          >
+            <option value="auto">Auto-detect</option>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="it">Italian</option>
+            <option value="pt">Portuguese</option>
+            <option value="ru">Russian</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh">Chinese</option>
+            <option value="ar">Arabic</option>
+            <option value="hi">Hindi</option>
+            <option value="tr">Turkish</option>
+            <option value="pl">Polish</option>
+            <option value="nl">Dutch</option>
+            <option value="sv">Swedish</option>
+            <option value="da">Danish</option>
+            <option value="no">Norwegian</option>
+            <option value="fi">Finnish</option>
+          </select>
+          <p class="text-xs text-gray-400 mt-1">
+            {{
+              currentSettings.sttProvider === 'google'
+                ? 'Select your language for better accuracy.'
+                : 'Auto-detect works for most languages. Select a specific language for better accuracy.'
+            }}
+          </p>
         </div>
         <div>
           <label for="openai-key" class="block mb-1 text-sm"
@@ -118,6 +163,27 @@
             Required only if Groq STT is selected above.
           </p>
         </div>
+        <div
+          v-if="
+            currentSettings.sttProvider === 'google' ||
+            currentSettings.ttsProvider === 'google'
+          "
+        >
+          <label for="google-key" class="block mb-1 text-sm"
+            >Google API Key *</label
+          >
+          <input
+            id="google-key"
+            type="password"
+            v-model="currentSettings.VITE_GOOGLE_API_KEY"
+            class="input focus:outline-none w-full"
+            autocomplete="new-password"
+            placeholder="AIza..."
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            Required for Google STT or TTS services.
+          </p>
+        </div>
       </div>
     </fieldset>
 
@@ -158,44 +224,6 @@
             </select>
             <p class="text-xs text-gray-400 mt-1">
               Larger models provide better accuracy but require more resources.
-            </p>
-          </div>
-          <div>
-            <label for="stt-language" class="block mb-1 text-sm"
-              >Language *</label
-            >
-            <select
-              id="stt-language"
-              v-model="currentSettings.localSttLanguage"
-              class="select select-bordered w-full focus:select-primary"
-              @change="
-                e => $emit('update:setting', 'localSttLanguage', e.target.value)
-              "
-            >
-              <option value="auto">Auto-detect</option>
-              <option value="en">English</option>
-              <option value="es">Spanish</option>
-              <option value="fr">French</option>
-              <option value="de">German</option>
-              <option value="it">Italian</option>
-              <option value="pt">Portuguese</option>
-              <option value="ru">Russian</option>
-              <option value="ja">Japanese</option>
-              <option value="ko">Korean</option>
-              <option value="zh">Chinese</option>
-              <option value="ar">Arabic</option>
-              <option value="hi">Hindi</option>
-              <option value="tr">Turkish</option>
-              <option value="pl">Polish</option>
-              <option value="nl">Dutch</option>
-              <option value="sv">Swedish</option>
-              <option value="da">Danish</option>
-              <option value="no">Norwegian</option>
-              <option value="fi">Finnish</option>
-            </select>
-            <p class="text-xs text-gray-400 mt-1">
-              Auto-detect works for most languages. Select a specific language
-              for better accuracy.
             </p>
           </div>
           <div>
@@ -265,6 +293,7 @@
             class="select select-bordered w-full focus:select-primary"
           >
             <option value="openai">OpenAI (Cloud)</option>
+            <option value="google">Google (Cloud)</option>
             <option value="local">Local (Piper)</option>
           </select>
           <p class="text-xs text-gray-400 mt-1">
@@ -286,6 +315,29 @@
             <option value="nova">Nova</option>
             <option value="onyx">Onyx</option>
             <option value="shimmer">Shimmer</option>
+          </select>
+        </div>
+        <div v-if="currentSettings.ttsProvider === 'google'">
+          <label for="google-tts-voice" class="block mb-1 text-sm"
+            >Google TTS Voice</label
+          >
+          <select
+            id="google-tts-voice"
+            v-model="currentSettings.googleTtsVoice"
+            class="select select-bordered w-full focus:select-primary"
+            @change="
+              e => $emit('update:setting', 'googleTtsVoice', e.target.value)
+            "
+          >
+            <option value="en-US-Journey-F">Journey F (Fem)</option>
+            <option value="en-US-Journey-O">Journey O (Fem)</option>
+            <option value="en-US-Neural2-C">Neural2 C (Fem)</option>
+            <option value="en-US-Neural2-F">Neural2 F (Fem)</option>
+            <option value="en-US-Neural2-H">Neural2 H (Fem)</option>
+            <option value="en-US-Standard-C">Standard C (Fem)</option>
+            <option value="en-US-Standard-E">Standard E (Fem)</option>
+            <option value="en-US-Wavenet-C">Wavenet C (Fem)</option>
+            <option value="en-US-Wavenet-F">Wavenet F (Fem)</option>
           </select>
         </div>
         <div v-if="currentSettings.ttsProvider === 'local'">

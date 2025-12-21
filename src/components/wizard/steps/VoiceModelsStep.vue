@@ -309,6 +309,7 @@
           >
             <option value="openai">OpenAI (Good quality, integrated)</option>
             <option value="groq">Groq (Faster, requires separate key)</option>
+            <option value="google">Google (Cloud)</option>
           </select>
         </div>
 
@@ -331,6 +332,50 @@
             placeholder="gsk_..."
             class="input input-bordered w-full focus:input-primary"
           />
+        </div>
+
+        <div v-if="formData.sttProvider === 'google'" class="form-control">
+          <label class="label">
+            <span class="label-text">Google API Key</span>
+          </label>
+          <div class="text-sm text-base-content/70 mb-2">
+            Required for Google Cloud Speech-to-Text.
+          </div>
+          <input
+            type="password"
+            v-model="formData.VITE_GOOGLE_API_KEY"
+            placeholder="AIza..."
+            class="input input-bordered w-full focus:input-primary"
+          />
+
+          <label class="label mt-2">
+            <span class="label-text">Language</span>
+          </label>
+          <select
+            v-model="formData.localSttLanguage"
+            class="select select-bordered w-full focus:select-primary"
+          >
+            <option value="auto">Auto-detect (Defaults to English)</option>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="it">Italian</option>
+            <option value="pt">Portuguese</option>
+            <option value="ru">Russian</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh">Chinese</option>
+            <option value="ar">Arabic</option>
+            <option value="hi">Hindi</option>
+            <option value="tr">Turkish</option>
+            <option value="pl">Polish</option>
+            <option value="nl">Dutch</option>
+            <option value="sv">Swedish</option>
+            <option value="da">Danish</option>
+            <option value="no">Norwegian</option>
+            <option value="fi">Finnish</option>
+          </select>
         </div>
 
         <div class="bg-base-200 p-4 rounded-lg space-y-2">

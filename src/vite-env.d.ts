@@ -16,6 +16,7 @@ declare module '*.vue' {
 
 interface ElectronAppSettings {
   VITE_OPENAI_API_KEY?: string
+  VITE_GOOGLE_API_KEY?: string
 }
 
 interface Window {

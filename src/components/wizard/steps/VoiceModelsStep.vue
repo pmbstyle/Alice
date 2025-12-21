@@ -347,6 +347,26 @@
             placeholder="AIza..."
             class="input input-bordered w-full focus:input-primary"
           />
+
+          <label class="label mt-2">
+            <span class="label-text">Language</span>
+          </label>
+          <select
+            v-model="formData.localSttLanguage"
+            class="select select-bordered w-full focus:select-primary"
+          >
+            <option value="auto">Auto-detect (Defaults to English)</option>
+            <option value="en">English</option>
+            <option value="es">Spanish</option>
+            <option value="fr">French</option>
+            <option value="de">German</option>
+            <option value="it">Italian</option>
+            <option value="pt">Portuguese</option>
+            <option value="ru">Russian</option>
+            <option value="ja">Japanese</option>
+            <option value="ko">Korean</option>
+            <option value="zh">Chinese</option>
+          </select>
         </div>
 
         <div class="bg-base-200 p-4 rounded-lg space-y-2">

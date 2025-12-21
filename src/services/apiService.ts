@@ -1141,6 +1141,34 @@ const fallbackToOpenAITTS = async (
   )
 }
 
+// Helper to map ISO 639-1 language codes to BCP-47 for Google Cloud
+function mapLanguageToBCP47(isoCode: string): string {
+  const mapping: Record<string, string> = {
+    auto: 'en-US',
+    zh: 'zh-CN',
+    en: 'en-US',
+    es: 'es-ES',
+    fr: 'fr-FR',
+    de: 'de-DE',
+    it: 'it-IT',
+    pt: 'pt-BR',
+    ru: 'ru-RU',
+    ja: 'ja-JP',
+    ko: 'ko-KR',
+    ar: 'ar-XA', // Google uses ar-XA for standard Arabic
+    hi: 'hi-IN',
+    tr: 'tr-TR',
+    pl: 'pl-PL',
+    nl: 'nl-NL',
+    sv: 'sv-SE',
+    da: 'da-DK',
+    no: 'nb-NO', // Google uses nb-NO for Norwegian Bokmål
+    fi: 'fi-FI',
+    uk: 'uk-UA',
+  }
+  return mapping[isoCode] || isoCode
+}
+
 export const transcribeWithGoogle = async (
   audioBuffer: ArrayBuffer
 ): Promise<string> => {
@@ -1151,25 +1179,35 @@ export const transcribeWithGoogle = async (
     throw new Error('Google API Key is not configured')
   }
 
-  // Convert ArrayBuffer to Base64
-  const bytes = new Uint8Array(audioBuffer)
-  let binary = ''
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i])
-  }
-  const base64Audio = btoa(binary)
+  // Convert ArrayBuffer to Base64 using FileReader (more efficient for large files)
+  const base64Audio = await new Promise<string>((resolve, reject) => {
+    const blob = new Blob([audioBuffer], { type: 'audio/wav' })
+    const reader = new FileReader()
+    reader.onloadend = () => {
+      const result = reader.result as string
+      // result is like "data:audio/wav;base64,....."
+      const base64 = result.split(',')[1]
+      resolve(base64)
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(blob)
+  })
+
+  const languageCode = mapLanguageToBCP47(
+    settingsStore.config.localSttLanguage || 'auto'
+  )
 
   const response = await fetch(
     `https://speech.googleapis.com/v1/speech:recognize?key=${apiKey}`,
     {
       method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
       body: JSON.stringify({
         config: {
           // If we don't specify encoding, Google attempts to detect it from the header (WAV)
-          languageCode:
-            settingsStore.config.localSttLanguage === 'auto'
-              ? 'en-US'
-              : settingsStore.config.localSttLanguage || 'en-US',
+          languageCode: languageCode,
         },
         audio: {
           content: base64Audio,

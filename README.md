@@ -24,8 +24,8 @@ While the OpenAI cloud API is preferred and provides the best user experience, A
 
 ### 🗣️ Voice Interaction
 
-* Fast, VAD-powered voice recognition (via `gpt-4o-transcribe` or `whisper-large-v3`)
-* Natural-sounding responses with OpenAI TTS and optional support for local multilingual text-to-speech via Piper TTS
+* Fast, VAD-powered voice recognition (via `gpt-4o-transcribe`, `google-tts-voice` or `whisper-large-v3`)
+* Natural-sounding responses with OpenAI/Google TTS and optional support for local multilingual text-to-speech via Piper TTS
 * Interruptible speech and streaming response cancellation for smoother flow
 
 ### 🧠 Memory & Context
@@ -43,7 +43,7 @@ While the OpenAI cloud API is preferred and provides the best user experience, A
 
 ### 🪄 Computer Use Tools
 
-Alice can now interact with your local system with user-approved permissions:
+Alice can interact with your local system with user-approved permissions:
 
 * 📂 File system browsing (e.g., listing folders)
 * 💻 Shell command execution (`ls`, `mv`, `mkdir`, etc)
@@ -67,7 +67,7 @@ Alice can now interact with your local system with user-approved permissions:
 * MCP server support
 
 ### 💬 Wake Word Support  
-With the local STT model, you can now set a **wake-up word** (like "Hey, Siri").  
+With the local STT model, you can set a **wake-up word** (like "Hey, Siri").  
 - Alice will always listen, but only process requests when the wake word is spoken.  
 - Default mode is **auto language detection**, but you can also select a specific language in settings. 
 
@@ -187,7 +187,7 @@ Install the output from the `release/` directory.
 
 ## 🤝 Contributing
 
-Ideas, bug reports, feature requests - all welcome! Open an issue or PR, or just drop by to share your thoughts. Your input helps shape Alice into something wonderful 💚
+Ideas, bug reports, feature requests - all welcome! Open an issue or PR, or drop by to share your thoughts. Your input helps shape Alice into something wonderful 💚
 
 ## A full app overview with tutorials
 <p align="center">

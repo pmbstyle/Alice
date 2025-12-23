@@ -603,10 +603,17 @@ export const indexMessageForThoughts = async (
   })
 }
 
+export type RetrievedThought =
+  | string
+  | {
+      role?: string
+      textContent?: string
+    }
+
 export const retrieveRelevantThoughtsForPrompt = async (
   content: string,
   topK = 3
-): Promise<string[]> => {
+): Promise<RetrievedThought[]> => {
   if (!content.trim()) return []
   const queryEmbedding = await createEmbedding(content)
   if (queryEmbedding.length === 0) return []
@@ -615,9 +622,10 @@ export const retrieveRelevantThoughtsForPrompt = async (
     queryEmbedding,
     topK,
   })
-  return ipcResult.success && Array.isArray(ipcResult.data)
-    ? ipcResult.data
-    : []
+  if (!ipcResult.success || !Array.isArray(ipcResult.data)) {
+    return []
+  }
+  return ipcResult.data
 }
 
 export const createSummarizationResponse = async (

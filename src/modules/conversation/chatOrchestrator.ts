@@ -55,6 +55,16 @@ export function createChatOrchestrator(
     return undefined
   }
 
+  const formatThoughtLine = (thought: any): string => {
+    if (typeof thought === 'string') {
+      return thought
+    }
+    const text = thought?.textContent?.trim()
+    if (!text) return ''
+    const role = thought?.role || 'unknown'
+    return `[${role}] ${text}`
+  }
+
   const buildContextMessages = async (): Promise<
     OpenAI.Responses.Request.InputItemLike[]
   > => {
@@ -98,7 +108,11 @@ export function createChatOrchestrator(
         if (thoughts.length > 0) {
           const thoughtsBlock =
             'Relevant thoughts from our past conversation (for context):\n' +
-            thoughts.map(t => `- ${t}`).join('\n')
+            thoughts
+              .map(formatThoughtLine)
+              .filter(Boolean)
+              .map(t => `- ${t}`)
+              .join('\n')
           contextMessages.push({
             role: 'user',
             content: [{ type: 'input_text', text: thoughtsBlock }],

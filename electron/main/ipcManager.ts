@@ -178,8 +178,11 @@ export function registerIPCHandlers(): void {
           topK,
           provider
         )
-        const thoughtTexts = thoughtsMetadatas.map(t => t.textContent)
-        return { success: true, data: thoughtTexts }
+        const thoughtEntries = thoughtsMetadatas.map(t => ({
+          role: t.role,
+          textContent: t.textContent,
+        }))
+        return { success: true, data: thoughtEntries }
       } catch (error) {
         console.error('[Main IPC thoughtVector:search] Error:', error)
         return { success: false, error: (error as Error).message }

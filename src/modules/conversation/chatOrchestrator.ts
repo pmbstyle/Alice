@@ -45,6 +45,16 @@ export interface ChatOrchestrator {
 export function createChatOrchestrator(
   dependencies: ChatDependencies
 ): ChatOrchestrator {
+  const getLatestUserMessage = (): ChatMessage | undefined => {
+    const history = dependencies.getChatHistory()
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      if (history[i].role === 'user') {
+        return history[i]
+      }
+    }
+    return undefined
+  }
+
   const buildContextMessages = async (): Promise<
     OpenAI.Responses.Request.InputItemLike[]
   > => {
@@ -73,9 +83,7 @@ export function createChatOrchestrator(
       dependencies.clearEphemeralEmotionalContext()
     }
 
-    const latestUserMessageContent = dependencies
-      .getChatHistory()
-      .find(m => m.role === 'user')?.content
+    const latestUserMessageContent = getLatestUserMessage()?.content
 
     if (latestUserMessageContent && Array.isArray(latestUserMessageContent)) {
       const textForThoughtRetrieval = latestUserMessageContent
@@ -103,9 +111,7 @@ export function createChatOrchestrator(
   }
 
   const buildContinuationInput = (): OpenAI.Responses.Request.InputItemLike[] => {
-    const latestUserMessage = dependencies
-      .getChatHistory()
-      .find(m => m.role === 'user')
+    const latestUserMessage = getLatestUserMessage()
 
     if (!latestUserMessage || !Array.isArray(latestUserMessage.content)) {
       return []

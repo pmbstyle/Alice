@@ -112,8 +112,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue'
-import { createEmbedding } from '../services/apiService'
-import { useSettingsStore } from '../stores/settingsStore'
+import { createDualEmbeddings } from '../services/apiService'
 
 interface Memory {
   id: string
@@ -128,7 +127,6 @@ const isLoading = ref(false)
 const isSaving = ref(false)
 const listError = ref<string | null>(null)
 const formError = ref<string | null>(null)
-const settingsStore = useSettingsStore()
 
 const form = reactive({
   content: '',
@@ -161,16 +159,11 @@ async function handleSaveMemory() {
     formError.value = 'Memory content cannot be empty.'
     return
   }
-  if (!settingsStore.config.VITE_OPENAI_API_KEY) {
-    formError.value =
-      'OpenAI API Key is not configured. Cannot generate embeddings for memory.'
-    isSaving.value = false
-    return
-  }
   isSaving.value = true
   formError.value = null
   try {
-    let generatedEmbedding: number[] | undefined = undefined
+    let generatedEmbeddingOpenAI: number[] | undefined = undefined
+    let generatedEmbeddingLocal: number[] | undefined = undefined
     let shouldGenerateEmbedding = false
 
     if (editingMemoryId.value) {
@@ -183,13 +176,12 @@ async function handleSaveMemory() {
 
     if (shouldGenerateEmbedding) {
       try {
-        generatedEmbedding = await createEmbedding(form.content)
-        if (generatedEmbedding.length === 0) {
-          console.warn(
-            '[MemoryManager UI] Generated empty embedding for content:',
-            form.content
-          )
-          generatedEmbedding = undefined
+        const embeddings = await createDualEmbeddings(form.content)
+        if (embeddings.openai && embeddings.openai.length > 0) {
+          generatedEmbeddingOpenAI = embeddings.openai
+        }
+        if (embeddings.local && embeddings.local.length > 0) {
+          generatedEmbeddingLocal = embeddings.local
         }
       } catch (embedError: any) {
         console.error(
@@ -197,7 +189,8 @@ async function handleSaveMemory() {
           embedError
         )
         formError.value = `Error generating embedding: ${embedError.message}. Memory will be saved without it.`
-        generatedEmbedding = undefined
+        generatedEmbeddingOpenAI = undefined
+        generatedEmbeddingLocal = undefined
       }
     }
 
@@ -207,8 +200,11 @@ async function handleSaveMemory() {
       memoryType: form.memoryType.trim() || 'general',
     }
 
-    if (generatedEmbedding) {
-      memoryData.embedding = generatedEmbedding
+    if (generatedEmbeddingOpenAI) {
+      memoryData.embeddingOpenAI = generatedEmbeddingOpenAI
+    }
+    if (generatedEmbeddingLocal) {
+      memoryData.embeddingLocal = generatedEmbeddingLocal
     }
 
     if (editingMemoryId.value) {

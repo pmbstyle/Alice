@@ -2,6 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { getDBInstance } from './thoughtVectorStore'
 import type { MemoryRecord } from './thoughtVectorStore'
 
+const OPENAI_VECTOR_DIMENSION = 1536
+const LOCAL_VECTOR_DIMENSION = 384
+
 function cosineSimilarity(vecA: number[], vecB: number[]): number {
   if (!vecA || !vecB || vecA.length !== vecB.length || vecA.length === 0) {
     return 0
@@ -38,23 +41,85 @@ function convertBufferToEmbedding(
   )
 }
 
+function normalizeEmbeddings(payload: {
+  embedding?: number[]
+  embeddingOpenAI?: number[]
+  embeddingLocal?: number[]
+}): {
+  openai?: number[]
+  local?: number[]
+  legacy?: number[]
+} {
+  const normalized: { openai?: number[]; local?: number[]; legacy?: number[] } =
+    {}
+
+  if (payload.embeddingOpenAI && payload.embeddingOpenAI.length > 0) {
+    normalized.openai = payload.embeddingOpenAI
+    normalized.legacy = payload.embeddingOpenAI
+  }
+
+  if (payload.embeddingLocal && payload.embeddingLocal.length > 0) {
+    normalized.local = payload.embeddingLocal
+  }
+
+  if (!normalized.openai && !normalized.local && payload.embedding) {
+    if (payload.embedding.length === OPENAI_VECTOR_DIMENSION) {
+      normalized.openai = payload.embedding
+      normalized.legacy = payload.embedding
+    } else if (payload.embedding.length === LOCAL_VECTOR_DIMENSION) {
+      normalized.local = payload.embedding
+    }
+  }
+
+  return normalized
+}
+
+function getProviderForEmbedding(embedding: number[]): 'openai' | 'local' | null {
+  if (embedding.length === OPENAI_VECTOR_DIMENSION) return 'openai'
+  if (embedding.length === LOCAL_VECTOR_DIMENSION) return 'local'
+  return null
+}
+
 export async function saveMemoryLocal(
   content: string,
   memoryType: string = 'general',
-  embedding?: number[]
+  embedding?: number[],
+  embeddingOpenAI?: number[],
+  embeddingLocal?: number[]
 ): Promise<MemoryRecord> {
   const db = getDBInstance()
   const id = randomUUID()
   const createdAt = new Date().toISOString()
-  const embeddingBuffer = convertEmbeddingToBuffer(embedding)
+  const normalized = normalizeEmbeddings({
+    embedding,
+    embeddingOpenAI,
+    embeddingLocal,
+  })
+  const legacyEmbeddingBuffer = convertEmbeddingToBuffer(normalized.legacy)
+  const openAIEmbeddingBuffer = convertEmbeddingToBuffer(normalized.openai)
+  const localEmbeddingBuffer = convertEmbeddingToBuffer(normalized.local)
 
   try {
     const stmt = db.prepare(
-      'INSERT INTO long_term_memories (id, content, memory_type, created_at, embedding) VALUES (?, ?, ?, ?, ?)'
+      'INSERT INTO long_term_memories (id, content, memory_type, created_at, embedding, embedding_openai, embedding_local) VALUES (?, ?, ?, ?, ?, ?, ?)'
     )
-    stmt.run(id, content, memoryType, createdAt, embeddingBuffer)
+    stmt.run(
+      id,
+      content,
+      memoryType,
+      createdAt,
+      legacyEmbeddingBuffer,
+      openAIEmbeddingBuffer,
+      localEmbeddingBuffer
+    )
     console.log('Memory saved to SQLite:', id)
-    return { id, content, memoryType, createdAt, embedding }
+    return {
+      id,
+      content,
+      memoryType,
+      createdAt,
+      embedding: normalized.openai || normalized.local,
+    }
   } catch (error) {
     console.error('Failed to save memory to SQLite:', error)
     throw error
@@ -71,8 +136,24 @@ export async function getRecentMemoriesLocal(
 
   try {
     if (queryEmbedding && queryEmbedding.length > 0) {
+      const provider = getProviderForEmbedding(queryEmbedding)
+      if (!provider) {
+        console.warn(
+          '[MemoryManager] Unknown embedding dimension. Falling back to recent memories.'
+        )
+        queryEmbedding = undefined
+      }
+    }
+
+    if (queryEmbedding && queryEmbedding.length > 0) {
+      const provider = getProviderForEmbedding(queryEmbedding)
+      if (!provider) {
+        return memoriesToReturn
+      }
       let sql =
-        'SELECT id, content, memory_type, created_at, embedding FROM long_term_memories WHERE embedding IS NOT NULL'
+        provider === 'local'
+          ? 'SELECT id, content, memory_type, created_at, embedding_local as embedding FROM long_term_memories WHERE embedding_local IS NOT NULL'
+          : 'SELECT id, content, memory_type, created_at, COALESCE(embedding_openai, embedding) as embedding FROM long_term_memories WHERE embedding_openai IS NOT NULL OR embedding IS NOT NULL'
       const params: any[] = []
       if (memoryType) {
         sql += ' AND memory_type = ?'
@@ -175,20 +256,38 @@ export async function updateMemoryLocal(
   id: string,
   updatedContent: string,
   updatedMemoryType: string,
-  updatedEmbedding?: number[]
+  updatedEmbedding?: number[],
+  updatedEmbeddingOpenAI?: number[],
+  updatedEmbeddingLocal?: number[]
 ): Promise<MemoryRecord | null> {
   const db = getDBInstance()
-  const embeddingBuffer = convertEmbeddingToBuffer(updatedEmbedding)
+  const normalized = normalizeEmbeddings({
+    embedding: updatedEmbedding,
+    embeddingOpenAI: updatedEmbeddingOpenAI,
+    embeddingLocal: updatedEmbeddingLocal,
+  })
   try {
+    const fields = ['content = ?', 'memory_type = ?']
+    const params: any[] = [updatedContent, updatedMemoryType]
+
+    if (normalized.legacy) {
+      fields.push('embedding = ?')
+      params.push(convertEmbeddingToBuffer(normalized.legacy))
+    }
+    if (normalized.openai) {
+      fields.push('embedding_openai = ?')
+      params.push(convertEmbeddingToBuffer(normalized.openai))
+    }
+    if (normalized.local) {
+      fields.push('embedding_local = ?')
+      params.push(convertEmbeddingToBuffer(normalized.local))
+    }
+
+    params.push(id)
     const stmt = db.prepare(
-      'UPDATE long_term_memories SET content = ?, memory_type = ?, embedding = ? WHERE id = ?'
+      `UPDATE long_term_memories SET ${fields.join(', ')} WHERE id = ?`
     )
-    const result = stmt.run(
-      updatedContent,
-      updatedMemoryType,
-      embeddingBuffer,
-      id
-    )
+    const result = stmt.run(...params)
 
     if (result.changes > 0) {
       console.log('Memory updated in SQLite:', id)

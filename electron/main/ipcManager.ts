@@ -206,13 +206,23 @@ export function registerIPCHandlers(): void {
         content,
         memoryType,
         embedding,
-      }: { content: string; memoryType?: string; embedding?: number[] }
+        embeddingOpenAI,
+        embeddingLocal,
+      }: {
+        content: string
+        memoryType?: string
+        embedding?: number[]
+        embeddingOpenAI?: number[]
+        embeddingLocal?: number[]
+      }
     ) => {
       try {
         const savedMemory = await saveMemoryLocal(
           content,
           memoryType,
-          embedding
+          embedding,
+          embeddingOpenAI,
+          embeddingLocal
         )
         return { success: true, data: savedMemory }
       } catch (error) {
@@ -265,11 +275,15 @@ export function registerIPCHandlers(): void {
         content,
         memoryType,
         embedding,
+        embeddingOpenAI,
+        embeddingLocal,
       }: {
         id: string
         content: string
         memoryType: string
         embedding?: number[]
+        embeddingOpenAI?: number[]
+        embeddingLocal?: number[]
       }
     ) => {
       try {
@@ -277,7 +291,9 @@ export function registerIPCHandlers(): void {
           id,
           content,
           memoryType,
-          embedding
+          embedding,
+          embeddingOpenAI,
+          embeddingLocal
         )
         if (updatedMemory) {
           return { success: true, data: updatedMemory }

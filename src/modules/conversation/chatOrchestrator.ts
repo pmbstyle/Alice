@@ -45,6 +45,8 @@ export interface ChatOrchestrator {
 export function createChatOrchestrator(
   dependencies: ChatDependencies
 ): ChatOrchestrator {
+  const THOUGHTS_BLOCK_MAX_CHARS = 1200
+
   const getLatestUserMessage = (): ChatMessage | undefined => {
     const history = dependencies.getChatHistory()
     for (let i = history.length - 1; i >= 0; i -= 1) {
@@ -63,6 +65,26 @@ export function createChatOrchestrator(
     if (!text) return ''
     const role = thought?.role || 'unknown'
     return `[${role}] ${text}`
+  }
+
+  const buildThoughtsBlock = (lines: string[]): string => {
+    const prefix = 'Relevant thoughts from our past conversation (for context):'
+    let remaining = THOUGHTS_BLOCK_MAX_CHARS - (prefix.length + 1)
+    if (remaining <= 0) return ''
+
+    const keptLines: string[] = []
+    for (const line of lines) {
+      const entry = `- ${line}`
+      const extra = entry.length + 1
+      if (extra > remaining) {
+        break
+      }
+      keptLines.push(entry)
+      remaining -= extra
+    }
+
+    if (keptLines.length === 0) return ''
+    return `${prefix}\n${keptLines.join('\n')}`
   }
 
   const buildContextMessages = async (): Promise<
@@ -106,17 +128,16 @@ export function createChatOrchestrator(
           textForThoughtRetrieval
         )
         if (thoughts.length > 0) {
-          const thoughtsBlock =
-            'Relevant thoughts from our past conversation (for context):\n' +
-            thoughts
-              .map(formatThoughtLine)
-              .filter(Boolean)
-              .map(t => `- ${t}`)
-              .join('\n')
-          contextMessages.push({
-            role: 'user',
-            content: [{ type: 'input_text', text: thoughtsBlock }],
-          })
+          const thoughtLines = thoughts
+            .map(formatThoughtLine)
+            .filter(Boolean)
+          const thoughtsBlock = buildThoughtsBlock(thoughtLines)
+          if (thoughtsBlock) {
+            contextMessages.push({
+              role: 'user',
+              content: [{ type: 'input_text', text: thoughtsBlock }],
+            })
+          }
         }
       }
     }

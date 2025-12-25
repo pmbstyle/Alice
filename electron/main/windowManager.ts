@@ -101,14 +101,16 @@ export async function createOverlayWindow(): Promise<BrowserWindow> {
   overlayWindow = new BrowserWindow({
     width,
     height,
-    transparent: true,
+    transparent: false,
     frame: false,
     alwaysOnTop: true,
     fullscreen: false,
     skipTaskbar: true,
     hasShadow: false,
     resizable: false,
-    backgroundColor: '#00000000',
+    backgroundColor: '#000000',
+    show: false,
+    paintWhenInitiallyHidden: true,
     webPreferences: {
       preload: getPreloadPath(),
       offscreen: false,
@@ -137,8 +139,10 @@ export async function showOverlay(): Promise<boolean> {
     await createOverlayWindow()
   }
   
-  overlayWindow.setOpacity(1.0)
+  overlayWindow.setOpacity(0.35)
   overlayWindow.show()
+  overlayWindow.focus()
+  overlayWindow.webContents.send('overlay-shown')
   
   return true
 }
@@ -146,6 +150,14 @@ export async function showOverlay(): Promise<boolean> {
 export function hideOverlay(): boolean {
   overlayWindow?.hide()
   win?.webContents.send('overlay-closed')
+  return true
+}
+
+export function setOverlayOpacity(opacity: number): boolean {
+  if (!overlayWindow || overlayWindow.isDestroyed()) {
+    return false
+  }
+  overlayWindow.setOpacity(opacity)
   return true
 }
 

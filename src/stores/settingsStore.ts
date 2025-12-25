@@ -208,6 +208,15 @@ const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
   'VITE_OPENROUTER_API_KEY',
 ]
 
+function requiresOpenAIKey(config: AliceSettings): boolean {
+  return (
+    config.aiProvider === 'openai' ||
+    config.sttProvider === 'openai' ||
+    config.ttsProvider === 'openai' ||
+    config.embeddingProvider === 'openai'
+  )
+}
+
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<AliceSettings>({ ...defaultSettings })
   const isLoading = ref(false)
@@ -273,6 +282,15 @@ export const useSettingsStore = defineStore('settings', () => {
       validated.aiProvider = 'openai'
     }
 
+    if (
+      !validated.VITE_OPENAI_API_KEY?.trim() &&
+      validated.aiProvider !== 'openai' &&
+      validated.embeddingProvider === 'openai'
+    ) {
+      validated.embeddingProvider = 'local'
+      migrated = true
+    }
+
     if (validated.sttProvider === 'local') {
       const validModelIds = [
         'whisper-tiny.en',
@@ -309,7 +327,7 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('lmStudioBaseUrl')
     }
 
-    if (settings.value.aiProvider !== 'openai') {
+    if (requiresOpenAIKey(settings.value)) {
       essentialKeys.push('VITE_OPENAI_API_KEY')
     }
 
@@ -340,10 +358,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const areCoreApiKeysSufficientForTesting = computed(() => {
     if (!isProduction.value) return true
 
-    const needsOpenAI =
-      settings.value.aiProvider === 'openai' ||
-      settings.value.aiProvider === 'openrouter' ||
-      settings.value.sttProvider === 'openai'
+    const needsOpenAI = requiresOpenAIKey(settings.value)
 
     if (needsOpenAI && !settings.value.VITE_OPENAI_API_KEY?.trim()) {
       return false
@@ -625,6 +640,24 @@ export const useSettingsStore = defineStore('settings', () => {
     ) {
       coreOpenAISettingsValid.value = false
     }
+
+    if (
+      key === 'aiProvider' &&
+      settings.value.aiProvider !== 'openai' &&
+      !settings.value.VITE_OPENAI_API_KEY?.trim() &&
+      settings.value.embeddingProvider === 'openai'
+    ) {
+      settings.value.embeddingProvider = 'local'
+    }
+
+    if (
+      key === 'VITE_OPENAI_API_KEY' &&
+      !settings.value.VITE_OPENAI_API_KEY?.trim() &&
+      settings.value.aiProvider !== 'openai' &&
+      settings.value.embeddingProvider === 'openai'
+    ) {
+      settings.value.embeddingProvider = 'local'
+    }
   }
 
   async function saveSettingsToFile(): Promise<boolean> {
@@ -720,24 +753,20 @@ export const useSettingsStore = defineStore('settings', () => {
 
     const currentConfigForTest = config.value
 
-    if (currentConfigForTest.aiProvider === 'openai') {
-      if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
-        error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing.`
-        generalStore.statusMessage = 'OpenAI API Key is required.'
-        isSaving.value = false
-        return
-      }
-    } else if (currentConfigForTest.aiProvider === 'openrouter') {
+    if (
+      requiresOpenAIKey(currentConfigForTest) &&
+      !currentConfigForTest.VITE_OPENAI_API_KEY?.trim()
+    ) {
+      error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing.`
+      generalStore.statusMessage = 'OpenAI API Key is required.'
+      isSaving.value = false
+      return
+    }
+
+    if (currentConfigForTest.aiProvider === 'openrouter') {
       if (!currentConfigForTest.VITE_OPENROUTER_API_KEY?.trim()) {
         error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENROUTER_API_KEY}' is missing.`
         generalStore.statusMessage = 'OpenRouter API Key is required.'
-        isSaving.value = false
-        return
-      }
-      if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
-        error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing. Required for TTS/STT/embeddings.`
-        generalStore.statusMessage =
-          'OpenAI API Key is required for TTS/STT/embeddings.'
         isSaving.value = false
         return
       }
@@ -748,24 +777,10 @@ export const useSettingsStore = defineStore('settings', () => {
         isSaving.value = false
         return
       }
-      if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
-        error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing. Required for TTS/STT/embeddings.`
-        generalStore.statusMessage =
-          'OpenAI API Key is required for TTS/STT/embeddings.'
-        isSaving.value = false
-        return
-      }
     } else if (currentConfigForTest.aiProvider === 'lm-studio') {
       if (!currentConfigForTest.lmStudioBaseUrl?.trim()) {
         error.value = `Essential setting '${settingKeyToLabelMap.lmStudioBaseUrl}' is missing.`
         generalStore.statusMessage = 'LM Studio Base URL is required.'
-        isSaving.value = false
-        return
-      }
-      if (!currentConfigForTest.VITE_OPENAI_API_KEY?.trim()) {
-        error.value = `Essential setting '${settingKeyToLabelMap.VITE_OPENAI_API_KEY}' is missing. Required for TTS/STT/embeddings.`
-        generalStore.statusMessage =
-          'OpenAI API Key is required for TTS/STT/embeddings.'
         isSaving.value = false
         return
       }

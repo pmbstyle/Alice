@@ -45,6 +45,48 @@ export interface ChatOrchestrator {
 export function createChatOrchestrator(
   dependencies: ChatDependencies
 ): ChatOrchestrator {
+  const THOUGHTS_BLOCK_MAX_CHARS = 1200
+
+  const getLatestUserMessage = (): ChatMessage | undefined => {
+    const history = dependencies.getChatHistory()
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      if (history[i].role === 'user') {
+        return history[i]
+      }
+    }
+    return undefined
+  }
+
+  const formatThoughtLine = (thought: any): string => {
+    if (typeof thought === 'string') {
+      return thought
+    }
+    const text = thought?.textContent?.trim()
+    if (!text) return ''
+    const role = thought?.role || 'unknown'
+    return `[${role}] ${text}`
+  }
+
+  const buildThoughtsBlock = (lines: string[]): string => {
+    const prefix = 'Relevant thoughts from our past conversation (for context):'
+    let remaining = THOUGHTS_BLOCK_MAX_CHARS - (prefix.length + 1)
+    if (remaining <= 0) return ''
+
+    const keptLines: string[] = []
+    for (const line of lines) {
+      const entry = `- ${line}`
+      const extra = entry.length + 1
+      if (extra > remaining) {
+        break
+      }
+      keptLines.push(entry)
+      remaining -= extra
+    }
+
+    if (keptLines.length === 0) return ''
+    return `${prefix}\n${keptLines.join('\n')}`
+  }
+
   const buildContextMessages = async (): Promise<
     OpenAI.Responses.Request.InputItemLike[]
   > => {
@@ -73,9 +115,7 @@ export function createChatOrchestrator(
       dependencies.clearEphemeralEmotionalContext()
     }
 
-    const latestUserMessageContent = dependencies
-      .getChatHistory()
-      .find(m => m.role === 'user')?.content
+    const latestUserMessageContent = getLatestUserMessage()?.content
 
     if (latestUserMessageContent && Array.isArray(latestUserMessageContent)) {
       const textForThoughtRetrieval = latestUserMessageContent
@@ -88,13 +128,16 @@ export function createChatOrchestrator(
           textForThoughtRetrieval
         )
         if (thoughts.length > 0) {
-          const thoughtsBlock =
-            'Relevant thoughts from our past conversation (for context):\n' +
-            thoughts.map(t => `- ${t}`).join('\n')
-          contextMessages.push({
-            role: 'user',
-            content: [{ type: 'input_text', text: thoughtsBlock }],
-          })
+          const thoughtLines = thoughts
+            .map(formatThoughtLine)
+            .filter(Boolean)
+          const thoughtsBlock = buildThoughtsBlock(thoughtLines)
+          if (thoughtsBlock) {
+            contextMessages.push({
+              role: 'user',
+              content: [{ type: 'input_text', text: thoughtsBlock }],
+            })
+          }
         }
       }
     }
@@ -103,9 +146,7 @@ export function createChatOrchestrator(
   }
 
   const buildContinuationInput = (): OpenAI.Responses.Request.InputItemLike[] => {
-    const latestUserMessage = dependencies
-      .getChatHistory()
-      .find(m => m.role === 'user')
+    const latestUserMessage = getLatestUserMessage()
 
     if (!latestUserMessage || !Array.isArray(latestUserMessage.content)) {
       return []

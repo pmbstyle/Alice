@@ -178,8 +178,11 @@ export function registerIPCHandlers(): void {
           topK,
           provider
         )
-        const thoughtTexts = thoughtsMetadatas.map(t => t.textContent)
-        return { success: true, data: thoughtTexts }
+        const thoughtEntries = thoughtsMetadatas.map(t => ({
+          role: t.role,
+          textContent: t.textContent,
+        }))
+        return { success: true, data: thoughtEntries }
       } catch (error) {
         console.error('[Main IPC thoughtVector:search] Error:', error)
         return { success: false, error: (error as Error).message }
@@ -206,13 +209,23 @@ export function registerIPCHandlers(): void {
         content,
         memoryType,
         embedding,
-      }: { content: string; memoryType?: string; embedding?: number[] }
+        embeddingOpenAI,
+        embeddingLocal,
+      }: {
+        content: string
+        memoryType?: string
+        embedding?: number[]
+        embeddingOpenAI?: number[]
+        embeddingLocal?: number[]
+      }
     ) => {
       try {
         const savedMemory = await saveMemoryLocal(
           content,
           memoryType,
-          embedding
+          embedding,
+          embeddingOpenAI,
+          embeddingLocal
         )
         return { success: true, data: savedMemory }
       } catch (error) {
@@ -265,11 +278,15 @@ export function registerIPCHandlers(): void {
         content,
         memoryType,
         embedding,
+        embeddingOpenAI,
+        embeddingLocal,
       }: {
         id: string
         content: string
         memoryType: string
         embedding?: number[]
+        embeddingOpenAI?: number[]
+        embeddingLocal?: number[]
       }
     ) => {
       try {
@@ -277,7 +294,9 @@ export function registerIPCHandlers(): void {
           id,
           content,
           memoryType,
-          embedding
+          embedding,
+          embeddingOpenAI,
+          embeddingLocal
         )
         if (updatedMemory) {
           return { success: true, data: updatedMemory }

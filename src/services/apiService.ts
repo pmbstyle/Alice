@@ -469,47 +469,98 @@ export const transcribeWithOpenAI = async (
   return transcription?.text || ''
 }
 
-export const createEmbedding = async (textInput: any): Promise<number[]> => {
-  const settings = useSettingsStore().config
-  let textToEmbed = ''
-
+function extractTextForEmbedding(textInput: any): string {
   if (typeof textInput === 'string') {
-    textToEmbed = textInput
-  } else if (textInput && typeof textInput.content === 'string') {
-    textToEmbed = textInput.content
-  } else if (textInput && Array.isArray(textInput.content)) {
+    return textInput
+  }
+  if (textInput && typeof textInput.content === 'string') {
+    return textInput.content
+  }
+  if (textInput && Array.isArray(textInput.content)) {
     const contentArray = textInput.content as AppChatMessageContentPart[]
     const textParts = contentArray
       .filter(item => item.type === 'app_text')
       .map(item => item.text || '')
-    textToEmbed = textParts.join(' ')
+    return textParts.join(' ')
   }
+  return ''
+}
+
+async function generateLocalEmbedding(textToEmbed: string): Promise<number[]> {
+  const { backendApi } = await import('./backendApi')
+  const embeddingsReady = await backendApi.isEmbeddingsReady()
+  if (!embeddingsReady) {
+    return []
+  }
+  return await backendApi.generateEmbedding(textToEmbed)
+}
+
+export const createEmbedding = async (textInput: any): Promise<number[]> => {
+  const settings = useSettingsStore().config
+  const textToEmbed = extractTextForEmbedding(textInput)
 
   if (!textToEmbed.trim()) return []
 
-  if (settings.embeddingProvider === 'local') {
+  const hasOpenAIKey = !!settings.VITE_OPENAI_API_KEY?.trim()
+  const shouldPreferLocal =
+    settings.embeddingProvider === 'local' ||
+    (!hasOpenAIKey && settings.aiProvider !== 'openai')
+
+  if (shouldPreferLocal) {
     try {
-      // Import the backend API
-      const { backendApi } = await import('./backendApi')
-
-      const embeddingsReady = await backendApi.isEmbeddingsReady()
-      if (!embeddingsReady) {
-        return fallbackToOpenAIEmbedding(textToEmbed)
-      }
-
-      const embedding = await backendApi.generateEmbedding(textToEmbed)
-
+      const embedding = await generateLocalEmbedding(textToEmbed)
       if (embedding && embedding.length > 0) {
         return embedding
-      } else {
-        return fallbackToOpenAIEmbedding(textToEmbed)
+      }
+      return hasOpenAIKey ? fallbackToOpenAIEmbedding(textToEmbed) : []
+    } catch (error) {
+      return hasOpenAIKey ? fallbackToOpenAIEmbedding(textToEmbed) : []
+    }
+  }
+
+  if (!hasOpenAIKey) {
+    try {
+      return await generateLocalEmbedding(textToEmbed)
+    } catch (error) {
+      return []
+    }
+  }
+
+  return fallbackToOpenAIEmbedding(textToEmbed)
+}
+
+export const createDualEmbeddings = async (
+  textInput: any
+): Promise<{ openai?: number[]; local?: number[] }> => {
+  const settings = useSettingsStore().config
+  const textToEmbed = extractTextForEmbedding(textInput)
+
+  if (!textToEmbed.trim()) return {}
+
+  const hasOpenAIKey = !!settings.VITE_OPENAI_API_KEY?.trim()
+  const results: { openai?: number[]; local?: number[] } = {}
+
+  try {
+    const localEmbedding = await generateLocalEmbedding(textToEmbed)
+    if (localEmbedding && localEmbedding.length > 0) {
+      results.local = localEmbedding
+    }
+  } catch (error) {
+    // Ignore local embedding failures.
+  }
+
+  if (hasOpenAIKey) {
+    try {
+      const openaiEmbedding = await fallbackToOpenAIEmbedding(textToEmbed)
+      if (openaiEmbedding && openaiEmbedding.length > 0) {
+        results.openai = openaiEmbedding
       }
     } catch (error) {
-      return fallbackToOpenAIEmbedding(textToEmbed)
+      // Ignore OpenAI embedding failures.
     }
-  } else {
-    return fallbackToOpenAIEmbedding(textToEmbed)
   }
+
+  return results
 }
 
 const fallbackToOpenAIEmbedding = async (
@@ -552,10 +603,17 @@ export const indexMessageForThoughts = async (
   })
 }
 
+export type RetrievedThought =
+  | string
+  | {
+      role?: string
+      textContent?: string
+    }
+
 export const retrieveRelevantThoughtsForPrompt = async (
   content: string,
   topK = 3
-): Promise<string[]> => {
+): Promise<RetrievedThought[]> => {
   if (!content.trim()) return []
   const queryEmbedding = await createEmbedding(content)
   if (queryEmbedding.length === 0) return []
@@ -564,9 +622,10 @@ export const retrieveRelevantThoughtsForPrompt = async (
     queryEmbedding,
     topK,
   })
-  return ipcResult.success && Array.isArray(ipcResult.data)
-    ? ipcResult.data
-    : []
+  if (!ipcResult.success || !Array.isArray(ipcResult.data)) {
+    return []
+  }
+  return ipcResult.data
 }
 
 export const createSummarizationResponse = async (

@@ -1,4 +1,4 @@
-import { createEmbedding } from '../services/apiService'
+import { createDualEmbeddings, createEmbedding } from '../services/apiService'
 import { useCustomToolsStore } from '../stores/customToolsStore'
 import { manage_clipboard } from './functions/clipboard'
 import {
@@ -103,15 +103,15 @@ async function save_memory(args: SaveMemoryArgs) {
     return { success: false, error: 'Content is required.' }
   }
   try {
-    let generatedEmbedding: number[] | undefined = undefined
+    let generatedEmbeddingOpenAI: number[] | undefined = undefined
+    let generatedEmbeddingLocal: number[] | undefined = undefined
     try {
-      generatedEmbedding = await createEmbedding(args.content)
-      if (generatedEmbedding.length === 0) {
-        console.warn(
-          '[FunctionCaller save_memory] Generated empty embedding for content:',
-          args.content
-        )
-        generatedEmbedding = undefined
+      const embeddings = await createDualEmbeddings(args.content)
+      if (embeddings.openai && embeddings.openai.length > 0) {
+        generatedEmbeddingOpenAI = embeddings.openai
+      }
+      if (embeddings.local && embeddings.local.length > 0) {
+        generatedEmbeddingLocal = embeddings.local
       }
     } catch (embedError) {
       console.error(
@@ -123,7 +123,8 @@ async function save_memory(args: SaveMemoryArgs) {
     const result = await window.ipcRenderer.invoke('memory:save', {
       content: args.content,
       memoryType: args.memoryType,
-      embedding: generatedEmbedding,
+      embeddingOpenAI: generatedEmbeddingOpenAI,
+      embeddingLocal: generatedEmbeddingLocal,
     })
     if (result.success) {
       console.log('Memory saved via IPC:', result.data)

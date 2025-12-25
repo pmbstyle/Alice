@@ -54,6 +54,41 @@ function parseErrorMessage(error: any): AppChatMessageContentPart {
   }
 }
 
+function extractTextFromMessage(message: ChatMessage): string {
+  if (typeof message.content === 'string') {
+    return message.content
+  }
+  if (Array.isArray(message.content)) {
+    return message.content
+      .filter(part => part.type === 'app_text' && part.text)
+      .map(part => part.text)
+      .join(' ')
+  }
+  return ''
+}
+
+function shouldIndexAssistantMessage(message: ChatMessage): boolean {
+  if (message.role !== 'assistant') return false
+  if (message.tool_calls && message.tool_calls.length > 0) return false
+
+  const text = extractTextFromMessage(message).trim()
+  if (!text) return false
+
+  const lower = text.toLowerCase()
+  const trivialPattern = /^(hi|hello|hey|thanks|sorry|ok|okay|sure|done)[.!?]*$/i
+  if (text.length < 40 && trivialPattern.test(lower)) {
+    return false
+  }
+
+  const sentenceCount = text.split(/[.!?]/).filter(Boolean).length
+  const hasListMarkers = /(^|\n)\s*([-*]|\d+\.)\s+/.test(text)
+
+  if (text.length >= 280) return true
+  if (text.length >= 120 && (sentenceCount >= 2 || hasListMarkers)) return true
+
+  return false
+}
+
 export const useConversationStore = defineStore('conversation', () => {
   const generalStore = useGeneralStore()
   const settingsStore = useSettingsStore()
@@ -561,6 +596,28 @@ export const useConversationStore = defineStore('conversation', () => {
       stream,
       options: { isContinuationAfterTool },
     })
+
+    if (result.streamEndedNormally) {
+      const assistantMessage = chatHistory.value.find(
+        msg => msg.local_id_temp === placeholderTempId
+      )
+      if (assistantMessage && shouldIndexAssistantMessage(assistantMessage)) {
+        const conversationId =
+          currentResponseId.value || 'default_conversation'
+        try {
+          await api.indexMessageForThoughts(
+            conversationId,
+            'assistant',
+            assistantMessage
+          )
+        } catch (error) {
+          console.error(
+            '[ConversationStore] Error indexing assistant message for thoughts:',
+            error
+          )
+        }
+      }
+    }
 
     turnManager.finalizeAfterStream({
       streamEndedNormally: result.streamEndedNormally,

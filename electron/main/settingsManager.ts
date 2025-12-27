@@ -43,6 +43,10 @@ export interface AppSettings {
   ttsVoice?: 'alloy' | 'echo' | 'fable' | 'nova' | 'onyx' | 'shimmer'
   localTtsVoice?: string
   embeddingProvider?: 'openai' | 'local'
+  ragEnabled?: boolean
+  ragPaths?: string[]
+  ragTopK?: number
+  ragMaxContextChars?: number
 
   microphoneToggleHotkey?: string
   mutePlaybackHotkey?: string

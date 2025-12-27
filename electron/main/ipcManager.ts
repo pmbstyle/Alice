@@ -5,6 +5,7 @@ import {
   clipboard,
   app,
   BrowserWindow,
+  dialog,
 } from 'electron'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -35,6 +36,12 @@ import {
   saveConversationSummary,
   getLatestConversationSummary,
 } from './thoughtVectorStore'
+import {
+  indexPaths as indexRagPaths,
+  searchRag,
+  clearRag,
+  getRagStats,
+} from './ragDocumentStore'
 import * as googleAuthManager from './googleAuthManager'
 import * as googleCalendarManager from './googleCalendarManager'
 import * as googleGmailManager from './googleGmailManager'
@@ -197,6 +204,77 @@ export function registerIPCHandlers(): void {
       return { success: true }
     } catch (error) {
       console.error('IPC thoughtVector:delete-all error:', error)
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  // RAG document operations
+  ipcMain.handle('rag:select-paths', async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile', 'openDirectory', 'multiSelections'],
+      })
+      if (result.canceled) {
+        return { success: true, data: [] }
+      }
+      return { success: true, data: result.filePaths }
+    } catch (error) {
+      console.error('[IPC rag:select-paths] Error:', error)
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle(
+    'rag:index-paths',
+    async (event, args: { paths: string[]; recursive?: boolean }) => {
+      try {
+        const result = await indexRagPaths(args?.paths || [], {
+          recursive: args?.recursive ?? true,
+        })
+        return { success: true, data: result }
+      } catch (error) {
+        console.error('[IPC rag:index-paths] Error:', error)
+        return {
+          success: false,
+          error:
+            error instanceof Error ? error.message : String(error || 'Error'),
+        }
+      }
+    }
+  )
+
+  ipcMain.handle(
+    'rag:search',
+    async (event, args: { queryEmbedding: number[]; topK?: number }) => {
+      try {
+        const results = await searchRag(
+          args?.queryEmbedding || [],
+          args?.topK ?? 5
+        )
+        return { success: true, data: results }
+      } catch (error) {
+        console.error('[IPC rag:search] Error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
+
+  ipcMain.handle('rag:clear', async () => {
+    try {
+      await clearRag()
+      return { success: true }
+    } catch (error) {
+      console.error('[IPC rag:clear] Error:', error)
+      return { success: false, error: (error as Error).message }
+    }
+  })
+
+  ipcMain.handle('rag:stats', async () => {
+    try {
+      const stats = await getRagStats()
+      return { success: true, data: stats }
+    } catch (error) {
+      console.error('[IPC rag:stats] Error:', error)
       return { success: false, error: (error as Error).message }
     }
   })

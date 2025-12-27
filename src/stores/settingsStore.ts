@@ -54,6 +54,10 @@ export interface AliceSettings {
   googleTtsVoice: string
   localTtsVoice: string
   embeddingProvider: 'openai' | 'local'
+  ragEnabled: boolean
+  ragPaths: string[]
+  ragTopK: number
+  ragMaxContextChars: number
 
   microphoneToggleHotkey: string
   mutePlaybackHotkey: string
@@ -126,6 +130,10 @@ const defaultSettings: AliceSettings = {
   googleTtsVoice: 'en-US-Journey-F',
   localTtsVoice: 'en_US-amy-medium',
   embeddingProvider: 'openai',
+  ragEnabled: false,
+  ragPaths: [],
+  ragTopK: 5,
+  ragMaxContextChars: 1500,
 
   microphoneToggleHotkey: 'Alt+M',
   mutePlaybackHotkey: 'Alt+S',
@@ -182,6 +190,10 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   googleTtsVoice: 'Google TTS Voice',
   localTtsVoice: 'Local TTS Voice',
   embeddingProvider: 'Embedding Provider',
+  ragEnabled: 'Local Documents (RAG) Enabled',
+  ragPaths: 'Local Documents Paths',
+  ragTopK: 'Local Documents Top K',
+  ragMaxContextChars: 'Local Documents Max Context Chars',
   microphoneToggleHotkey: 'Microphone Toggle Hotkey',
   mutePlaybackHotkey: 'Mute Playback Hotkey',
   takeScreenshotHotkey: 'Take Screenshot Hotkey',
@@ -288,6 +300,24 @@ export const useSettingsStore = defineStore('settings', () => {
       validated.embeddingProvider === 'openai'
     ) {
       validated.embeddingProvider = 'local'
+      migrated = true
+    }
+
+    if (!Array.isArray(validated.ragPaths)) {
+      validated.ragPaths = []
+      migrated = true
+    }
+
+    if (!Number.isFinite(validated.ragTopK) || validated.ragTopK < 1) {
+      validated.ragTopK = defaultSettings.ragTopK
+      migrated = true
+    }
+
+    if (
+      !Number.isFinite(validated.ragMaxContextChars) ||
+      validated.ragMaxContextChars < 300
+    ) {
+      validated.ragMaxContextChars = defaultSettings.ragMaxContextChars
       migrated = true
     }
 
@@ -404,7 +434,9 @@ export const useSettingsStore = defineStore('settings', () => {
                   key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
                   key === 'SUMMARIZATION_MESSAGE_COUNT' ||
                   key === 'assistantTemperature' ||
-                  key === 'assistantTopP'
+                  key === 'assistantTopP' ||
+                  key === 'ragTopK' ||
+                  key === 'ragMaxContextChars'
                 ) {
                   return [key, parseFloat(String(value))]
                 }
@@ -583,10 +615,15 @@ export const useSettingsStore = defineStore('settings', () => {
       key === 'assistantTopP' ||
       key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
       key === 'SUMMARIZATION_MESSAGE_COUNT' ||
-      key === 'websocketPort'
+      key === 'websocketPort' ||
+      key === 'ragTopK' ||
+      key === 'ragMaxContextChars'
     ) {
       ;(settings.value as any)[key] = Number(value)
-    } else if (key === 'assistantTools' && Array.isArray(value)) {
+    } else if (
+      (key === 'assistantTools' || key === 'ragPaths') &&
+      Array.isArray(value)
+    ) {
       settings.value[key] = value as string[]
     } else {
       ;(settings.value as any)[key] = String(value)
@@ -614,6 +651,9 @@ export const useSettingsStore = defineStore('settings', () => {
       settings.value[key] = value as string
     }
     if (key === 'localSttEnabled') {
+      settings.value[key] = value as boolean
+    }
+    if (key === 'ragEnabled') {
       settings.value[key] = value as boolean
     }
     if (key === 'ttsProvider') {
@@ -703,6 +743,10 @@ export const useSettingsStore = defineStore('settings', () => {
         googleTtsVoice: settings.value.googleTtsVoice,
         localTtsVoice: settings.value.localTtsVoice,
         embeddingProvider: settings.value.embeddingProvider,
+        ragEnabled: settings.value.ragEnabled,
+        ragPaths: Array.from(settings.value.ragPaths || []),
+        ragTopK: settings.value.ragTopK,
+        ragMaxContextChars: settings.value.ragMaxContextChars,
         microphoneToggleHotkey: settings.value.microphoneToggleHotkey,
         mutePlaybackHotkey: settings.value.mutePlaybackHotkey,
         takeScreenshotHotkey: settings.value.takeScreenshotHotkey,

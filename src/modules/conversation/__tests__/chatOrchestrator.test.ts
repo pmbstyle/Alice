@@ -19,10 +19,17 @@ function setup({
       isNewChain ? null : 'resp_existing'
     ),
     setCurrentResponseId: vi.fn(),
+    getAiProvider: vi.fn(() => 'openai'),
     getAssistantSystemPrompt: vi.fn(() => 'system'),
     getEphemeralEmotionalContext: vi.fn(() => null),
     clearEphemeralEmotionalContext: vi.fn(),
     retrieveThoughtsForPrompt: vi.fn(async () => []),
+    retrieveDocumentsForPrompt: vi.fn(async () => []),
+    getRagConfig: vi.fn(() => ({
+      enabled: false,
+      topK: 5,
+      maxContextChars: 1500,
+    })),
     fetchLatestSummary: vi.fn(async () => ({ success: false })),
     getChatHistory: vi.fn(() => [
       { role: 'user', content: [{ type: 'app_text', text: 'Hello' }] },

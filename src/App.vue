@@ -1,8 +1,10 @@
 <template>
-  <OnboardingWizard v-if="showOnboarding" />
-  <SettingsWindow v-else-if="showSettings" />
-  <Main v-else-if="!showOverlay" />
-  <Overlay v-else />
+  <template v-if="showOnboarding || showSettings || showOverlay">
+    <Overlay v-if="showOverlay" />
+    <OnboardingWizard v-if="showOnboarding" />
+    <SettingsWindow v-if="showSettings" />
+  </template>
+  <Main v-else />
   <CommandApprovalDialog
     :is-visible="commandApprovalVisible"
     :command="pendingCommand"
@@ -73,8 +75,7 @@ const showOnboarding = computed(() => {
   if (!settingsStore.initialLoadAttempted) {
     return false
   }
-
-  return !settingsStore.settings.onboardingCompleted
+  return route.hash !== '#settings' && route.hash !== '#overlay' && !settingsStore.settings.onboardingCompleted
 })
 
 const updateAvailable = ref(false)

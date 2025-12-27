@@ -49,6 +49,7 @@ import {
   getRendererDist,
   createSettingsWindow,
   closeSettingsWindow,
+  setOverlayOpacity,
 } from './windowManager'
 import {
   registerMicrophoneToggleHotkey,
@@ -424,6 +425,10 @@ export function registerIPCHandlers(): void {
 
   ipcMain.handle('hide-overlay', () => {
     return hideOverlay()
+  })
+
+  ipcMain.handle('set-overlay-opacity', (event, opacity: number) => {
+    return setOverlayOpacity(opacity)
   })
 
   // Screenshot management

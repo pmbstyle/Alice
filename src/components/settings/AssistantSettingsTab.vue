@@ -361,13 +361,7 @@
                   :disabled="!isToolConfigured(tool.name)"
                 />
                 <span
-                  class="label-text tooltip tooltip-right"
-                  :data-tip="
-                    tool.description +
-                    (!isToolConfigured(tool.name)
-                      ? ' (API key for this tool not configured in Optional Tool APIs section)'
-                      : '')
-                  "
+                  class="label-text font-bold text-white"
                 >
                   {{ tool.displayName }}
                   <span
@@ -378,6 +372,10 @@
                   </span>
                 </span>
               </label>
+              <div class="text-sm text-gray-400">
+                {{ tool.description }}
+                <template v-if="!isToolConfigured(tool.name)">(API key for this tool not configured in Optional Tool APIs section)</template>
+              </div>
             </div>
           </div>
 

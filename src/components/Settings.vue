@@ -261,10 +261,11 @@ const { googleAuthStatus, connectGoogleServices, disconnectGoogleServices } =
 const availableToolsForSelect = computed(() => {
   return PREDEFINED_OPENAI_TOOLS.map(tool => {
     const functionDef = (tool as any).function || tool
+    const toolInfo = getToolInfo(functionDef.name)
     return {
       name: functionDef.name,
-      description: functionDef.description || 'No description available.',
-      displayName: betterToolName(functionDef.name),
+      description: toolInfo.description,
+      displayName: toolInfo.displayName,
     }
   }).filter(tool => tool.name)
 })
@@ -302,7 +303,7 @@ const refreshModels = async () => {
   }
 }
 
-function betterToolName(name: string): string {
+function getToolInfo(name: string): { displayName: string; description: string } {
   const nameMap: Record<string, string> = {
     get_current_datetime: 'Current Date & Time',
     open_path: 'Open Apps/URLs',
@@ -322,10 +323,38 @@ function betterToolName(name: string): string {
     perform_web_search: 'Web Search (Tavily)',
     searxng_web_search: 'Web Search (SearXNG)',
   }
-  return (
-    nameMap[name] ||
-    name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-  )
+
+  const descriptionMap: Record<string, string> = {
+    get_current_datetime: 'Allows Alice to get the current date and time',
+    open_path: 'Allows Alice to open apps, URLs, files, and folders on the user\'s computer',
+    manage_clipboard: 'Alice can read and write to the user\'s clipboard',
+    save_memory: 'Alice can store memories (long term memory)',
+    delete_memory: 'Alice can delete memories (long term memory)',
+    recall_memories: 'Alice can recall memories (long term memory)',
+    list_directory: 'Alice can list the files and folders on the user\'s computer',
+    execute_command: 'Alice can execute shell commands on the user\'s computer',
+    schedule_task: 'Alice can schedule tasks to run on a recurring basis',
+    manage_scheduled_tasks: 'Alice can manage scheduled tasks',
+    get_calendar_events: 'Google Calendar integration to get calendar events',
+    create_calendar_event: 'Google Calendar integration to create calendar events',
+    update_calendar_event: 'Google Calendar integration to update calendar events',
+    delete_calendar_event: 'Google Calendar integration to delete calendar events',
+    get_unread_emails: 'Google Gmail integration to get unread emails',
+    search_emails: 'Google Gmail integration to search emails',
+    get_email_content: 'Google Gmail integration to get email content',
+    search_torrents: 'Alice can search for torrents on the internet (requires Jackett)',
+    add_torrent_to_qb: 'Alice can add a torrent to qBittorrent (requires qBittorrent)',
+    browser_context: 'Alice can get information about the current webpage in users browser (requires browser extension)',
+    perform_web_search: 'For models that lack web search capabilities (Tavily)',
+    searxng_web_search: 'For models that lack web search capabilities (SearXNG)',
+  }
+
+  return {
+    displayName:
+      nameMap[name] ||
+      name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+    description: descriptionMap[name] || 'No description available',
+  }
 }
 
 const resetSystemPrompt = () => {

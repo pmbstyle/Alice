@@ -1,50 +1,111 @@
 <template>
-  <div id="overlay"></div>
+  <div id="overlay">
+    <canvas ref="canvasRef" class="overlay-canvas"></canvas>
+  </div>
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount } from 'vue'
+import { nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
 
-let startX, startY, selectionBox
+let startX, startY
+let currentX, currentY
+let isSelecting = false
+const canvasRef = ref(null)
+let ctx = null
+let animationFrameId = null
+
+function startAnimationLoop() {
+  if (animationFrameId !== null) return
+  const loop = () => {
+    draw()
+    if (isSelecting) {
+      animationFrameId = requestAnimationFrame(loop)
+    } else {
+      animationFrameId = null
+    }
+  }
+  animationFrameId = requestAnimationFrame(loop)
+}
+
+function resizeCanvas() {
+  const canvas = canvasRef.value
+  if (!canvas) return
+  const dpr = window.devicePixelRatio || 1
+  const width = window.innerWidth
+  const height = window.innerHeight
+  if (width === 0 || height === 0) {
+    return
+  }
+  canvas.width = Math.floor(width * dpr)
+  canvas.height = Math.floor(height * dpr)
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
+  ctx = canvas.getContext('2d')
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  draw()
+}
+
+function draw() {
+  if (!ctx) return
+  const width = window.innerWidth
+  const height = window.innerHeight
+  ctx.clearRect(0, 0, width, height)
+
+  if (!isSelecting) return
+  const x = Math.min(startX, currentX)
+  const y = Math.min(startY, currentY)
+  const w = Math.abs(currentX - startX)
+  const h = Math.abs(currentY - startY)
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.15)'
+  ctx.fillRect(x, y, w, h)
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = 2
+  ctx.strokeRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2))
+}
 
 function onMouseDown(e) {
   console.log('Mouse down detected', e.clientX, e.clientY)
+  resizeCanvas()
   startX = e.clientX
   startY = e.clientY
-  selectionBox = document.createElement('div')
-  selectionBox.classList.add('selection-box')
-  selectionBox.style.left = `${startX}px`
-  selectionBox.style.top = `${startY}px`
-  selectionBox.style.width = '0px'
-  selectionBox.style.height = '0px'
-  document.body.appendChild(selectionBox)
+  currentX = startX
+  currentY = startY
+  isSelecting = true
+  draw()
+  startAnimationLoop()
 }
 
 function onMouseMove(e) {
-  if (!selectionBox) return
-  const currentX = e.clientX
-  const currentY = e.clientY
-  selectionBox.style.width = `${Math.abs(currentX - startX)}px`
-  selectionBox.style.height = `${Math.abs(currentY - startY)}px`
-  selectionBox.style.left = `${Math.min(startX, currentX)}px`
-  selectionBox.style.top = `${Math.min(startY, currentY)}px`
+  if (!isSelecting) return
+  currentX = e.clientX
+  currentY = e.clientY
+  draw()
 }
 
 async function onMouseUp(e) {
-  if (!selectionBox) return
+  if (!isSelecting) return
   console.log('Mouse up detected')
-  const rect = selectionBox.getBoundingClientRect()
+  const rect = {
+    x: Math.min(startX, currentX),
+    y: Math.min(startY, currentY),
+    width: Math.abs(currentX - startX),
+    height: Math.abs(currentY - startY),
+  }
 
   if (rect.width < 10 || rect.height < 10) {
-    document.body.removeChild(selectionBox)
-    selectionBox = null
+    isSelecting = false
+    draw()
     return
   }
 
-  document.body.removeChild(selectionBox)
-  selectionBox = null
+  isSelecting = false
+  draw()
+  animationFrameId = null
 
   try {
+    await window.ipcRenderer.invoke('set-overlay-opacity', 0)
+    await new Promise(resolve => setTimeout(resolve, 50))
     const source = (await window.ipcRenderer.invoke('capture-screen'))[0]
     const image = await navigator.mediaDevices.getUserMedia({
       video: {
@@ -90,16 +151,25 @@ async function onMouseUp(e) {
 
 function onKeyDown(e) {
   if (e.key === 'Escape') {
-    if (selectionBox) {
-      document.body.removeChild(selectionBox)
-      selectionBox = null
-    }
+    isSelecting = false
+    draw()
+    animationFrameId = null
     window.ipcRenderer.invoke('hide-overlay')
   }
 }
 
 onMounted(() => {
   console.log('Overlay component mounted')
+  nextTick(() => {
+    resizeCanvas()
+  })
+  window.addEventListener('resize', resizeCanvas)
+  window.addEventListener('focus', resizeCanvas)
+  if (window.ipcRenderer) {
+    window.ipcRenderer.on('overlay-shown', () => {
+      resizeCanvas()
+    })
+  }
   document.addEventListener('mousedown', onMouseDown)
   document.addEventListener('mousemove', onMouseMove)
   document.addEventListener('mouseup', onMouseUp)
@@ -107,14 +177,20 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  if (window.ipcRenderer) {
+    window.ipcRenderer.removeAllListeners('overlay-shown')
+  }
+  if (animationFrameId !== null) {
+    cancelAnimationFrame(animationFrameId)
+    animationFrameId = null
+  }
+  window.removeEventListener('resize', resizeCanvas)
+  window.removeEventListener('focus', resizeCanvas)
   document.removeEventListener('mousedown', onMouseDown)
   document.removeEventListener('mousemove', onMouseMove)
   document.removeEventListener('mouseup', onMouseUp)
   document.removeEventListener('keydown', onKeyDown)
-
-  if (selectionBox) {
-    document.body.removeChild(selectionBox)
-  }
+  isSelecting = false
 })
 </script>
 
@@ -127,19 +203,18 @@ html {
   background: transparent;
 }
 #overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   cursor: crosshair;
   z-index: 9999;
+  background-color: transparent;
 }
-.selection-box {
-  border: 2px dashed #fff;
-  background-color: rgba(255, 255, 255, 0.1);
+.overlay-canvas {
   position: absolute;
-  pointer-events: none;
-  z-index: 10000;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 </style>

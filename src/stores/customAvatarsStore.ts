@@ -4,7 +4,6 @@ import type { CustomAvatar, CustomAvatarsSnapshot } from '../../types/customAvat
 import videoSpeaking from '../assets/videos/speaking.mp4'
 import videoStandby from '../assets/videos/standby.mp4'
 import videoThinking from '../assets/videos/thinking.mp4'
-import videoConfig from '../assets/videos/config.mp4'
 import { useSettingsStore } from './settingsStore'
 
 interface OperationResult<T> {
@@ -22,7 +21,6 @@ const builtInAvatar: CustomAvatar = {
     speaking: videoSpeaking,
     standby: videoStandby,
     thinking: videoThinking,
-    config: videoConfig,
   },
   previewVideo: videoStandby,
 }

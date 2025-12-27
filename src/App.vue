@@ -72,6 +72,9 @@ const showSettings = computed(() => {
 })
 
 const showOnboarding = computed(() => {
+  if (!settingsStore.initialLoadAttempted) {
+    return false
+  }
   return route.hash !== '#settings' && route.hash !== '#overlay' && !settingsStore.settings.onboardingCompleted
 })
 

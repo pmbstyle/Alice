@@ -64,6 +64,8 @@ export default defineConfig(({ mode, command }) => {
                 ),
                 input: {
                   index: 'electron/main/index.ts',
+                  'workers/pdfParserWorker':
+                    'electron/main/workers/pdfParserWorker.ts',
                 },
               },
             },

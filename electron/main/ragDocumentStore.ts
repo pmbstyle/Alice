@@ -3,11 +3,11 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import { unlinkSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
+import { Worker } from 'node:worker_threads'
 import axios from 'axios'
 import HnswlibNode from 'hnswlib-node'
 import Database from 'better-sqlite3'
 import { backendManager } from './backendManager'
-import pdfWorkerUrl from 'pdfjs-dist/legacy/build/pdf.worker.mjs?url'
 
 const { HierarchicalNSW } = HnswlibNode
 
@@ -29,6 +29,7 @@ const CHUNK_MAX_TOKENS = 120
 const CHUNK_OVERLAP_TOKENS = 30
 const MAX_DOC_CHUNKS = 2000
 const MAX_FILE_SIZE_BYTES = 32 * 1024 * 1024
+const PDF_WORKER_TIMEOUT_MS = 120000
 
 const ragDbPath = path.join(app.getPath('userData'), RAG_DB_FILE_NAME)
 const ragIndexPath = path.join(app.getPath('userData'), RAG_HNSW_INDEX_FILE_NAME)
@@ -37,7 +38,6 @@ let db: Database.Database | null = null
 let hnswIndex: HierarchicalNSW | null = null
 let isStoreInitialized = false
 let labelToChunkId: Map<number, string> = new Map()
-let pdfWorkerInitialized = false
 let hasRecoveredFromCorruption = false
 
 export interface RagSearchResult {
@@ -341,6 +341,41 @@ function cleanExtractedText(text: string): string {
   return normalizeWhitespace(merged.join(' '))
 }
 
+async function parsePdfInWorker(filePath: string): Promise<ParsedSection[]> {
+  const workerUrl = new URL('./workers/pdfParserWorker.js', import.meta.url)
+
+  return new Promise((resolve, reject) => {
+    const worker = new Worker(workerUrl, { type: 'module' })
+    const timeout = setTimeout(() => {
+      worker.terminate().catch(() => undefined)
+      reject(new Error('[RAG] PDF worker timed out.'))
+    }, PDF_WORKER_TIMEOUT_MS)
+
+    const cleanup = () => {
+      clearTimeout(timeout)
+      worker.removeAllListeners()
+    }
+
+    worker.once('message', message => {
+      cleanup()
+      worker.terminate().catch(() => undefined)
+      if (message?.success) {
+        resolve(message.sections || [])
+        return
+      }
+      reject(new Error(message?.error || '[RAG] PDF worker failed.'))
+    })
+
+    worker.once('error', error => {
+      cleanup()
+      worker.terminate().catch(() => undefined)
+      reject(error)
+    })
+
+    worker.postMessage({ filePath })
+  })
+}
+
 function splitByMarkdownHeadings(text: string): ParsedSection[] {
   const lines = text.split(/\r?\n/)
   const sections: ParsedSection[] = []
@@ -489,30 +524,13 @@ async function parseFile(filePath: string): Promise<ParsedDocument | null> {
   const ext = path.extname(filePath).toLowerCase()
 
   if (ext === '.pdf') {
-    const { getDocument, GlobalWorkerOptions } = await import(
-      'pdfjs-dist/legacy/build/pdf.mjs'
-    )
-    if (!pdfWorkerInitialized) {
-      GlobalWorkerOptions.workerSrc = pdfWorkerUrl
-      pdfWorkerInitialized = true
-    }
-    const buffer = await fs.readFile(filePath)
-    const data = new Uint8Array(
-      buffer.buffer,
-      buffer.byteOffset,
-      buffer.byteLength
-    )
-    const pdf = await getDocument({ data, disableWorker: true }).promise
-    const sections: ParsedSection[] = []
-    for (let page = 1; page <= pdf.numPages; page += 1) {
-      const pageData = await pdf.getPage(page)
-      const content = await pageData.getTextContent()
-      const text = content.items.map((item: any) => item.str).join(' ')
-      const cleaned = cleanExtractedText(text)
-      if (cleaned) {
-        sections.push({ text: cleaned, page })
-      }
-    }
+    const sectionsRaw = await parsePdfInWorker(filePath)
+    const sections = sectionsRaw
+      .map(section => ({
+        text: cleanExtractedText(section.text),
+        page: section.page,
+      }))
+      .filter(section => section.text)
     return {
       title: path.basename(filePath),
       sections,

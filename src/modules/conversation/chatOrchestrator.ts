@@ -207,8 +207,10 @@ export function createChatOrchestrator(
 
   const getLatestUserMessage = (): ChatMessage | undefined => {
     const history = dependencies.getChatHistory()
-    for (let i = 0; i < history.length; i += 1) {
-      if (history[i].role === 'user') return history[i]
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      if (history[i].role === 'user') {
+        return history[i]
+      }
     }
     return undefined
   }

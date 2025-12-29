@@ -79,6 +79,7 @@ function buildRagContextBlock(
     path: string
     title: string
     page?: number | null
+    section?: string | null
   }[],
   maxChars: number
 ): string {
@@ -92,7 +93,9 @@ function buildRagContextBlock(
     const snippet =
       normalized.length <= 320 ? normalized : `${normalized.slice(0, 317)}...`
     const source = formatRagSource(result.path, result.title, result.page)
-    const entry = `- [${source}] ${snippet}`
+    const section = result.section?.trim()
+    const sectionPrefix = section ? `(Section: ${section}) ` : ''
+    const entry = `- [${source}] ${sectionPrefix}${snippet}`
     const extra = entry.length + 1
     if (extra > remaining) {
       break
@@ -112,6 +115,31 @@ function buildRagRulesBlock(): string {
     '- Cite sources inline like [filename#pX].',
     '- If the answer is not in the excerpts, say you could not find it.',
   ].join('\n')
+}
+
+function adjustRagConfig(
+  prompt: string,
+  config: { topK: number; maxContextChars: number }
+) {
+  const wordCount = prompt.trim().split(/\s+/).filter(Boolean).length
+  let topK = config.topK
+  let maxContextChars = config.maxContextChars
+
+  if (wordCount <= 6) {
+    topK = Math.min(config.topK + 3, 12)
+    maxContextChars = Math.min(config.maxContextChars + 800, 5000)
+  } else if (wordCount <= 14) {
+    topK = Math.min(config.topK + 2, 10)
+    maxContextChars = Math.min(config.maxContextChars + 500, 4500)
+  } else if (wordCount >= 60) {
+    topK = Math.max(config.topK - 3, 2)
+    maxContextChars = Math.max(config.maxContextChars - 600, 1200)
+  } else if (wordCount >= 30) {
+    topK = Math.max(config.topK - 2, 3)
+    maxContextChars = Math.max(config.maxContextChars - 400, 1500)
+  }
+
+  return { topK, maxContextChars }
 }
 
 function rerankRagResults(
@@ -882,9 +910,13 @@ export const useConversationStore = defineStore('conversation', () => {
     }
 
     if (settingsStore.config.ragEnabled) {
+      const adjustedConfig = adjustRagConfig(prompt, {
+        topK: settingsStore.config.ragTopK,
+        maxContextChars: settingsStore.config.ragMaxContextChars,
+      })
       const ragResultsRaw = await api.retrieveRelevantDocumentsForPrompt(
         prompt,
-        settingsStore.config.ragTopK
+        adjustedConfig.topK
       )
       const ragResults = rerankRagResults(ragResultsRaw, prompt)
       if (ragResults.length > 0) {
@@ -894,7 +926,7 @@ export const useConversationStore = defineStore('conversation', () => {
         })
         const ragBlock = buildRagContextBlock(
           ragResults,
-          settingsStore.config.ragMaxContextChars
+          adjustedConfig.maxContextChars
         )
         if (ragBlock) {
           contextMessages.push({

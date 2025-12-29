@@ -79,7 +79,9 @@ export function createChatOrchestrator(
     for (const result of results) {
       const snippet = formatRagSnippet(result.text)
       const source = formatRagSource(result)
-      const entry = `- [${source}] ${snippet}`
+      const section = result.section?.trim()
+      const sectionPrefix = section ? `(Section: ${section}) ` : ''
+      const entry = `- [${source}] ${sectionPrefix}${snippet}`
       const extra = entry.length + 1
       if (extra > remaining) {
         break
@@ -99,6 +101,31 @@ export function createChatOrchestrator(
       '- Cite sources inline like [filename#pX].',
       '- If the answer is not in the excerpts, say you could not find it.',
     ].join('\n')
+  }
+
+  const adjustRagConfig = (
+    prompt: string,
+    config: { topK: number; maxContextChars: number }
+  ) => {
+    const wordCount = prompt.trim().split(/\s+/).filter(Boolean).length
+    let topK = config.topK
+    let maxContextChars = config.maxContextChars
+
+    if (wordCount <= 6) {
+      topK = Math.min(config.topK + 3, 12)
+      maxContextChars = Math.min(config.maxContextChars + 800, 5000)
+    } else if (wordCount <= 14) {
+      topK = Math.min(config.topK + 2, 10)
+      maxContextChars = Math.min(config.maxContextChars + 500, 4500)
+    } else if (wordCount >= 60) {
+      topK = Math.max(config.topK - 3, 2)
+      maxContextChars = Math.max(config.maxContextChars - 600, 1200)
+    } else if (wordCount >= 30) {
+      topK = Math.max(config.topK - 2, 3)
+      maxContextChars = Math.max(config.maxContextChars - 400, 1500)
+    }
+
+    return { topK, maxContextChars }
   }
 
   const rerankRagResults = (
@@ -271,28 +298,32 @@ export function createChatOrchestrator(
 
         const ragConfig = dependencies.getRagConfig()
         if (ragConfig.enabled) {
+          const adjustedConfig = adjustRagConfig(
+            textForThoughtRetrieval,
+            ragConfig
+          )
           const ragResultsRaw = await dependencies.retrieveDocumentsForPrompt(
             textForThoughtRetrieval,
-            ragConfig.topK
+            adjustedConfig.topK
           )
           const ragResults = rerankRagResults(
             ragResultsRaw,
             textForThoughtRetrieval
           )
           if (ragResults.length > 0) {
-          contextMessages.push({
-            role: 'user',
-            content: [{ type: 'input_text', text: buildRagRulesBlock() }],
-          })
-          const ragBlock = buildRagBlock(
-            ragResults,
-            ragConfig.maxContextChars
-          )
-          if (ragBlock) {
             contextMessages.push({
               role: 'user',
-              content: [{ type: 'input_text', text: ragBlock }],
+              content: [{ type: 'input_text', text: buildRagRulesBlock() }],
             })
+            const ragBlock = buildRagBlock(
+              ragResults,
+              adjustedConfig.maxContextChars
+            )
+            if (ragBlock) {
+              contextMessages.push({
+                role: 'user',
+                content: [{ type: 'input_text', text: ragBlock }],
+              })
             }
           }
         }

@@ -158,7 +158,10 @@ function removeLinksFromText(text: string): string {
     .replace(/https?:\/\/[^\s\)]+/g, '')
     .replace(/www\.[^\s\)]+/g, '')
     .replace(/\[[^\]]*\]\([^)]*\)/g, '')
-    .replace(/\[[^\]]+#p\d+\]/gi, '')
+    .replace(
+      /\[[^\]\n]+?\.(?:pdf|docx?|txt|md|markdown|html?|pptx?)(?:#p\d+)?\]/gi,
+      ''
+    )
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -649,10 +652,10 @@ export const retrieveRelevantDocumentsForPrompt = async (
   if (!content.trim()) return []
 
   const queryEmbedding = await createLocalEmbedding(content)
-  if (queryEmbedding.length === 0) return []
 
   const ipcResult = await window.ipcRenderer.invoke('rag:search', {
     queryEmbedding,
+    queryText: content,
     topK,
   })
   if (!ipcResult.success || !Array.isArray(ipcResult.data)) {

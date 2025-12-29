@@ -245,10 +245,14 @@ export function registerIPCHandlers(): void {
 
   ipcMain.handle(
     'rag:search',
-    async (event, args: { queryEmbedding: number[]; topK?: number }) => {
+    async (
+      event,
+      args: { queryEmbedding: number[]; queryText?: string; topK?: number }
+    ) => {
       try {
         const results = await searchRag(
           args?.queryEmbedding || [],
+          args?.queryText || '',
           args?.topK ?? 5
         )
         return { success: true, data: results }

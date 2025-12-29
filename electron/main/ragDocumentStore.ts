@@ -1,6 +1,7 @@
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs/promises'
+import { unlinkSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
 import axios from 'axios'
 import HnswlibNode from 'hnswlib-node'
@@ -37,6 +38,7 @@ let hnswIndex: HierarchicalNSW | null = null
 let isStoreInitialized = false
 let labelToChunkId: Map<number, string> = new Map()
 let pdfWorkerInitialized = false
+let hasRecoveredFromCorruption = false
 
 export interface RagSearchResult {
   id: string
@@ -51,6 +53,7 @@ export interface RagSearchResult {
 interface ParsedSection {
   text: string
   page?: number
+  heading?: string
 }
 
 interface ParsedDocument {
@@ -60,8 +63,18 @@ interface ParsedDocument {
 
 function initDb(): void {
   if (db) return
-  db = new Database(ragDbPath)
-  db.pragma('journal_mode = WAL')
+  try {
+    db = new Database(ragDbPath)
+    db.pragma('journal_mode = WAL')
+  } catch (error) {
+    if (isSqliteCorruption(error)) {
+      resetRagDatabase('[RAG] Corrupt database detected during init.')
+      db = new Database(ragDbPath)
+      db.pragma('journal_mode = WAL')
+    } else {
+      throw error
+    }
+  }
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS rag_documents (
@@ -90,6 +103,45 @@ function initDb(): void {
     );
     CREATE INDEX IF NOT EXISTS idx_rag_chunks_doc_id ON rag_chunks (doc_id);
   `)
+
+  try {
+    ensureFtsReady(db)
+  } catch (error) {
+    if (isSqliteCorruption(error)) {
+      resetRagDatabase('[RAG] Corrupt FTS detected during init.')
+      db = new Database(ragDbPath)
+      db.pragma('journal_mode = WAL')
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS rag_documents (
+          id TEXT PRIMARY KEY,
+          path TEXT UNIQUE NOT NULL,
+          file_hash TEXT NOT NULL,
+          mtime INTEGER NOT NULL,
+          size INTEGER NOT NULL,
+          title TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        );
+      `)
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS rag_chunks (
+          id TEXT PRIMARY KEY,
+          doc_id TEXT NOT NULL,
+          chunk_index INTEGER NOT NULL,
+          text TEXT NOT NULL,
+          embedding_local BLOB NOT NULL,
+          token_count INTEGER NOT NULL,
+          page INTEGER,
+          section TEXT,
+          created_at TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_rag_chunks_doc_id ON rag_chunks (doc_id);
+      `)
+      ensureFtsReady(db)
+    } else {
+      throw error
+    }
+  }
 }
 
 async function initializeIndex(): Promise<void> {
@@ -129,6 +181,7 @@ export async function initializeRagStore(): Promise<void> {
   initDb()
   await initializeIndex()
   isStoreInitialized = true
+  hasRecoveredFromCorruption = false
 }
 
 async function saveIndex(): Promise<void> {
@@ -234,6 +287,69 @@ function cleanExtractedText(text: string): string {
   return normalizeWhitespace(merged.join(' '))
 }
 
+function splitByMarkdownHeadings(text: string): ParsedSection[] {
+  const lines = text.split(/\r?\n/)
+  const sections: ParsedSection[] = []
+  let currentHeading = ''
+  let buffer: string[] = []
+
+  const flush = () => {
+    const content = cleanExtractedText(buffer.join('\n'))
+    if (content) {
+      sections.push({ text: content, heading: currentHeading })
+    }
+    buffer = []
+  }
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^\s{0,3}#{1,6}\s+(.*)$/)
+    if (headingMatch) {
+      flush()
+      currentHeading = headingMatch[1].trim()
+      continue
+    }
+    buffer.push(line)
+  }
+
+  flush()
+  if (sections.length === 0) {
+    return [{ text: cleanExtractedText(text), heading: '' }]
+  }
+  return sections
+}
+
+function ensureFtsReady(currentDb: Database.Database) {
+  currentDb.exec(`
+    CREATE VIRTUAL TABLE IF NOT EXISTS rag_chunks_fts
+    USING fts5(id, text, content='rag_chunks', content_rowid='rowid');
+  `)
+
+  currentDb.exec(`
+    CREATE TRIGGER IF NOT EXISTS rag_chunks_ai AFTER INSERT ON rag_chunks BEGIN
+      INSERT INTO rag_chunks_fts(rowid, id, text) VALUES (new.rowid, new.id, new.text);
+    END;
+    CREATE TRIGGER IF NOT EXISTS rag_chunks_ad AFTER DELETE ON rag_chunks BEGIN
+      INSERT INTO rag_chunks_fts(rag_chunks_fts, rowid, id, text)
+      VALUES ('delete', old.rowid, old.id, old.text);
+    END;
+    CREATE TRIGGER IF NOT EXISTS rag_chunks_au AFTER UPDATE ON rag_chunks BEGIN
+      INSERT INTO rag_chunks_fts(rag_chunks_fts, rowid, id, text)
+      VALUES ('delete', old.rowid, old.id, old.text);
+      INSERT INTO rag_chunks_fts(rowid, id, text) VALUES (new.rowid, new.id, new.text);
+    END;
+  `)
+
+  const ftsCount = currentDb
+    .prepare('SELECT COUNT(*) as count FROM rag_chunks_fts')
+    .get() as { count: number }
+  if (ftsCount.count === 0) {
+    currentDb.exec(`
+      INSERT INTO rag_chunks_fts(rowid, id, text)
+      SELECT rowid, id, text FROM rag_chunks;
+    `)
+  }
+}
+
 function estimateTokens(text: string): number {
   if (!text) return 0
   return text.split(/\s+/).filter(Boolean).length
@@ -273,6 +389,46 @@ function ensureDb(): Database.Database {
     throw new Error('Failed to initialize RAG database.')
   }
   return db
+}
+
+function isSqliteCorruption(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const code = (error as { code?: string }).code
+  return code === 'SQLITE_CORRUPT' || code === 'SQLITE_CORRUPT_VTAB'
+}
+
+function resetRagDatabase(reason: string): void {
+  if (hasRecoveredFromCorruption) {
+    console.warn('[RAG] Skipping repeated corruption recovery.')
+    return
+  }
+
+  hasRecoveredFromCorruption = true
+  console.warn(reason)
+
+  try {
+    db?.close()
+  } catch (error) {
+    console.warn('[RAG] Failed to close corrupted DB:', error)
+  }
+  db = null
+  isStoreInitialized = false
+  labelToChunkId.clear()
+
+  try {
+    unlinkSync(ragDbPath)
+  } catch (error) {
+    // Best-effort cleanup; database might already be gone or locked.
+  }
+
+  try {
+    unlinkSync(ragIndexPath)
+  } catch (error) {
+    // Best-effort cleanup; index might already be gone or locked.
+  }
+
+  hnswIndex = new HierarchicalNSW('cosine', LOCAL_VECTOR_DIMENSION)
+  hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
 }
 
 async function parseFile(filePath: string): Promise<ParsedDocument | null> {
@@ -329,7 +485,10 @@ async function parseFile(filePath: string): Promise<ParsedDocument | null> {
     const markdown = turndownService.turndown(bodyText)
     return {
       title,
-      sections: [{ text: cleanExtractedText(markdown) }],
+      sections: splitByMarkdownHeadings(markdown).map(section => ({
+        ...section,
+        text: cleanExtractedText(section.text),
+      })),
     }
   }
 
@@ -337,7 +496,10 @@ async function parseFile(filePath: string): Promise<ParsedDocument | null> {
     const text = await fs.readFile(filePath, 'utf-8')
     return {
       title: path.basename(filePath),
-      sections: [{ text: cleanExtractedText(text) }],
+      sections: splitByMarkdownHeadings(text).map(section => ({
+        ...section,
+        text: cleanExtractedText(section.text),
+      })),
     }
   }
 
@@ -401,15 +563,23 @@ async function upsertDocument(
   const docId = existing?.id || randomUUID()
   const now = new Date().toISOString()
 
-  if (existing) {
-    currentDb.prepare(
-      'UPDATE rag_documents SET file_hash = ?, mtime = ?, size = ?, title = ?, updated_at = ? WHERE id = ?'
-    ).run(hash, mtime, size, parsed.title, now, docId)
-    currentDb.prepare('DELETE FROM rag_chunks WHERE doc_id = ?').run(docId)
-  } else {
-    currentDb.prepare(
-      'INSERT INTO rag_documents (id, path, file_hash, mtime, size, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-    ).run(docId, filePath, hash, mtime, size, parsed.title, now, now)
+  try {
+    if (existing) {
+      currentDb.prepare(
+        'UPDATE rag_documents SET file_hash = ?, mtime = ?, size = ?, title = ?, updated_at = ? WHERE id = ?'
+      ).run(hash, mtime, size, parsed.title, now, docId)
+      currentDb.prepare('DELETE FROM rag_chunks WHERE doc_id = ?').run(docId)
+    } else {
+      currentDb.prepare(
+        'INSERT INTO rag_documents (id, path, file_hash, mtime, size, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+      ).run(docId, filePath, hash, mtime, size, parsed.title, now, now)
+    }
+  } catch (error) {
+    if (isSqliteCorruption(error)) {
+      resetRagDatabase('[RAG] Corrupt database detected during upsert.')
+      throw error
+    }
+    throw error
   }
 
   const chunkRows: {
@@ -428,12 +598,17 @@ async function upsertDocument(
     text: string
     tokenCount: number
     page?: number
+    heading?: string
   }[] = []
 
   for (const section of parsed.sections) {
     const sectionChunks = splitIntoChunks(section.text)
     for (const chunk of sectionChunks) {
-      chunks.push({ ...chunk, page: section.page })
+      chunks.push({
+        ...chunk,
+        page: section.page,
+        heading: section.heading,
+      })
       if (chunks.length >= MAX_DOC_CHUNKS) {
         break
       }
@@ -464,7 +639,7 @@ async function upsertDocument(
       embedding_local: toEmbeddingBuffer(embedding),
       token_count: chunks[i].tokenCount,
       page: chunks[i].page ?? null,
-      section: null,
+      section: chunks[i].heading || null,
       created_at: createdAt,
     })
   }
@@ -473,21 +648,28 @@ async function upsertDocument(
     'INSERT INTO rag_chunks (id, doc_id, chunk_index, text, embedding_local, token_count, page, section, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
   )
 
-  currentDb.transaction(() => {
-    for (const row of chunkRows) {
-      insert.run(
-        row.id,
-        row.doc_id,
-        row.chunk_index,
-        row.text,
-        row.embedding_local,
-        row.token_count,
-        row.page,
-        row.section,
-        row.created_at
-      )
+  try {
+    currentDb.transaction(() => {
+      for (const row of chunkRows) {
+        insert.run(
+          row.id,
+          row.doc_id,
+          row.chunk_index,
+          row.text,
+          row.embedding_local,
+          row.token_count,
+          row.page,
+          row.section,
+          row.created_at
+        )
+      }
+    })()
+  } catch (error) {
+    if (isSqliteCorruption(error)) {
+      resetRagDatabase('[RAG] Corrupt database detected while writing chunks.')
     }
-  })()
+    throw error
+  }
 }
 
 async function rebuildIndexFromDb(): Promise<void> {
@@ -664,6 +846,9 @@ export async function indexPaths(
       )
       indexed += 1
     } catch (error) {
+      if (isSqliteCorruption(error)) {
+        resetRagDatabase('[RAG] Corrupt database detected during indexing.')
+      }
       console.warn('[RAG] Failed to index file:', file.filePath, error)
       skipped += 1
     }
@@ -677,42 +862,110 @@ export async function indexPaths(
   return { indexed, skipped }
 }
 
+function keywordSearch(
+  queryText: string,
+  topK: number
+): { id: string; rank: number }[] {
+  if (!db) return []
+  const tokens = queryText
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(token => token.length >= 3)
+
+  if (tokens.length === 0) return []
+
+  const ftsQuery = tokens.map(token => `${token}*`).join(' AND ')
+  const rows = db
+    .prepare(
+      `SELECT id, bm25(rag_chunks_fts) as score
+       FROM rag_chunks_fts
+       WHERE rag_chunks_fts MATCH ?
+       ORDER BY score ASC
+       LIMIT ?`
+    )
+    .all(ftsQuery, topK) as { id: string; score: number }[]
+
+  return rows.map((row, idx) => ({
+    id: row.id,
+    rank: idx + 1,
+  }))
+}
+
+function combineRankedLists(
+  primary: string[],
+  secondary: { id: string; rank: number }[],
+  limit: number
+): string[] {
+  const k = 60
+  const scores = new Map<string, number>()
+
+  primary.forEach((id, idx) => {
+    const score = 1 / (k + idx + 1)
+    scores.set(id, (scores.get(id) || 0) + score)
+  })
+
+  secondary.forEach(item => {
+    const score = 1 / (k + item.rank)
+    scores.set(item.id, (scores.get(item.id) || 0) + score)
+  })
+
+  return Array.from(scores.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([id]) => id)
+}
+
 export async function searchRag(
   queryEmbedding: number[],
+  queryText: string,
   topK: number
 ): Promise<RagSearchResult[]> {
   await initializeRagStore()
-  if (!hnswIndex || hnswIndex.getCurrentCount() === 0) {
+  const hasEmbedding =
+    queryEmbedding && queryEmbedding.length === LOCAL_VECTOR_DIMENSION
+  const hasText = queryText && queryText.trim().length > 0
+
+  if ((!hnswIndex || hnswIndex.getCurrentCount() === 0) && !hasText) {
     return []
   }
-  if (queryEmbedding.length !== LOCAL_VECTOR_DIMENSION) {
-    return []
+
+  let vectorIds: string[] = []
+  if (hasEmbedding && hnswIndex && hnswIndex.getCurrentCount() > 0) {
+    const result = hnswIndex.searchKnn(
+      queryEmbedding,
+      Math.min(topK, hnswIndex.getCurrentCount())
+    )
+    vectorIds = (result.neighbors || [])
+      .map(label => labelToChunkId.get(label))
+      .filter(Boolean) as string[]
   }
 
-  const result = hnswIndex.searchKnn(
-    queryEmbedding,
-    Math.min(topK, hnswIndex.getCurrentCount())
-  )
+  const keywordIds = hasText ? keywordSearch(queryText, topK) : []
+  const combinedIds = combineRankedLists(vectorIds, keywordIds, topK)
 
-  const chunkIds = (result.neighbors || [])
-    .map(label => labelToChunkId.get(label))
-    .filter(Boolean) as string[]
-
-  const metadata = getChunkMetadataByIds(chunkIds)
+  const metadata = getChunkMetadataByIds(combinedIds)
   return metadata.map((item, idx) => ({
     ...item,
-    score: 1 - (result.distances?.[idx] ?? 1),
+    score: 1 - Math.min(1, idx / Math.max(1, topK)),
   }))
 }
 
 export async function clearRag(): Promise<void> {
-  const currentDb = ensureDb()
-  currentDb.prepare('DELETE FROM rag_chunks').run()
-  currentDb.prepare('DELETE FROM rag_documents').run()
-  hnswIndex = new HierarchicalNSW('cosine', LOCAL_VECTOR_DIMENSION)
-  hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
-  labelToChunkId.clear()
-  await saveIndex()
+  try {
+    const currentDb = ensureDb()
+    currentDb.prepare('DELETE FROM rag_chunks').run()
+    currentDb.prepare('DELETE FROM rag_documents').run()
+    hnswIndex = new HierarchicalNSW('cosine', LOCAL_VECTOR_DIMENSION)
+    hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
+    labelToChunkId.clear()
+    await saveIndex()
+  } catch (error) {
+    if (isSqliteCorruption(error)) {
+      resetRagDatabase('[RAG] Corrupt database detected during clear.')
+      return
+    }
+    throw error
+  }
 }
 
 export async function getRagStats(): Promise<{

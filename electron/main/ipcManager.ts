@@ -41,6 +41,7 @@ import {
   searchRag,
   clearRag,
   getRagStats,
+  removeRagPaths,
 } from './ragDocumentStore'
 import * as googleAuthManager from './googleAuthManager'
 import * as googleCalendarManager from './googleCalendarManager'
@@ -272,6 +273,19 @@ export function registerIPCHandlers(): void {
       return { success: false, error: (error as Error).message }
     }
   })
+
+  ipcMain.handle(
+    'rag:remove-paths',
+    async (event, args: { paths: string[] }) => {
+      try {
+        const result = await removeRagPaths(args?.paths || [])
+        return { success: true, data: result }
+      } catch (error) {
+        console.error('[IPC rag:remove-paths] Error:', error)
+        return { success: false, error: (error as Error).message }
+      }
+    }
+  )
 
   ipcMain.handle('rag:stats', async () => {
     try {

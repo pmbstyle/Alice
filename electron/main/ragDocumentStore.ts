@@ -199,6 +199,60 @@ function normalizeWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim()
 }
 
+function normalizePathForCompare(value: string): string {
+  const normalized = path.normalize(value)
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized
+}
+
+async function normalizeRagTargets(
+  paths: string[]
+): Promise<Array<{ normalizedPath: string; dirPrefix: string; isDirectory: boolean }>> {
+  const unique = Array.from(
+    new Set((paths || []).map(item => String(item)).filter(Boolean))
+  )
+  const results: Array<{
+    normalizedPath: string
+    dirPrefix: string
+    isDirectory: boolean
+  }> = []
+
+  for (const target of unique) {
+    const resolved = path.resolve(target)
+    let isDirectory = false
+    try {
+      const stat = await fs.stat(resolved)
+      isDirectory = stat.isDirectory()
+    } catch (error) {
+      isDirectory = path.extname(resolved) === ''
+    }
+    const normalizedPath = normalizePathForCompare(resolved)
+    const dirPrefix = normalizePathForCompare(
+      isDirectory
+        ? resolved.endsWith(path.sep)
+          ? resolved
+          : `${resolved}${path.sep}`
+        : resolved
+    )
+    results.push({ normalizedPath, dirPrefix, isDirectory })
+  }
+
+  return results
+}
+
+function shouldRemoveRagDoc(
+  docPath: string,
+  targets: Array<{ normalizedPath: string; dirPrefix: string; isDirectory: boolean }>
+): boolean {
+  const normalizedDoc = normalizePathForCompare(docPath)
+  return targets.some(target => {
+    if (normalizedDoc === target.normalizedPath) return true
+    if (target.isDirectory && normalizedDoc.startsWith(target.dirPrefix)) {
+      return true
+    }
+    return false
+  })
+}
+
 function cleanExtractedText(text: string): string {
   const deHyphenated = text.replace(/(\w)-\s+(\w)/g, '$1$2')
   const tokens = deHyphenated.split(/\s+/)
@@ -563,25 +617,6 @@ async function upsertDocument(
   const docId = existing?.id || randomUUID()
   const now = new Date().toISOString()
 
-  try {
-    if (existing) {
-      currentDb.prepare(
-        'UPDATE rag_documents SET file_hash = ?, mtime = ?, size = ?, title = ?, updated_at = ? WHERE id = ?'
-      ).run(hash, mtime, size, parsed.title, now, docId)
-      currentDb.prepare('DELETE FROM rag_chunks WHERE doc_id = ?').run(docId)
-    } else {
-      currentDb.prepare(
-        'INSERT INTO rag_documents (id, path, file_hash, mtime, size, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-      ).run(docId, filePath, hash, mtime, size, parsed.title, now, now)
-    }
-  } catch (error) {
-    if (isSqliteCorruption(error)) {
-      resetRagDatabase('[RAG] Corrupt database detected during upsert.')
-      throw error
-    }
-    throw error
-  }
-
   const chunkRows: {
     id: string
     doc_id: string
@@ -619,16 +654,38 @@ async function upsertDocument(
   }
 
   if (chunks.length === 0) {
+    try {
+      currentDb.transaction(() => {
+        if (existing) {
+          currentDb.prepare(
+            'UPDATE rag_documents SET file_hash = ?, mtime = ?, size = ?, title = ?, updated_at = ? WHERE id = ?'
+          ).run(hash, mtime, size, parsed.title, now, docId)
+          currentDb.prepare('DELETE FROM rag_chunks WHERE doc_id = ?').run(docId)
+        } else {
+          currentDb.prepare(
+            'INSERT INTO rag_documents (id, path, file_hash, mtime, size, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          ).run(docId, filePath, hash, mtime, size, parsed.title, now, now)
+        }
+      })()
+    } catch (error) {
+      if (isSqliteCorruption(error)) {
+        resetRagDatabase('[RAG] Corrupt database detected during upsert.')
+      }
+      throw error
+    }
     return
   }
 
   const embeddings = await generateEmbeddings(chunks.map(c => c.text))
+  if (embeddings.length !== chunks.length) {
+    throw new Error('[RAG] Embedding batch size mismatch.')
+  }
   const createdAt = new Date().toISOString()
 
   for (let i = 0; i < chunks.length; i += 1) {
     const embedding = embeddings[i]
     if (!embedding || embedding.length !== LOCAL_VECTOR_DIMENSION) {
-      continue
+      throw new Error('[RAG] Invalid embedding payload received.')
     }
     const chunkId = randomUUID()
     chunkRows.push({
@@ -650,6 +707,16 @@ async function upsertDocument(
 
   try {
     currentDb.transaction(() => {
+      if (existing) {
+        currentDb.prepare(
+          'UPDATE rag_documents SET file_hash = ?, mtime = ?, size = ?, title = ?, updated_at = ? WHERE id = ?'
+        ).run(hash, mtime, size, parsed.title, now, docId)
+        currentDb.prepare('DELETE FROM rag_chunks WHERE doc_id = ?').run(docId)
+      } else {
+        currentDb.prepare(
+          'INSERT INTO rag_documents (id, path, file_hash, mtime, size, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        ).run(docId, filePath, hash, mtime, size, parsed.title, now, now)
+      }
       for (const row of chunkRows) {
         insert.run(
           row.id,
@@ -670,6 +737,44 @@ async function upsertDocument(
     }
     throw error
   }
+}
+
+export async function removeRagPaths(
+  paths: string[]
+): Promise<{ removed: number }> {
+  await initializeRagStore()
+  const currentDb = ensureDb()
+  const normalizedTargets = await normalizeRagTargets(paths)
+  if (normalizedTargets.length === 0) return { removed: 0 }
+
+  const rows = currentDb
+    .prepare('SELECT id, path FROM rag_documents')
+    .all() as { id: string; path: string }[]
+
+  const idsToRemove = rows
+    .filter(row => shouldRemoveRagDoc(row.path, normalizedTargets))
+    .map(row => row.id)
+
+  if (idsToRemove.length === 0) {
+    return { removed: 0 }
+  }
+
+  try {
+    currentDb.transaction(() => {
+      for (const id of idsToRemove) {
+        currentDb.prepare('DELETE FROM rag_chunks WHERE doc_id = ?').run(id)
+        currentDb.prepare('DELETE FROM rag_documents WHERE id = ?').run(id)
+      }
+    })()
+  } catch (error) {
+    if (isSqliteCorruption(error)) {
+      resetRagDatabase('[RAG] Corrupt database detected while removing paths.')
+    }
+    throw error
+  }
+
+  await rebuildIndexFromDb()
+  return { removed: idsToRemove.length }
 }
 
 async function rebuildIndexFromDb(): Promise<void> {

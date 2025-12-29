@@ -981,6 +981,27 @@ const removeRagPath = (pathItem: string) => {
     item => item !== pathItem
   )
   emit('update:setting', 'ragPaths', updated)
+  removeRagDocuments(pathItem)
+}
+
+const removeRagDocuments = async (pathItem: string) => {
+  isIndexingRag.value = true
+  ragStatusMessage.value = 'Removing documents...'
+  try {
+    const result = await window.ipcRenderer.invoke('rag:remove-paths', {
+      paths: [pathItem],
+    })
+    if (result.success && result.data) {
+      ragStatusMessage.value = `Removed ${result.data.removed} documents`
+    } else {
+      ragStatusMessage.value = result.error || 'Failed to remove documents'
+    }
+  } catch (error) {
+    ragStatusMessage.value = 'Failed to remove documents'
+  } finally {
+    isIndexingRag.value = false
+    await refreshRagStats()
+  }
 }
 
 </script>

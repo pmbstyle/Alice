@@ -159,7 +159,7 @@ function removeLinksFromText(text: string): string {
     .replace(/www\.[^\s\)]+/g, '')
     .replace(/\[[^\]]*\]\([^)]*\)/g, '')
     .replace(
-      /\[[^\]\n]+?\.(?:pdf|docx?|txt|md|markdown|html?|pptx?)(?:#p\d+)?\]/gi,
+      /\[[^\]\n]+?\.(?:pdf|docx?|txt|md|markdown|html?|pptx?)(?:#p\d+(?:\s*,\s*p\d+)*)?\]/gi,
       ''
     )
     .replace(/\s+/g, ' ')

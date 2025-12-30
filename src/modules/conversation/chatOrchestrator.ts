@@ -132,6 +132,8 @@ export function createChatOrchestrator(
     results: RagSearchResult[],
     prompt: string
   ): RagSearchResult[] => {
+    const normalizeText = (value: string) =>
+      value.toLowerCase().replace(/[^a-z0-9]/g, '')
     const stopwords = new Set([
       'what',
       'where',
@@ -161,24 +163,37 @@ export function createChatOrchestrator(
 
     if (keywords.length === 0) return results
 
+    const anchorKeywords = keywords.filter(word => word.length >= 5)
     const scored = results.map(result => {
       const haystack = `${result.title} ${result.path} ${result.text}`.toLowerCase()
+      const normalizedHaystack = normalizeText(haystack)
       const matches = keywords.reduce((count, word) => {
         return haystack.includes(word) ? count + 1 : count
+      }, 0)
+      const anchorMatches = anchorKeywords.reduce((count, word) => {
+        return normalizedHaystack.includes(normalizeText(word))
+          ? count + 1
+          : count
       }, 0)
       return {
         result,
         score: (result.score || 0) + matches * 0.2,
         matches,
+        anchorMatches,
       }
     })
 
-    scored.sort((a, b) => {
+    const hasAnchorMatch = scored.some(item => item.anchorMatches > 0)
+    const scoped = hasAnchorMatch
+      ? scored.filter(item => item.anchorMatches > 0)
+      : scored
+
+    scoped.sort((a, b) => {
       if (b.matches !== a.matches) return b.matches - a.matches
       return b.score - a.score
     })
 
-    const ordered = scored.map(item => item.result)
+    const ordered = scoped.map(item => item.result)
     const roleScoped =
       /\b(this|that)\s+(role|position)\b/i.test(prompt) ||
       /\bjobscan\b/i.test(prompt)
@@ -207,12 +222,51 @@ export function createChatOrchestrator(
 
   const getLatestUserMessage = (): ChatMessage | undefined => {
     const history = dependencies.getChatHistory()
-    for (let i = history.length - 1; i >= 0; i -= 1) {
+    for (let i = 0; i < history.length; i += 1) {
       if (history[i].role === 'user') {
         return history[i]
       }
     }
     return undefined
+  }
+
+  const getPreviousUserMessage = (): ChatMessage | undefined => {
+    const history = dependencies.getChatHistory()
+    let foundLatest = false
+    for (let i = 0; i < history.length; i += 1) {
+      if (history[i].role !== 'user') continue
+      if (!foundLatest) {
+        foundLatest = true
+        continue
+      }
+      return history[i]
+    }
+    return undefined
+  }
+
+  const extractUserText = (message?: ChatMessage): string => {
+    if (!message || !Array.isArray(message.content)) return ''
+    return message.content
+      .filter(part => part.type === 'app_text' && part.text)
+      .map(part => part.text)
+      .join(' ')
+      .trim()
+  }
+
+  const buildRetrievalSeed = (latest: string, previous: string): string => {
+    if (!latest) return ''
+    const wordCount = latest.split(/\s+/).filter(Boolean).length
+    const shouldIncludePrevious =
+      wordCount <= 8 ||
+      /\b(check|correct|right|verify|confirm|that|this|those|these)\b/i.test(
+        latest
+      )
+
+    if (!shouldIncludePrevious || !previous) {
+      return latest
+    }
+
+    return `${previous}\n${latest}`
   }
 
   const formatThoughtLine = (thought: any): string => {
@@ -273,17 +327,15 @@ export function createChatOrchestrator(
       dependencies.clearEphemeralEmotionalContext()
     }
 
-    const latestUserMessageContent = getLatestUserMessage()?.content
+    const latestUserMessage = getLatestUserMessage()
+    const previousUserMessage = getPreviousUserMessage()
+    const latestUserText = extractUserText(latestUserMessage)
+    const previousUserText = extractUserText(previousUserMessage)
+    const retrievalSeed = buildRetrievalSeed(latestUserText, previousUserText)
 
-    if (latestUserMessageContent && Array.isArray(latestUserMessageContent)) {
-      const textForThoughtRetrieval = latestUserMessageContent
-        .filter(p => p.type === 'app_text' && p.text)
-        .map(p => p.text)
-        .join(' ')
-
-      if (textForThoughtRetrieval) {
+    if (retrievalSeed) {
         const thoughts = await dependencies.retrieveThoughtsForPrompt(
-          textForThoughtRetrieval
+          retrievalSeed
         )
         if (thoughts.length > 0) {
           const thoughtLines = thoughts
@@ -301,16 +353,16 @@ export function createChatOrchestrator(
         const ragConfig = dependencies.getRagConfig()
         if (ragConfig.enabled) {
           const adjustedConfig = adjustRagConfig(
-            textForThoughtRetrieval,
+            retrievalSeed,
             ragConfig
           )
           const ragResultsRaw = await dependencies.retrieveDocumentsForPrompt(
-            textForThoughtRetrieval,
+            retrievalSeed,
             adjustedConfig.topK
           )
           const ragResults = rerankRagResults(
             ragResultsRaw,
-            textForThoughtRetrieval
+            retrievalSeed
           )
           if (ragResults.length > 0) {
             contextMessages.push({
@@ -329,7 +381,6 @@ export function createChatOrchestrator(
             }
           }
         }
-      }
     }
 
     return contextMessages

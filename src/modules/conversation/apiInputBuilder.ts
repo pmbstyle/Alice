@@ -46,9 +46,9 @@ export function createApiInputBuilder(
       const apiInput: OpenAI.Responses.Request.InputItemLike[] = []
       const recentHistory = historyToBuildFrom.slice(0, maxHistory).reverse()
 
-      const lastUserMessageInFullHistoryId = historyToBuildFrom
-        .filter(msg => msg.role === 'user')
-        .slice(-1)[0]?.local_id_temp
+      const lastUserMessageInFullHistoryId = historyToBuildFrom.find(
+        msg => msg.role === 'user'
+      )?.local_id_temp
 
       const aiProvider = dependencies.getAiProvider()
 

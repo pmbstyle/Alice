@@ -1,12 +1,13 @@
 import { app } from 'electron'
 import path from 'node:path'
 import fs from 'node:fs/promises'
-import { unlinkSync } from 'node:fs'
+import { existsSync, unlinkSync } from 'node:fs'
 import { createHash, randomUUID } from 'node:crypto'
 import { Worker } from 'node:worker_threads'
 import axios from 'axios'
 import HnswlibNode from 'hnswlib-node'
 import Database from 'better-sqlite3'
+import { pathToFileURL } from 'node:url'
 import { backendManager } from './backendManager'
 
 const { HierarchicalNSW } = HnswlibNode
@@ -15,6 +16,7 @@ const LOCAL_VECTOR_DIMENSION = 384
 const MAX_ELEMENTS_HNSW = 200000
 const RAG_DB_FILE_NAME = 'alice-rag.sqlite'
 const RAG_HNSW_INDEX_FILE_NAME = 'alice-rag-hnsw-local.index'
+const RAG_HNSW_META_FILE_NAME = 'alice-rag-hnsw-local.meta.json'
 const SUPPORTED_EXTENSIONS = new Set([
   '.txt',
   '.md',
@@ -30,9 +32,13 @@ const CHUNK_OVERLAP_TOKENS = 30
 const MAX_DOC_CHUNKS = 2000
 const MAX_FILE_SIZE_BYTES = 32 * 1024 * 1024
 const PDF_WORKER_TIMEOUT_MS = 120000
+const PDF_CROSS_PAGE_OVERLAP_CHARS = 300
+const RAG_DEBUG_PDF = process.env.ALICE_RAG_DEBUG_PDF === 'true'
+const RAG_DEBUG_PDF_SAMPLE_CHARS = 1200
 
 const ragDbPath = path.join(app.getPath('userData'), RAG_DB_FILE_NAME)
 const ragIndexPath = path.join(app.getPath('userData'), RAG_HNSW_INDEX_FILE_NAME)
+const ragIndexMetaPath = path.join(app.getPath('userData'), RAG_HNSW_META_FILE_NAME)
 
 let db: Database.Database | null = null
 let hnswIndex: HierarchicalNSW | null = null
@@ -151,18 +157,23 @@ async function initializeIndex(): Promise<void> {
 
   hnswIndex = new HierarchicalNSW('cosine', LOCAL_VECTOR_DIMENSION)
 
-  const { count } = db
-    .prepare('SELECT COUNT(*) as count FROM rag_chunks')
-    .get() as { count: number }
+  const fingerprint = getIndexFingerprintFromDb()
+  const count = fingerprint.count
 
   if (count === 0) {
     hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
     labelToChunkId.clear()
+    await saveIndex()
     return
   }
 
   try {
+    const meta = await readIndexMeta()
     await hnswIndex.readIndex(ragIndexPath)
+    if (!meta || !isIndexMetaMatch(meta, fingerprint)) {
+      await rebuildIndexFromDb()
+      return
+    }
     if (hnswIndex.getCurrentCount() !== count) {
       await rebuildIndexFromDb()
       return
@@ -190,6 +201,7 @@ async function saveIndex(): Promise<void> {
     const dir = path.dirname(ragIndexPath)
     await fs.mkdir(dir, { recursive: true })
     await hnswIndex.writeIndex(ragIndexPath)
+    await writeIndexMeta(getIndexFingerprintFromDb())
   } catch (error) {
     console.error('[RAG] Failed to save HNSW index:', error)
   }
@@ -254,7 +266,11 @@ function shouldRemoveRagDoc(
 }
 
 function cleanExtractedText(text: string): string {
-  const deHyphenated = text.replace(/(\w)-\s+(\w)/g, '$1$2')
+  const normalizedBullets = text
+    .replace(/ΓùÅ/g, '-')
+    .replace(/[•●◦·]/g, '-')
+    .replace(/ΓÇÖ/g, "'")
+  const deHyphenated = normalizedBullets.replace(/(\w)-\s+(\w)/g, '$1$2')
   const tokens = deHyphenated.split(/\s+/)
   const stopShortTokens = new Set([
     'a',
@@ -342,10 +358,15 @@ function cleanExtractedText(text: string): string {
 }
 
 async function parsePdfInWorker(filePath: string): Promise<ParsedSection[]> {
-  const workerUrl = new URL('./workers/pdfParserWorker.js', import.meta.url)
+  const workerUrl = getPdfWorkerUrl()
 
   return new Promise((resolve, reject) => {
-    const worker = new Worker(workerUrl, { type: 'module' })
+    const worker = new Worker(workerUrl, {
+      type: 'module',
+      workerData: {
+        appPath: app.getAppPath(),
+      },
+    })
     const timeout = setTimeout(() => {
       worker.terminate().catch(() => undefined)
       reject(new Error('[RAG] PDF worker timed out.'))
@@ -360,6 +381,20 @@ async function parsePdfInWorker(filePath: string): Promise<ParsedSection[]> {
       cleanup()
       worker.terminate().catch(() => undefined)
       if (message?.success) {
+        if (RAG_DEBUG_PDF && Array.isArray(message.sections)) {
+          console.log('[RAG][PDF] Parsed sections for', filePath)
+          message.sections.forEach((section: ParsedSection, index: number) => {
+            const preview = String(section.text || '')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, RAG_DEBUG_PDF_SAMPLE_CHARS)
+            console.log(
+              `[RAG][PDF] #${index + 1} page=${section.page ?? 'n/a'} chars=${
+                section.text?.length || 0
+              } preview="${preview}"`
+            )
+          })
+        }
         resolve(message.sections || [])
         return
       }
@@ -374,6 +409,22 @@ async function parsePdfInWorker(filePath: string): Promise<ParsedSection[]> {
 
     worker.postMessage({ filePath })
   })
+}
+
+function getPdfWorkerUrl(): URL {
+  const appPath = app.getAppPath()
+  const candidates = [
+    path.join(appPath, 'dist-electron', 'main', 'workers', 'pdfParserWorker.js'),
+    path.join(appPath, 'workers', 'pdfParserWorker.js'),
+  ]
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return pathToFileURL(candidate)
+    }
+  }
+
+  return new URL('./workers/pdfParserWorker.js', import.meta.url)
 }
 
 function splitByMarkdownHeadings(text: string): ParsedSection[] {
@@ -448,19 +499,45 @@ function splitIntoChunks(text: string): { text: string; tokenCount: number }[] {
   const normalized = normalizeWhitespace(text)
   if (!normalized) return []
 
-  const words = normalized.split(' ')
+  const sentences = normalized
+    .split(/(?<=[.!?])\s+/)
+    .map(sentence => sentence.trim())
+    .filter(Boolean)
+
+  if (sentences.length === 0) return []
+
   const chunks: { text: string; tokenCount: number }[] = []
   const maxTokens = Math.max(1, CHUNK_MAX_TOKENS)
-  const overlap = Math.min(CHUNK_OVERLAP_TOKENS, maxTokens - 1)
+  const targetOverlap = Math.min(CHUNK_OVERLAP_TOKENS, maxTokens - 1)
 
-  let index = 0
-  while (index < words.length) {
-    const slice = words.slice(index, index + maxTokens)
-    const chunkText = slice.join(' ')
-    const tokenCount = slice.length
-    chunks.push({ text: chunkText, tokenCount })
-    if (index + maxTokens >= words.length) break
-    index += maxTokens - overlap
+  let start = 0
+  while (start < sentences.length) {
+    let tokenCount = 0
+    let end = start
+    for (; end < sentences.length; end += 1) {
+      const sentenceTokens = estimateTokens(sentences[end])
+      if (tokenCount + sentenceTokens > maxTokens && tokenCount > 0) {
+        break
+      }
+      tokenCount += sentenceTokens
+    }
+
+    const slice = sentences.slice(start, end)
+    if (slice.length === 0) break
+    chunks.push({ text: slice.join(' '), tokenCount })
+
+    if (end >= sentences.length) break
+
+    let overlapTokens = 0
+    let nextStart = end - 1
+    for (; nextStart > start; nextStart -= 1) {
+      overlapTokens += estimateTokens(sentences[nextStart])
+      if (overlapTokens >= targetOverlap) {
+        break
+      }
+    }
+
+    start = Math.max(start + 1, nextStart)
   }
 
   return chunks
@@ -478,6 +555,55 @@ function ensureDb(): Database.Database {
     throw new Error('Failed to initialize RAG database.')
   }
   return db
+}
+
+type RagIndexMeta = {
+  version: number
+  count: number
+  maxCreatedAt: string | null
+}
+
+function getIndexFingerprintFromDb(): { count: number; maxCreatedAt: string | null } {
+  const currentDb = ensureDb()
+  const row = currentDb
+    .prepare('SELECT COUNT(*) as count, MAX(created_at) as maxCreatedAt FROM rag_chunks')
+    .get() as { count: number; maxCreatedAt: string | null }
+  return {
+    count: row.count || 0,
+    maxCreatedAt: row.maxCreatedAt || null,
+  }
+}
+
+function isIndexMetaMatch(meta: RagIndexMeta, fingerprint: { count: number; maxCreatedAt: string | null }): boolean {
+  return (
+    meta.version === 1 &&
+    meta.count === fingerprint.count &&
+    meta.maxCreatedAt === fingerprint.maxCreatedAt
+  )
+}
+
+async function readIndexMeta(): Promise<RagIndexMeta | null> {
+  try {
+    const raw = await fs.readFile(ragIndexMetaPath, 'utf-8')
+    const parsed = JSON.parse(raw) as RagIndexMeta
+    if (!parsed || typeof parsed !== 'object') return null
+    return parsed
+  } catch (error) {
+    return null
+  }
+}
+
+async function writeIndexMeta(meta: { count: number; maxCreatedAt: string | null }): Promise<void> {
+  try {
+    const payload: RagIndexMeta = {
+      version: 1,
+      count: meta.count,
+      maxCreatedAt: meta.maxCreatedAt,
+    }
+    await fs.writeFile(ragIndexMetaPath, JSON.stringify(payload))
+  } catch (error) {
+    console.warn('[RAG] Failed to write index metadata:', error)
+  }
 }
 
 function isSqliteCorruption(error: unknown): boolean {
@@ -515,6 +641,11 @@ function resetRagDatabase(reason: string): void {
   } catch (error) {
     // Best-effort cleanup; index might already be gone or locked.
   }
+  try {
+    unlinkSync(ragIndexMetaPath)
+  } catch (error) {
+    // Best-effort cleanup; meta might already be gone or locked.
+  }
 
   hnswIndex = new HierarchicalNSW('cosine', LOCAL_VECTOR_DIMENSION)
   hnswIndex.initIndex(MAX_ELEMENTS_HNSW)
@@ -531,9 +662,10 @@ async function parseFile(filePath: string): Promise<ParsedDocument | null> {
         page: section.page,
       }))
       .filter(section => section.text)
+    const withOverlap = applyCrossPageOverlap(sections)
     return {
       title: path.basename(filePath),
-      sections,
+      sections: withOverlap,
     }
   }
 
@@ -576,6 +708,25 @@ async function parseFile(filePath: string): Promise<ParsedDocument | null> {
   }
 
   return null
+}
+
+function applyCrossPageOverlap(sections: ParsedSection[]): ParsedSection[] {
+  if (sections.length <= 1) return sections
+  const overlapped: ParsedSection[] = []
+  for (let i = 0; i < sections.length; i += 1) {
+    const current = sections[i]
+    if (i === 0) {
+      overlapped.push(current)
+      continue
+    }
+    const previous = sections[i - 1]
+    const tail = previous.text.slice(
+      Math.max(0, previous.text.length - PDF_CROSS_PAGE_OVERLAP_CHARS)
+    )
+    const combined = tail ? `${tail} ${current.text}` : current.text
+    overlapped.push({ ...current, text: combined })
+  }
+  return overlapped
 }
 
 async function isEmbeddingsReady(): Promise<boolean> {
@@ -795,6 +946,48 @@ export async function removeRagPaths(
   return { removed: idsToRemove.length }
 }
 
+async function pruneMissingDocuments(
+  targets: Array<{ normalizedPath: string; dirPrefix: string; isDirectory: boolean }>
+): Promise<number> {
+  if (targets.length === 0) return 0
+  const currentDb = ensureDb()
+  const rows = currentDb
+    .prepare('SELECT id, path FROM rag_documents')
+    .all() as { id: string; path: string }[]
+
+  const idsToRemove: string[] = []
+
+  for (const row of rows) {
+    if (!shouldRemoveRagDoc(row.path, targets)) continue
+    try {
+      const stat = await fs.stat(row.path)
+      if (!stat.isFile()) {
+        idsToRemove.push(row.id)
+      }
+    } catch (error) {
+      idsToRemove.push(row.id)
+    }
+  }
+
+  if (idsToRemove.length === 0) return 0
+
+  try {
+    currentDb.transaction(() => {
+      for (const id of idsToRemove) {
+        currentDb.prepare('DELETE FROM rag_chunks WHERE doc_id = ?').run(id)
+        currentDb.prepare('DELETE FROM rag_documents WHERE id = ?').run(id)
+      }
+    })()
+  } catch (error) {
+    if (isSqliteCorruption(error)) {
+      resetRagDatabase('[RAG] Corrupt database detected while pruning paths.')
+    }
+    throw error
+  }
+
+  return idsToRemove.length
+}
+
 async function rebuildIndexFromDb(): Promise<void> {
   const currentDb = ensureDb()
   if (!hnswIndex) {
@@ -905,6 +1098,13 @@ export async function indexPaths(
 ): Promise<{ indexed: number; skipped: number }> {
   await initializeRagStore()
 
+  const normalizedTargets = await normalizeRagTargets(paths)
+  try {
+    await pruneMissingDocuments(normalizedTargets)
+  } catch (error) {
+    console.warn('[RAG] Failed to prune missing documents:', error)
+  }
+
   const files = await collectIndexablePaths(paths, options?.recursive ?? true)
   const filesToIndex: Array<{
     filePath: string
@@ -990,14 +1190,42 @@ function keywordSearch(
   topK: number
 ): { id: string; rank: number }[] {
   if (!db) return []
+  const stopwords = new Set([
+    'what',
+    'where',
+    'when',
+    'which',
+    'that',
+    'this',
+    'with',
+    'from',
+    'about',
+    'your',
+    'work',
+    'experience',
+    'role',
+    'position',
+    'did',
+    'does',
+    'done',
+    'for',
+    'and',
+    'the',
+    'was',
+    'were',
+  ])
   const tokens = queryText
     .toLowerCase()
     .split(/[^a-z0-9]+/)
-    .filter(token => token.length >= 3)
+    .filter(token => token.length >= 3 && !stopwords.has(token))
 
   if (tokens.length === 0) return []
 
-  const ftsQuery = tokens.map(token => `${token}*`).join(' AND ')
+  const uniqueTokens = Array.from(new Set(tokens))
+  const limitedTokens = uniqueTokens
+    .sort((a, b) => b.length - a.length)
+    .slice(0, 6)
+  const ftsQuery = limitedTokens.map(token => `${token}*`).join(' OR ')
   const rows = db
     .prepare(
       `SELECT id, bm25(rag_chunks_fts) as score
@@ -1052,18 +1280,20 @@ export async function searchRag(
     return []
   }
 
+  const candidateK = Math.min(Math.max(topK * 4, topK), 40)
+
   let vectorIds: string[] = []
   if (hasEmbedding && hnswIndex && hnswIndex.getCurrentCount() > 0) {
     const result = hnswIndex.searchKnn(
       queryEmbedding,
-      Math.min(topK, hnswIndex.getCurrentCount())
+      Math.min(candidateK, hnswIndex.getCurrentCount())
     )
     vectorIds = (result.neighbors || [])
       .map(label => labelToChunkId.get(label))
       .filter(Boolean) as string[]
   }
 
-  const keywordIds = hasText ? keywordSearch(queryText, topK) : []
+  const keywordIds = hasText ? keywordSearch(queryText, candidateK) : []
   const combinedIds = combineRankedLists(vectorIds, keywordIds, topK)
 
   const metadata = getChunkMetadataByIds(combinedIds)

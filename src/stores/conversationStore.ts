@@ -152,6 +152,8 @@ function rerankRagResults(
   }[],
   prompt: string
 ) {
+  const normalizeText = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, '')
   const stopwords = new Set([
     'what',
     'where',
@@ -181,8 +183,10 @@ function rerankRagResults(
 
   if (keywords.length === 0) return results
 
+  const anchorKeywords = keywords.filter(word => word.length >= 5)
   const scored = results.map(result => {
     const haystack = `${result.title} ${result.path} ${result.text}`.toLowerCase()
+    const normalizedHaystack = normalizeText(haystack)
     const matches = keywords.reduce((count, word) => {
       return haystack.includes(word) ? count + 1 : count
     }, 0)
@@ -190,15 +194,25 @@ function rerankRagResults(
       result,
       score: (result.score || 0) + matches * 0.2,
       matches,
+      anchorMatches: anchorKeywords.reduce((count, word) => {
+        return normalizedHaystack.includes(normalizeText(word))
+          ? count + 1
+          : count
+      }, 0),
     }
   })
 
-  scored.sort((a, b) => {
+  const hasAnchorMatch = scored.some(item => item.anchorMatches > 0)
+  const scoped = hasAnchorMatch
+    ? scored.filter(item => item.anchorMatches > 0)
+    : scored
+
+  scoped.sort((a, b) => {
     if (b.matches !== a.matches) return b.matches - a.matches
     return b.score - a.score
   })
 
-  const ordered = scored.map(item => item.result)
+  const ordered = scoped.map(item => item.result)
   const roleScoped =
     /\b(this|that)\s+(role|position)\b/i.test(prompt) ||
     /\bjobscan\b/i.test(prompt)

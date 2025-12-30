@@ -93,16 +93,16 @@ describe('createApiInputBuilder', () => {
   it('converts last user image into input_image part', async () => {
     const history: ConversationHistoryMessage[] = [
       {
+        role: 'assistant',
+        content: [{ type: 'app_text', text: 'Nice cat!' }],
+      },
+      {
         role: 'user',
         local_id_temp: 'user-last',
         content: [
           { type: 'app_text', text: 'Look at this' },
           { type: 'app_image_uri', uri: 'https://example.com/cat.png' },
         ],
-      },
-      {
-        role: 'assistant',
-        content: [{ type: 'app_text', text: 'Nice cat!' }],
       },
     ]
 
@@ -123,16 +123,16 @@ describe('createApiInputBuilder', () => {
     const history: ConversationHistoryMessage[] = [
       {
         role: 'user',
+        local_id_temp: 'user-latest',
+        content: [{ type: 'app_text', text: 'Most recent question' }],
+      },
+      {
+        role: 'user',
         local_id_temp: 'user-older',
         content: [
           { type: 'app_text', text: 'Previously sent' },
           { type: 'app_image_uri', uri: 'https://example.com/old.png' },
         ],
-      },
-      {
-        role: 'user',
-        local_id_temp: 'user-latest',
-        content: [{ type: 'app_text', text: 'Most recent question' }],
       },
     ]
 

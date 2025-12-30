@@ -68,7 +68,11 @@ const messageMarkdown = (text: string): string => {
   if (!text) return ''
 
   try {
-    const rawHtml = marked.parse(text) as string
+    const withCitations = text.replace(
+      /\[([^\]\n]+?\.(?:pdf|docx?|txt|md|markdown|html?|pptx?)(?:#p\d+(?:\s*,\s*p\d+)*)?)\]/gi,
+      '<span class="rag-citation">[$1]</span>'
+    )
+    const rawHtml = marked.parse(withCitations) as string
     const cleanHtml = DOMPurify.sanitize(rawHtml, {
       USE_PROFILES: { html: true },
       ALLOWED_ATTR: ['href', 'title', 'rel', 'style', 'class', 'id', 'data-*'],

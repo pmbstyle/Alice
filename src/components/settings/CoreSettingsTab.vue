@@ -492,6 +492,110 @@
         </div>
       </div>
     </fieldset>
+
+    <!-- Local Documents (RAG) Section -->
+    <fieldset
+      class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+    >
+      <legend class="fieldset-legend">Local Documents (RAG)</legend>
+      <div class="grid grid-cols-1 gap-4 p-2">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label for="rag-enabled" class="block mb-1 text-sm"
+              >Enable RAG</label
+            >
+            <select
+              id="rag-enabled"
+              v-model="currentSettings.ragEnabled"
+              class="select select-bordered w-full focus:select-primary"
+            >
+              <option :value="true">Enabled</option>
+              <option :value="false">Disabled</option>
+            </select>
+          </div>
+          <div>
+            <label for="rag-topk" class="block mb-1 text-sm"
+              >Top K Chunks</label
+            >
+            <input
+              id="rag-topk"
+              type="number"
+              min="1"
+              max="20"
+              v-model.number="currentSettings.ragTopK"
+              class="input input-bordered w-full focus:input-primary"
+            />
+          </div>
+          <div>
+            <label for="rag-max-chars" class="block mb-1 text-sm"
+              >Max Context Chars</label
+            >
+            <input
+              id="rag-max-chars"
+              type="number"
+              min="500"
+              max="6000"
+              step="100"
+              v-model.number="currentSettings.ragMaxContextChars"
+              class="input input-bordered w-full focus:input-primary"
+            />
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            class="btn btn-sm"
+            :disabled="isIndexingRag"
+            @click="selectRagPaths"
+          >
+            Add Files/Folders
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm"
+            :disabled="isIndexingRag || currentSettings.ragPaths.length === 0"
+            @click="reindexRag"
+          >
+            Reindex
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-outline"
+            :disabled="isIndexingRag"
+            @click="clearRagIndex"
+          >
+            Clear Index
+          </button>
+          <span class="text-xs text-gray-400">
+            {{ ragStats.documents }} docs, {{ ragStats.chunks }} chunks
+          </span>
+          <span v-if="ragStatusMessage" class="text-xs text-gray-400">
+            {{ ragStatusMessage }}
+          </span>
+        </div>
+
+        <div v-if="currentSettings.ragPaths.length > 0">
+          <label class="block mb-2 text-sm">Indexed Paths</label>
+          <div class="space-y-2">
+            <div
+              v-for="pathItem in currentSettings.ragPaths"
+              :key="pathItem"
+              class="flex items-center justify-between gap-2 bg-gray-800/50 rounded px-3 py-2 text-xs"
+            >
+              <span class="truncate" :title="pathItem">{{ pathItem }}</span>
+              <button
+                type="button"
+                class="btn btn-xs btn-ghost"
+                @click="removeRagPath(pathItem)"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </fieldset>
   </div>
 </template>
 
@@ -530,6 +634,9 @@ const availableVoices = ref<Voice[]>([])
 const isRefreshingVoices = ref(false)
 const isPreviewingVoice = ref(false)
 const showVoiceHelp = ref(false)
+const ragStats = ref({ documents: 0, chunks: 0 })
+const isIndexingRag = ref(false)
+const ragStatusMessage = ref('')
 
 let statusInterval: NodeJS.Timeout | null = null
 
@@ -780,6 +887,8 @@ onMounted(async () => {
   if (props.currentSettings.ttsProvider === 'local') {
     await refreshVoices()
   }
+
+  await refreshRagStats()
 })
 
 // Watch for TTS provider changes to load voices
@@ -798,4 +907,101 @@ onUnmounted(() => {
     statusInterval = null
   }
 })
+
+const refreshRagStats = async () => {
+  try {
+    const result = await window.ipcRenderer.invoke('rag:stats')
+    if (result.success && result.data) {
+      ragStats.value = result.data
+    }
+  } catch (error) {
+    console.warn('Failed to load RAG stats:', error)
+  }
+}
+
+const selectRagPaths = async () => {
+  try {
+    const result = await window.ipcRenderer.invoke('rag:select-paths')
+    if (!result.success || !Array.isArray(result.data)) {
+      return
+    }
+    const updated = Array.from(
+      new Set([...props.currentSettings.ragPaths, ...result.data])
+    )
+    emit('update:setting', 'ragPaths', updated)
+    await indexRagPaths(updated)
+  } catch (error) {
+    console.warn('Failed to select RAG paths:', error)
+  }
+}
+
+const indexRagPaths = async (paths: string[]) => {
+  const normalizedPaths = Array.from(paths || []).map(String)
+  if (normalizedPaths.length === 0) return
+  isIndexingRag.value = true
+  ragStatusMessage.value = 'Indexing...'
+  try {
+    const result = await window.ipcRenderer.invoke('rag:index-paths', {
+      paths: normalizedPaths,
+      recursive: true,
+    })
+    if (result.success && result.data) {
+      ragStatusMessage.value = `Indexed ${result.data.indexed}, skipped ${result.data.skipped}`
+    } else {
+      ragStatusMessage.value = result.error || 'Indexing failed'
+    }
+  } catch (error) {
+    ragStatusMessage.value = 'Indexing failed'
+  } finally {
+    isIndexingRag.value = false
+    await refreshRagStats()
+  }
+}
+
+const reindexRag = async () => {
+  await indexRagPaths(props.currentSettings.ragPaths)
+}
+
+const clearRagIndex = async () => {
+  isIndexingRag.value = true
+  ragStatusMessage.value = 'Clearing index...'
+  try {
+    await window.ipcRenderer.invoke('rag:clear')
+    ragStatusMessage.value = 'Index cleared'
+  } catch (error) {
+    ragStatusMessage.value = 'Failed to clear index'
+  } finally {
+    isIndexingRag.value = false
+    await refreshRagStats()
+  }
+}
+
+const removeRagPath = (pathItem: string) => {
+  const updated = props.currentSettings.ragPaths.filter(
+    item => item !== pathItem
+  )
+  emit('update:setting', 'ragPaths', updated)
+  removeRagDocuments(pathItem)
+}
+
+const removeRagDocuments = async (pathItem: string) => {
+  isIndexingRag.value = true
+  ragStatusMessage.value = 'Removing documents...'
+  try {
+    const result = await window.ipcRenderer.invoke('rag:remove-paths', {
+      paths: [pathItem],
+    })
+    if (result.success && result.data) {
+      ragStatusMessage.value = `Removed ${result.data.removed} documents`
+    } else {
+      ragStatusMessage.value = result.error || 'Failed to remove documents'
+    }
+  } catch (error) {
+    ragStatusMessage.value = 'Failed to remove documents'
+  } finally {
+    isIndexingRag.value = false
+    await refreshRagStats()
+  }
+}
+
 </script>

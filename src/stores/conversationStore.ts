@@ -67,6 +67,178 @@ function extractTextFromMessage(message: ChatMessage): string {
   return ''
 }
 
+function formatRagSource(pathValue: string, title: string, page?: number | null) {
+  const fileName = pathValue.split(/[\\/]/).pop() || title
+  const pageSuffix = page && page > 0 ? `#p${page}` : ''
+  return `${fileName}${pageSuffix}`
+}
+
+function buildRagContextBlock(
+  results: {
+    text: string
+    path: string
+    title: string
+    page?: number | null
+    section?: string | null
+  }[],
+  maxChars: number
+): string {
+  const prefix = 'Relevant excerpts from user\'s documents (cite when used):'
+  let remaining = maxChars - (prefix.length + 1)
+  if (remaining <= 0) return ''
+
+  const lines: string[] = []
+  for (const result of results) {
+    const normalized = result.text.replace(/\s+/g, ' ').trim()
+    const snippet =
+      normalized.length <= 320 ? normalized : `${normalized.slice(0, 317)}...`
+    const source = formatRagSource(result.path, result.title, result.page)
+    const section = result.section?.trim()
+    const sectionPrefix = section ? `(Section: ${section}) ` : ''
+    const entry = `- [${source}] ${sectionPrefix}${snippet}`
+    const extra = entry.length + 1
+    if (extra > remaining) {
+      break
+    }
+    lines.push(entry)
+    remaining -= extra
+  }
+
+  if (lines.length === 0) return ''
+  return `${prefix}\n${lines.join('\n')}`
+}
+
+function buildRagRulesBlock(): string {
+  return [
+    'RAG_RULES:',
+    '- Use the document excerpts below when they are relevant.',
+    '- Cite sources inline like [filename#pX].',
+    '- If the answer is not in the excerpts, say you could not find it.',
+  ].join('\n')
+}
+
+function adjustRagConfig(
+  prompt: string,
+  config: { topK: number; maxContextChars: number }
+) {
+  const wordCount = prompt.trim().split(/\s+/).filter(Boolean).length
+  let topK = config.topK
+  let maxContextChars = config.maxContextChars
+
+  if (wordCount <= 6) {
+    topK = Math.min(config.topK + 3, 12)
+    maxContextChars = Math.min(config.maxContextChars + 800, 5000)
+  } else if (wordCount <= 14) {
+    topK = Math.min(config.topK + 2, 10)
+    maxContextChars = Math.min(config.maxContextChars + 500, 4500)
+  } else if (wordCount >= 60) {
+    topK = Math.max(config.topK - 3, 2)
+    maxContextChars = Math.max(config.maxContextChars - 600, 1200)
+  } else if (wordCount >= 30) {
+    topK = Math.max(config.topK - 2, 3)
+    maxContextChars = Math.max(config.maxContextChars - 400, 1500)
+  }
+
+  return { topK, maxContextChars }
+}
+
+function rerankRagResults(
+  results: {
+    text: string
+    path: string
+    title: string
+    score?: number
+    page?: number | null
+  }[],
+  prompt: string
+) {
+  const normalizeText = (value: string) =>
+    value.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const stopwords = new Set([
+    'what',
+    'where',
+    'when',
+    'which',
+    'that',
+    'this',
+    'with',
+    'from',
+    'about',
+    'your',
+    'work',
+    'experience',
+    'role',
+    'position',
+    'did',
+    'does',
+    'done',
+    'for',
+    'and',
+    'the',
+  ])
+  const keywords = prompt
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(word => word.length >= 4 && !stopwords.has(word))
+
+  if (keywords.length === 0) return results
+
+  const anchorKeywords = keywords.filter(word => word.length >= 5)
+  const scored = results.map(result => {
+    const haystack = `${result.title} ${result.path} ${result.text}`.toLowerCase()
+    const normalizedHaystack = normalizeText(haystack)
+    const matches = keywords.reduce((count, word) => {
+      return haystack.includes(word) ? count + 1 : count
+    }, 0)
+    return {
+      result,
+      score: (result.score || 0) + matches * 0.2,
+      matches,
+      anchorMatches: anchorKeywords.reduce((count, word) => {
+        return normalizedHaystack.includes(normalizeText(word))
+          ? count + 1
+          : count
+      }, 0),
+    }
+  })
+
+  const hasAnchorMatch = scored.some(item => item.anchorMatches > 0)
+  const scoped = hasAnchorMatch
+    ? scored.filter(item => item.anchorMatches > 0)
+    : scored
+
+  scoped.sort((a, b) => {
+    if (b.matches !== a.matches) return b.matches - a.matches
+    return b.score - a.score
+  })
+
+  const ordered = scoped.map(item => item.result)
+  const roleScoped =
+    /\b(this|that)\s+(role|position)\b/i.test(prompt) ||
+    /\bjobscan\b/i.test(prompt)
+
+  if (!roleScoped || ordered.length === 0) return ordered
+
+  const withoutContacts = ordered.filter(result => {
+    const text = result.text || ''
+    const contactSignals = [
+      /@/.test(text),
+      /https?:\/\//i.test(text),
+      /linkedin/i.test(text),
+      /github/i.test(text),
+      /\.com/i.test(text),
+    ].filter(Boolean).length
+    return contactSignals < 2
+  })
+  const scopedResults = withoutContacts.length > 0 ? withoutContacts : ordered
+
+  const anchorPage = scopedResults[0]?.page
+  if (!anchorPage) return ordered
+
+  const samePage = scopedResults.filter(result => result.page === anchorPage)
+  return samePage.length > 0 ? samePage : scopedResults
+}
+
 function shouldIndexAssistantMessage(message: ChatMessage): boolean {
   if (message.role !== 'assistant') return false
   if (message.tool_calls && message.tool_calls.length > 0) return false
@@ -329,6 +501,7 @@ export const useConversationStore = defineStore('conversation', () => {
       setCurrentResponseId: id => {
         currentResponseId.value = id
       },
+      getAiProvider: () => settingsStore.config.aiProvider,
       getAssistantSystemPrompt: () => settingsStore.config.assistantSystemPrompt,
       getEphemeralEmotionalContext: () => ephemeralEmotionalContext.value,
       clearEphemeralEmotionalContext: () => {
@@ -336,6 +509,13 @@ export const useConversationStore = defineStore('conversation', () => {
       },
       retrieveThoughtsForPrompt: prompt =>
         api.retrieveRelevantThoughtsForPrompt(prompt),
+      retrieveDocumentsForPrompt: (prompt, topK) =>
+        api.retrieveRelevantDocumentsForPrompt(prompt, topK),
+      getRagConfig: () => ({
+        enabled: settingsStore.config.ragEnabled,
+        topK: settingsStore.config.ragTopK,
+        maxContextChars: settingsStore.config.ragMaxContextChars,
+      }),
       fetchLatestSummary: () =>
         window.ipcRenderer.invoke('summaries:get-latest-summary', {}),
       getChatHistory: () => [...chatHistory.value],
@@ -741,6 +921,34 @@ export const useConversationStore = defineStore('conversation', () => {
         content: [{ type: 'input_text', text: emotionalContextContent }],
       })
       ephemeralEmotionalContext.value = null
+    }
+
+    if (settingsStore.config.ragEnabled) {
+      const adjustedConfig = adjustRagConfig(prompt, {
+        topK: settingsStore.config.ragTopK,
+        maxContextChars: settingsStore.config.ragMaxContextChars,
+      })
+      const ragResultsRaw = await api.retrieveRelevantDocumentsForPrompt(
+        prompt,
+        adjustedConfig.topK
+      )
+      const ragResults = rerankRagResults(ragResultsRaw, prompt)
+      if (ragResults.length > 0) {
+        contextMessages.push({
+          role: 'user',
+          content: [{ type: 'input_text', text: buildRagRulesBlock() }],
+        })
+        const ragBlock = buildRagContextBlock(
+          ragResults,
+          adjustedConfig.maxContextChars
+        )
+        if (ragBlock) {
+          contextMessages.push({
+            role: 'user',
+            content: [{ type: 'input_text', text: ragBlock }],
+          })
+        }
+      }
     }
 
     const finalApiInput = [...contextMessages, ...constructedApiInput]

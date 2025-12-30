@@ -1,5 +1,6 @@
 import type OpenAI from 'openai'
 import type { ChatMessage } from '../../types/chat'
+import type { RagSearchResult } from '../../types/rag'
 
 export interface ChatDependencies {
   isInitialized(): boolean
@@ -7,10 +8,16 @@ export interface ChatDependencies {
   getIsRecordingRequested(): boolean
   getCurrentResponseId(): string | null
   setCurrentResponseId(id: string | null): void
+  getAiProvider(): string
   getAssistantSystemPrompt(): string
   getEphemeralEmotionalContext(): string | null
   clearEphemeralEmotionalContext(): void
   retrieveThoughtsForPrompt(prompt: string): Promise<string[]>
+  retrieveDocumentsForPrompt(
+    prompt: string,
+    topK: number
+  ): Promise<RagSearchResult[]>
+  getRagConfig(): { enabled: boolean; topK: number; maxContextChars: number }
   fetchLatestSummary(): Promise<{
     success: boolean
     data?: { summary_text?: string }
@@ -47,14 +54,219 @@ export function createChatOrchestrator(
 ): ChatOrchestrator {
   const THOUGHTS_BLOCK_MAX_CHARS = 1200
 
+  const formatRagSource = (result: RagSearchResult): string => {
+    const fileName = result.path.split(/[\\/]/).pop() || result.title
+    const pageSuffix =
+      result.page && result.page > 0 ? `#p${result.page}` : ''
+    return `${fileName}${pageSuffix}`
+  }
+
+  const formatRagSnippet = (text: string): string => {
+    const normalized = text.replace(/\s+/g, ' ').trim()
+    if (normalized.length <= 320) return normalized
+    return `${normalized.slice(0, 317)}...`
+  }
+
+  const buildRagBlock = (
+    results: RagSearchResult[],
+    maxChars: number
+  ): string => {
+    const prefix = 'Relevant excerpts from user\'s documents (cite when used):'
+    let remaining = maxChars - (prefix.length + 1)
+    if (remaining <= 0) return ''
+
+    const lines: string[] = []
+    for (const result of results) {
+      const snippet = formatRagSnippet(result.text)
+      const source = formatRagSource(result)
+      const section = result.section?.trim()
+      const sectionPrefix = section ? `(Section: ${section}) ` : ''
+      const entry = `- [${source}] ${sectionPrefix}${snippet}`
+      const extra = entry.length + 1
+      if (extra > remaining) {
+        break
+      }
+      lines.push(entry)
+      remaining -= extra
+    }
+
+    if (lines.length === 0) return ''
+    return `${prefix}\n${lines.join('\n')}`
+  }
+
+  const buildRagRulesBlock = (): string => {
+    return [
+      'RAG_RULES:',
+      '- Use the document excerpts below when they are relevant.',
+      '- Cite sources inline like [filename#pX].',
+      '- If the answer is not in the excerpts, say you could not find it.',
+    ].join('\n')
+  }
+
+  const adjustRagConfig = (
+    prompt: string,
+    config: { topK: number; maxContextChars: number }
+  ) => {
+    const wordCount = prompt.trim().split(/\s+/).filter(Boolean).length
+    let topK = config.topK
+    let maxContextChars = config.maxContextChars
+
+    if (wordCount <= 6) {
+      topK = Math.min(config.topK + 3, 12)
+      maxContextChars = Math.min(config.maxContextChars + 800, 5000)
+    } else if (wordCount <= 14) {
+      topK = Math.min(config.topK + 2, 10)
+      maxContextChars = Math.min(config.maxContextChars + 500, 4500)
+    } else if (wordCount >= 60) {
+      topK = Math.max(config.topK - 3, 2)
+      maxContextChars = Math.max(config.maxContextChars - 600, 1200)
+    } else if (wordCount >= 30) {
+      topK = Math.max(config.topK - 2, 3)
+      maxContextChars = Math.max(config.maxContextChars - 400, 1500)
+    }
+
+    return { topK, maxContextChars }
+  }
+
+  const rerankRagResults = (
+    results: RagSearchResult[],
+    prompt: string
+  ): RagSearchResult[] => {
+    const normalizeText = (value: string) =>
+      value.toLowerCase().replace(/[^a-z0-9]/g, '')
+    const stopwords = new Set([
+      'what',
+      'where',
+      'when',
+      'which',
+      'that',
+      'this',
+      'with',
+      'from',
+      'about',
+      'your',
+      'work',
+      'experience',
+      'role',
+      'position',
+      'did',
+      'does',
+      'done',
+      'for',
+      'and',
+      'the',
+    ])
+    const keywords = prompt
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(word => word.length >= 4 && !stopwords.has(word))
+
+    if (keywords.length === 0) return results
+
+    const anchorKeywords = keywords.filter(word => word.length >= 5)
+    const scored = results.map(result => {
+      const haystack = `${result.title} ${result.path} ${result.text}`.toLowerCase()
+      const normalizedHaystack = normalizeText(haystack)
+      const matches = keywords.reduce((count, word) => {
+        return haystack.includes(word) ? count + 1 : count
+      }, 0)
+      const anchorMatches = anchorKeywords.reduce((count, word) => {
+        return normalizedHaystack.includes(normalizeText(word))
+          ? count + 1
+          : count
+      }, 0)
+      return {
+        result,
+        score: (result.score || 0) + matches * 0.2,
+        matches,
+        anchorMatches,
+      }
+    })
+
+    const hasAnchorMatch = scored.some(item => item.anchorMatches > 0)
+    const scoped = hasAnchorMatch
+      ? scored.filter(item => item.anchorMatches > 0)
+      : scored
+
+    scoped.sort((a, b) => {
+      if (b.matches !== a.matches) return b.matches - a.matches
+      return b.score - a.score
+    })
+
+    const ordered = scoped.map(item => item.result)
+    const roleScoped =
+      /\b(this|that)\s+(role|position)\b/i.test(prompt) ||
+      /\bjobscan\b/i.test(prompt)
+
+    if (!roleScoped || ordered.length === 0) return ordered
+
+    const withoutContacts = ordered.filter(result => {
+      const text = result.text || ''
+      const contactSignals = [
+        /@/.test(text),
+        /https?:\/\//i.test(text),
+        /linkedin/i.test(text),
+        /github/i.test(text),
+        /\.com/i.test(text),
+      ].filter(Boolean).length
+      return contactSignals < 2
+    })
+    const scopedResults = withoutContacts.length > 0 ? withoutContacts : ordered
+
+    const anchorPage = scopedResults[0]?.page
+    if (!anchorPage) return ordered
+
+    const samePage = scopedResults.filter(result => result.page === anchorPage)
+    return samePage.length > 0 ? samePage : scopedResults
+  }
+
   const getLatestUserMessage = (): ChatMessage | undefined => {
     const history = dependencies.getChatHistory()
-    for (let i = history.length - 1; i >= 0; i -= 1) {
+    for (let i = 0; i < history.length; i += 1) {
       if (history[i].role === 'user') {
         return history[i]
       }
     }
     return undefined
+  }
+
+  const getPreviousUserMessage = (): ChatMessage | undefined => {
+    const history = dependencies.getChatHistory()
+    let foundLatest = false
+    for (let i = 0; i < history.length; i += 1) {
+      if (history[i].role !== 'user') continue
+      if (!foundLatest) {
+        foundLatest = true
+        continue
+      }
+      return history[i]
+    }
+    return undefined
+  }
+
+  const extractUserText = (message?: ChatMessage): string => {
+    if (!message || !Array.isArray(message.content)) return ''
+    return message.content
+      .filter(part => part.type === 'app_text' && part.text)
+      .map(part => part.text)
+      .join(' ')
+      .trim()
+  }
+
+  const buildRetrievalSeed = (latest: string, previous: string): string => {
+    if (!latest) return ''
+    const wordCount = latest.split(/\s+/).filter(Boolean).length
+    const shouldIncludePrevious =
+      wordCount <= 8 ||
+      /\b(check|correct|right|verify|confirm|that|this|those|these)\b/i.test(
+        latest
+      )
+
+    if (!shouldIncludePrevious || !previous) {
+      return latest
+    }
+
+    return `${previous}\n${latest}`
   }
 
   const formatThoughtLine = (thought: any): string => {
@@ -115,17 +327,15 @@ export function createChatOrchestrator(
       dependencies.clearEphemeralEmotionalContext()
     }
 
-    const latestUserMessageContent = getLatestUserMessage()?.content
+    const latestUserMessage = getLatestUserMessage()
+    const previousUserMessage = getPreviousUserMessage()
+    const latestUserText = extractUserText(latestUserMessage)
+    const previousUserText = extractUserText(previousUserMessage)
+    const retrievalSeed = buildRetrievalSeed(latestUserText, previousUserText)
 
-    if (latestUserMessageContent && Array.isArray(latestUserMessageContent)) {
-      const textForThoughtRetrieval = latestUserMessageContent
-        .filter(p => p.type === 'app_text' && p.text)
-        .map(p => p.text)
-        .join(' ')
-
-      if (textForThoughtRetrieval) {
+    if (retrievalSeed) {
         const thoughts = await dependencies.retrieveThoughtsForPrompt(
-          textForThoughtRetrieval
+          retrievalSeed
         )
         if (thoughts.length > 0) {
           const thoughtLines = thoughts
@@ -139,18 +349,53 @@ export function createChatOrchestrator(
             })
           }
         }
-      }
+
+        const ragConfig = dependencies.getRagConfig()
+        if (ragConfig.enabled) {
+          const adjustedConfig = adjustRagConfig(
+            retrievalSeed,
+            ragConfig
+          )
+          const ragResultsRaw = await dependencies.retrieveDocumentsForPrompt(
+            retrievalSeed,
+            adjustedConfig.topK
+          )
+          const ragResults = rerankRagResults(
+            ragResultsRaw,
+            retrievalSeed
+          )
+          if (ragResults.length > 0) {
+            contextMessages.push({
+              role: 'user',
+              content: [{ type: 'input_text', text: buildRagRulesBlock() }],
+            })
+            const ragBlock = buildRagBlock(
+              ragResults,
+              adjustedConfig.maxContextChars
+            )
+            if (ragBlock) {
+              contextMessages.push({
+                role: 'user',
+                content: [{ type: 'input_text', text: ragBlock }],
+              })
+            }
+          }
+        }
     }
 
     return contextMessages
   }
 
-  const buildContinuationInput = (): OpenAI.Responses.Request.InputItemLike[] => {
+  const buildContinuationInput = async (): Promise<
+    OpenAI.Responses.Request.InputItemLike[]
+  > => {
     const latestUserMessage = getLatestUserMessage()
 
     if (!latestUserMessage || !Array.isArray(latestUserMessage.content)) {
       return []
     }
+
+    const contextMessages = await buildContextMessages()
 
     const convertedContent =
       latestUserMessage.content.reduce<OpenAI.Responses.Request.ContentPartLike[]>(
@@ -165,14 +410,15 @@ export function createChatOrchestrator(
         []
       )
 
-    return convertedContent.length
-      ? [
-          {
-            role: 'user',
-            content: convertedContent,
-          },
-        ]
-      : []
+    if (!convertedContent.length) return contextMessages
+
+    return [
+      ...contextMessages,
+      {
+        role: 'user',
+        content: convertedContent,
+      },
+    ]
   }
 
   const runChat = async () => {
@@ -193,12 +439,15 @@ export function createChatOrchestrator(
 
     let finalApiInput: OpenAI.Responses.Request.InputItemLike[] = []
 
-    if (isNewChain) {
+    const aiProvider = dependencies.getAiProvider()
+    const shouldUseFullHistoryOnContinuation = aiProvider !== 'openai'
+
+    if (isNewChain || shouldUseFullHistoryOnContinuation) {
       const contextMessages = await buildContextMessages()
       const constructedApiInput = await dependencies.buildApiInput(true)
       finalApiInput = [...contextMessages, ...constructedApiInput]
     } else {
-      finalApiInput = buildContinuationInput()
+      finalApiInput = await buildContinuationInput()
     }
 
     const placeholderTempId = dependencies.addAssistantPlaceholder()

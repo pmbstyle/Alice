@@ -311,4 +311,14 @@ const handleChatClick = (event: MouseEvent) => {
   word-break: break-word;
   overflow-wrap: break-word;
 }
+
+:deep(.rag-citation) {
+  display: inline-block;
+  padding: 0.15rem 0.35rem;
+  margin-left: 0.15rem;
+  border-radius: 999px;
+  font-size: 0.65rem;
+  background: rgba(0, 0, 0, 0.15);
+  cursor: default;
+}
 </style>

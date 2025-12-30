@@ -22,6 +22,7 @@ import {
   listLMStudioModels,
 } from './llmProviders/lmStudio'
 import type { AppChatMessageContentPart } from '../types/chat'
+import type { RagSearchResult } from '../types/rag'
 
 /**
  * Parse WAV file ArrayBuffer and extract raw PCM audio data as Float32Array
@@ -157,6 +158,10 @@ function removeLinksFromText(text: string): string {
     .replace(/https?:\/\/[^\s\)]+/g, '')
     .replace(/www\.[^\s\)]+/g, '')
     .replace(/\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(
+      /\[[^\]\n]+?\.(?:pdf|docx?|txt|md|markdown|html?|pptx?)(?:#p\d+(?:\s*,\s*p\d+)*)?\]/gi,
+      ''
+    )
     .replace(/\s+/g, ' ')
     .trim()
 }
@@ -495,6 +500,18 @@ async function generateLocalEmbedding(textToEmbed: string): Promise<number[]> {
   return await backendApi.generateEmbedding(textToEmbed)
 }
 
+export const createLocalEmbedding = async (
+  textInput: any
+): Promise<number[]> => {
+  const textToEmbed = extractTextForEmbedding(textInput)
+  if (!textToEmbed.trim()) return []
+  try {
+    return await generateLocalEmbedding(textToEmbed)
+  } catch (error) {
+    return []
+  }
+}
+
 export const createEmbedding = async (textInput: any): Promise<number[]> => {
   const settings = useSettingsStore().config
   const textToEmbed = extractTextForEmbedding(textInput)
@@ -620,6 +637,25 @@ export const retrieveRelevantThoughtsForPrompt = async (
 
   const ipcResult = await window.ipcRenderer.invoke('thoughtVector:search', {
     queryEmbedding,
+    topK,
+  })
+  if (!ipcResult.success || !Array.isArray(ipcResult.data)) {
+    return []
+  }
+  return ipcResult.data
+}
+
+export const retrieveRelevantDocumentsForPrompt = async (
+  content: string,
+  topK = 5
+): Promise<RagSearchResult[]> => {
+  if (!content.trim()) return []
+
+  const queryEmbedding = await createLocalEmbedding(content)
+
+  const ipcResult = await window.ipcRenderer.invoke('rag:search', {
+    queryEmbedding,
+    queryText: content,
     topK,
   })
   if (!ipcResult.success || !Array.isArray(ipcResult.data)) {

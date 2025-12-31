@@ -67,6 +67,15 @@ function extractTextFromMessage(message: ChatMessage): string {
   return ''
 }
 
+function getMessageIdentity(message: ChatMessage): string {
+  return (
+    message.local_id_temp ||
+    message.api_message_id ||
+    message.id ||
+    `${message.role}-${message.created_at ?? ''}-${extractTextFromMessage(message).slice(0, 80)}`
+  )
+}
+
 function formatRagSource(pathValue: string, title: string, page?: number | null) {
   const fileName = pathValue.split(/[\\/]/).pop() || title
   const pageSuffix = page && page > 0 ? `#p${page}` : ''
@@ -319,7 +328,15 @@ export const useConversationStore = defineStore('conversation', () => {
     try {
       return await chat()
     } finally {
-      chatHistory.value = originalHistory
+      const latestHistory = [...chatHistory.value]
+      const originalIdentities = new Set(
+        originalHistory.map(getMessageIdentity)
+      )
+      const additions = latestHistory.filter(
+        message => !originalIdentities.has(getMessageIdentity(message))
+      )
+      chatHistory.value =
+        additions.length > 0 ? [...additions, ...originalHistory] : originalHistory
     }
   }
 

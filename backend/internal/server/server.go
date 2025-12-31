@@ -4,13 +4,13 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 
 	"alice-backend/internal/api"
 	"alice-backend/internal/config"
 
 	"github.com/gorilla/mux"
-	"github.com/rs/cors"
 )
 
 // Server represents the HTTP server
@@ -70,15 +70,7 @@ func (s *Server) Start(port string) error {
 	modelsRouter.HandleFunc("/status", s.handler.GetModelStatus).Methods("GET")
 	modelsRouter.HandleFunc("/download-status", s.handler.GetModelDownloadStatus).Methods("GET")
 
-	// CORS configuration
-	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3000", "http://localhost:5173"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"*"},
-		AllowCredentials: true,
-	})
-
-	handler := c.Handler(router)
+	handler := corsMiddleware(router)
 
 	s.httpServer = &http.Server{
 		Addr:         ":" + port,
@@ -90,6 +82,31 @@ func (s *Server) Start(port string) error {
 
 	log.Printf("Server starting on port %s", port)
 	return s.httpServer.ListenAndServe()
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			if parsed, err := url.Parse(origin); err == nil {
+				host := parsed.Hostname()
+				if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					w.Header().Set("Vary", "Origin")
+					w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+					w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+					w.Header().Set("Access-Control-Allow-Credentials", "true")
+				}
+			}
+		}
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
 }
 
 // Stop gracefully stops the server

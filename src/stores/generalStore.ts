@@ -197,6 +197,7 @@ export const useGeneralStore = defineStore('general', () => {
 
   const queueAudioForPlayback = (audioResponse: Response): boolean => {
     if (!isTTSEnabled.value) return false
+    if (!audioResponse || audioResponse.status === 204) return false
     audioQueue.value.push(audioResponse)
     return true
   }

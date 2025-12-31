@@ -409,52 +409,55 @@ export const useSettingsStore = defineStore('settings', () => {
     return true
   })
 
-  const config = computed<Readonly<AliceSettings>>(() => {
-    const baseConfig = isProduction.value
-      ? settings.value
-      : {
-          ...defaultSettings,
-          ...settings.value,
-          ...Object.fromEntries(
-            Object.entries(import.meta.env)
-              .filter(
-                ([key]) =>
-                  key.startsWith('VITE_') ||
-                  key.startsWith('assistant') ||
-                  key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
-                  key === 'SUMMARIZATION_MESSAGE_COUNT' ||
-                  key === 'SUMMARIZATION_MODEL' ||
-                  key === 'SUMMARIZATION_SYSTEM_PROMPT' ||
-                  key === 'sttProvider' ||
-                  key === 'aiProvider' ||
-                  key === 'onboardingCompleted'
-              )
-              .map(([key, value]) => {
-                if (
-                  key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
-                  key === 'SUMMARIZATION_MESSAGE_COUNT' ||
-                  key === 'assistantTemperature' ||
-                  key === 'assistantTopP' ||
-                  key === 'ragTopK' ||
-                  key === 'ragMaxContextChars'
-                ) {
-                  return [key, parseFloat(String(value))]
-                }
-                if (key === 'assistantTools' && typeof value === 'string') {
-                  return [
-                    key,
-                    value
-                      .split(',')
-                      .map(t => t.trim())
-                      .filter(Boolean),
-                  ]
-                }
-                return [key, String(value)]
-              })
-          ),
-        }
-    return baseConfig
-  })
+    const config = computed<Readonly<AliceSettings>>(() => {
+      if (isProduction.value) {
+        return settings.value
+      }
+
+      const envOverrides = Object.fromEntries(
+        Object.entries(import.meta.env)
+          .filter(
+            ([key]) =>
+              key.startsWith('VITE_') ||
+              key.startsWith('assistant') ||
+              key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
+              key === 'SUMMARIZATION_MESSAGE_COUNT' ||
+              key === 'SUMMARIZATION_MODEL' ||
+              key === 'SUMMARIZATION_SYSTEM_PROMPT' ||
+              key === 'sttProvider' ||
+              key === 'aiProvider' ||
+              key === 'onboardingCompleted'
+          )
+          .map(([key, value]) => {
+            if (
+              key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
+              key === 'SUMMARIZATION_MESSAGE_COUNT' ||
+              key === 'assistantTemperature' ||
+              key === 'assistantTopP' ||
+              key === 'ragTopK' ||
+              key === 'ragMaxContextChars'
+            ) {
+              return [key, parseFloat(String(value))]
+            }
+            if (key === 'assistantTools' && typeof value === 'string') {
+              return [
+                key,
+                value
+                  .split(',')
+                  .map(t => t.trim())
+                  .filter(Boolean),
+              ]
+            }
+            return [key, String(value)]
+          })
+      )
+
+      return {
+        ...defaultSettings,
+        ...envOverrides,
+        ...settings.value,
+      }
+    })
 
   async function loadSettings() {
     if (initialLoadAttempted.value) {

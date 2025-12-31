@@ -69,7 +69,7 @@ const messageMarkdown = (text: string): string => {
 
   try {
     const withCitations = text.replace(
-      /\[([^\]\n]+?\.(?:pdf|docx?|txt|md|markdown|html?|pptx?)(?:#p\d+(?:\s*,\s*p\d+)*)?)\]/gi,
+      /\[([^\]\n]+?\.(?:pdf|docx?|txt|md|markdown|html?|pptx?)(?:#p[0-9a-zA-Z]+(?:\s*,\s*p[0-9a-zA-Z]+)*)?)\]/gi,
       '<span class="rag-citation">[$1]</span>'
     )
     const rawHtml = marked.parse(withCitations) as string

@@ -4,7 +4,12 @@
       <div
         class="chat mb-2"
         v-for="(message, index) in chatHistoryDisplay"
-        :key="message.api_message_id || `local-${index}`"
+        :key="
+          message.api_message_id ||
+          message.local_id_temp ||
+          message.id ||
+          `local-${index}`
+        "
         :class="{
           'chat-start':
             message.role === 'assistant' || message.role === 'system',

@@ -233,8 +233,11 @@ import MemoryManager from './MemoryManager.vue'
 const appVersion = ref(import.meta.env.VITE_APP_VERSION || '')
 const settingsStore = useSettingsStore()
 const conversationStore = useConversationStore()
+const { settings } = storeToRefs(settingsStore)
 
-const currentSettings = ref<AliceSettings>({ ...settingsStore.config })
+const currentSettings = ref<AliceSettings>({
+  ...settings.value,
+})
 const activeTab = ref<
   | 'core'
   | 'assistant'
@@ -390,7 +393,7 @@ onMounted(async () => {
   if (!settingsStore.initialLoadAttempted) {
     await settingsStore.loadSettings()
   }
-  currentSettings.value = { ...settingsStore.config }
+  currentSettings.value = { ...settings.value }
 
   if (
     settingsStore.coreOpenAISettingsValid &&
@@ -401,9 +404,9 @@ onMounted(async () => {
 })
 
 watch(
-  () => settingsStore.config,
-  newConfig => {
-    currentSettings.value = { ...newConfig }
+  settings,
+  newSettings => {
+    currentSettings.value = { ...newSettings }
   },
   { deep: true, immediate: true }
 )

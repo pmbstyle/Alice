@@ -159,7 +159,7 @@ function removeLinksFromText(text: string): string {
     .replace(/www\.[^\s\)]+/g, '')
     .replace(/\[[^\]]*\]\([^)]*\)/g, '')
     .replace(
-      /\[[^\]\n]+?\.(?:pdf|docx?|txt|md|markdown|html?|pptx?)(?:#p\d+(?:\s*,\s*p\d+)*)?\]/gi,
+      /\[[^\]\n]+?\.(?:pdf|docx?|txt|md|markdown|html?|pptx?)(?:#p[0-9a-zA-Z]+(?:\s*,\s*p[0-9a-zA-Z]+)*)?\]/gi,
       ''
     )
     .replace(/\s+/g, ' ')
@@ -171,7 +171,10 @@ export const ttsStream = async (
   signal: AbortSignal
 ): Promise<Response> => {
   const settings = useSettingsStore().config
-  const cleanedText = removeLinksFromText(text)
+  const cleanedText = removeLinksFromText(text).trim()
+  if (!cleanedText) {
+    return new Response(null, { status: 204, statusText: 'No Content' })
+  }
 
   if (settings.ttsProvider === 'local') {
     try {

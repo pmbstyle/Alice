@@ -22,7 +22,7 @@ jobs:
             goos: windows
             goarch: amd64
             output: alice-backend.exe
-          - os: macos-13
+          - os: macos-latest
             goos: darwin
             goarch: amd64
             output: alice-backend

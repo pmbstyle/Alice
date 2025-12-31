@@ -319,8 +319,8 @@ const processRequest = async (
             startTimeout()
             return
           }
-          reject(new Error('Chat request timeout after 30 seconds'))
-        }, 30000)
+          reject(new Error('Chat request timeout after 90 seconds'))
+        }, 90000)
       }
 
       const stateWatcher = () => {

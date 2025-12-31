@@ -139,8 +139,6 @@ export const createOpenRouterResponse = async (
     })
   }
 
-  console.log('[OpenRouter] Final messages:', JSON.stringify(messages, null, 2))
-
   const openrouterModel = settings.assistantModel || 'gpt-4.1-mini'
   const modelWithWebSearch = openrouterModel.includes(':online')
     ? openrouterModel

@@ -44,7 +44,7 @@
     "dotenv": "^17.2.3",
     "electron": "28.3.3",
     "electron-builder": "^24.13.3",
-    "cross-env": "^7.0.3",
+    "cross-env": "^10.1.0",
     "openai": "^6.9.1",
     "pinia": "^3.0.3",
     "postcss": "^8.5.6",

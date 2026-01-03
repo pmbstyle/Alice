@@ -92,7 +92,7 @@ export async function saveTokens(tokens: any): Promise<void> {
 
 export async function clearTokens(): Promise<void> {
   try {
-    await fs.unlink(TOKEN_PATH)
+    await fsPromises.unlink(TOKEN_PATH)
     console.log('Tokens deleted.')
   } catch (err) {
     console.log('Error deleting tokens or tokens not found:', err)

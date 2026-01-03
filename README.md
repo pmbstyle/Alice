@@ -119,6 +119,7 @@ Swap Alice's appearance with [your own](https://github.com/pmbstyle/Alice/blob/m
 | **Windows** | [Alice-AI-App-Windows-1.3.0-Setup.exe](https://github.com/pmbstyle/Alice/releases/download/v1.3.0/Alice-AI-App-Windows-1.3.0-Setup.exe) |
 | **macOS** | [Alice-AI-App-Mac-1.3.0-Installer.dmg](https://github.com/pmbstyle/Alice/releases/download/v1.3.0/Alice-AI-App-Mac-1.3.0-Installer.dmg) |
 | **Linux** | [Alice-AI-App-Linux-1.3.0.AppImage](https://github.com/pmbstyle/Alice/releases/download/v1.3.0/Alice-AI-App-Linux-1.3.0.AppImage) |
+| **ArchLinux**(community build) | [AUR Package](https://aur.archlinux.org/packages/alice-ai-app-bin) |
 <!-- STABLE_DOWNLOADS_END -->
 
 Follow the [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupInstructions.md) to configure your API keys and environment.
@@ -185,13 +186,6 @@ $ npm run build
 ```
 
 Install the output from the `release/` directory.
-
-
-
-## 🐧 Community
-
-* 🏗️ [ArchLinux AUR Package](https://aur.archlinux.org/packages/alice-ai-app-bin)
-
 
 
 ## 🤝 Contributing

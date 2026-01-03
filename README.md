@@ -34,6 +34,7 @@ While the OpenAI cloud API is preferred and provides the best user experience, A
 * **Memories**: Structured long-term facts in local DB
 * **Summarization**: Compact message history into context prompts
 * **Emotion awareness**: Summaries include mood estimation for more human responses
+* **Local RAG**: Add local documents to the LLM context, chat with your docs
 
 ### 🎨 Vision & Visual Output
 
@@ -111,6 +112,14 @@ Swap Alice's appearance with [your own](https://github.com/pmbstyle/Alice/blob/m
 ## 🚀 Download
 
 👉 **[Download the latest release](https://github.com/pmbstyle/Alice/releases/latest)**
+
+<!-- STABLE_DOWNLOADS -->
+| Platform | Download |
+|----------|----------|
+| **Windows** | [Alice-AI-App-Windows-1.3.0-Setup.exe](https://github.com/pmbstyle/Alice/releases/download/v1.3.0/Alice-AI-App-Windows-1.3.0-Setup.exe) |
+| **macOS** | [Alice-AI-App-Mac-1.3.0-Installer.dmg](https://github.com/pmbstyle/Alice/releases/download/v1.3.0/Alice-AI-App-Mac-1.3.0-Installer.dmg) |
+| **Linux** | [Alice-AI-App-Linux-1.3.0.AppImage](https://github.com/pmbstyle/Alice/releases/download/v1.3.0/Alice-AI-App-Linux-1.3.0.AppImage) |
+<!-- STABLE_DOWNLOADS_END -->
 
 Follow the [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs/setupInstructions.md) to configure your API keys and environment.
 

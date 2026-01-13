@@ -1084,6 +1084,17 @@ export function registerIPCHandlers(): void {
     }
   })
 
+  // Get backend log file path
+  ipcMain.handle('backend:get-log-path', async () => {
+    try {
+      const logPath = backendManager.getLogFilePath()
+      return { success: true, logPath }
+    } catch (error: any) {
+      console.error('[IPC backend:get-log-path] Error:', error)
+      return { success: false, error: error.message }
+    }
+  })
+
   // HTTP request handler to bypass CORS
   ipcMain.handle('http:request', async (event, args: {
     url: string

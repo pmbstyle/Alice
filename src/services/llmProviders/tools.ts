@@ -121,6 +121,17 @@ export async function buildToolsForProvider(): Promise<any[]> {
     })
     finalToolsForApi.length = 0
     finalToolsForApi.push(...allowedTools)
+  } else if (settings.aiProvider === 'aws-bedrock') {
+    // Bedrock supports all tools except image_generation
+    // Claude on Bedrock supports full tool calling
+    const allowedTools = finalToolsForApi.filter(tool => {
+      if (tool.type === 'image_generation') {
+        return false
+      }
+      return true
+    })
+    finalToolsForApi.length = 0
+    finalToolsForApi.push(...allowedTools)
   }
 
   return finalToolsForApi

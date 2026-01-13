@@ -9,6 +9,10 @@ import { app, session } from 'electron'
 
 app.disableHardwareAcceleration()
 
+// Initialize logging FIRST - before any other imports
+import { loggingManager } from './loggingManager'
+loggingManager.initialize()
+
 import {
   initializeThoughtVectorStore,
   ensureSaveOnQuit as ensureThoughtStoreSave,
@@ -43,6 +47,7 @@ import { initializeUpdater, checkForUpdates } from './updaterManager'
 import { registerAuthIPCHandlers, stopAuthServer } from './authManager'
 import DesktopManager from './desktopManager'
 import { backendManager } from './backendManager'
+import { whisperHttpServerManager } from './whisperHttpServerManager'
 import { setupDependencies } from '../../scripts/setup-dependencies.js'
 
 
@@ -434,6 +439,33 @@ app.whenReady().then(async () => {
   await createOverlayWindow()
   checkForUpdates()
 
+  // Start Whisper HTTP server FIRST (before Go backend)
+  try {
+    // Set the language from user settings before starting
+    if (initialSettings?.localSttLanguage) {
+      whisperHttpServerManager.setLanguage(initialSettings.localSttLanguage)
+      console.log(`[Main App Ready] Configured Whisper language: ${initialSettings.localSttLanguage}`)
+    }
+
+    console.log('[Main App Ready] Starting Whisper HTTP server...')
+    const whisperStarted = await whisperHttpServerManager.start()
+
+    if (whisperStarted) {
+      console.log('[Main App Ready] ✓ Whisper HTTP server started successfully')
+      // Set environment variables for Go backend to connect to Whisper HTTP server
+      process.env.WHISPER_HTTP_ADDR = whisperHttpServerManager.getServiceUrl()
+      process.env.WHISPER_USE_HTTP = 'true'
+      console.log('[Main App Ready] Configured Go backend to use Whisper HTTP at', whisperHttpServerManager.getServiceUrl())
+    } else {
+      console.warn('[Main App Ready] Whisper HTTP server failed to start, Go backend will use CLI fallback')
+      process.env.WHISPER_USE_HTTP = 'false'
+    }
+  } catch (error) {
+    console.error('[Main App Ready] Error starting Whisper HTTP server:', error)
+    process.env.WHISPER_USE_HTTP = 'false'
+  }
+
+  // NOW start Go backend (it will connect to Whisper service)
   try {
     console.log('[Main App Ready] Starting Go AI backend...')
     const backendStarted = await backendManager.start()
@@ -477,7 +509,11 @@ app.on('before-quit', async event => {
 
   try {
     await Promise.race([
-      Promise.all([ensureThoughtStoreSave(), backendManager.stop()]),
+      Promise.all([
+        ensureThoughtStoreSave(),
+        backendManager.stop(),
+        whisperHttpServerManager.stop()
+      ]),
       new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Cleanup timeout')), 4000)
       ),
@@ -486,6 +522,8 @@ app.on('before-quit', async event => {
   } catch (err) {
     console.error('[Main Index] Error during before-quit cleanup:', err)
   } finally {
+    // Shutdown logging last
+    loggingManager.shutdown()
     clearTimeout(cleanupTimeout)
     app.exit(0)
   }

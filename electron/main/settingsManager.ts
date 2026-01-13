@@ -42,6 +42,7 @@ export interface AppSettings {
   ttsProvider?: 'openai' | 'local'
   ttsVoice?: 'alloy' | 'echo' | 'fable' | 'nova' | 'onyx' | 'shimmer'
   localTtsVoice?: string
+  localSttLanguage?: string
   embeddingProvider?: 'openai' | 'local'
   ragEnabled?: boolean
   ragPaths?: string[]

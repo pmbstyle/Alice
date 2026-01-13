@@ -1,5 +1,6 @@
 import OpenAI from 'openai'
 import Groq from 'groq-sdk'
+import { BedrockRuntimeClient } from '@aws-sdk/client-bedrock-runtime'
 import { useSettingsStore } from '../stores/settingsStore'
 import { backendApi } from './backendApi'
 
@@ -8,6 +9,7 @@ let openrouterClient: OpenAI | null = null
 let groqClient: Groq | null = null
 let ollamaClient: OpenAI | null = null
 let lmStudioClient: OpenAI | null = null
+let bedrockClient: BedrockRuntimeClient | null = null
 
 export function getOpenAIClient(): OpenAI {
   if (!openaiClient) {
@@ -57,6 +59,16 @@ export function getLMStudioClient(): OpenAI {
     throw new Error('LM Studio client could not be initialized')
   }
   return lmStudioClient
+}
+
+export function getBedrockClient(): BedrockRuntimeClient {
+  if (!bedrockClient) {
+    initializeBedrockClient()
+  }
+  if (!bedrockClient) {
+    throw new Error('Bedrock client could not be initialized')
+  }
+  return bedrockClient
 }
 
 function initializeOpenAIClient(): void {
@@ -140,6 +152,28 @@ function initializeLMStudioClient(): void {
   })
 }
 
+function initializeBedrockClient(): void {
+  const settings = useSettingsStore().config
+  if (!settings.awsAccessKeyId || !settings.awsSecretAccessKey) {
+    console.error('AWS credentials are not configured.')
+    throw new Error('AWS credentials are not configured.')
+  }
+
+  if (!settings.awsRegion) {
+    console.error('AWS region is not configured.')
+    throw new Error('AWS region is not configured.')
+  }
+
+  bedrockClient = new BedrockRuntimeClient({
+    region: settings.awsRegion,
+    credentials: {
+      accessKeyId: settings.awsAccessKeyId,
+      secretAccessKey: settings.awsSecretAccessKey,
+      ...(settings.awsSessionToken ? { sessionToken: settings.awsSessionToken } : {})
+    }
+  })
+}
+
 export function reinitializeClients(): void {
   console.log('Reinitializing API clients with updated settings...')
 
@@ -181,6 +215,14 @@ export function reinitializeClients(): void {
   } catch (error) {
     console.error('Failed to reinitialize LM Studio client:', error)
     lmStudioClient = null
+  }
+
+  try {
+    initializeBedrockClient()
+    console.log('Bedrock client reinitialized successfully')
+  } catch (error) {
+    console.error('Failed to reinitialize Bedrock client:', error)
+    bedrockClient = null
   }
 }
 

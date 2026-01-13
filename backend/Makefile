@@ -1,4 +1,23 @@
-.PHONY: build clean test run deps
+.PHONY: build clean test run deps proto service
+
+# Protobuf generation
+proto:
+	protoc --go_out=. --go_opt=paths=source_relative \
+	  --go-grpc_out=. --go-grpc_opt=paths=source_relative \
+	  proto/whisper/v1/whisper.proto
+
+# Whisper gRPC service
+service:
+	go build -ldflags="-s -w" -o bin/whisper-service ./cmd/whisper-service
+
+service-windows:
+	GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bin/whisper-service.exe ./cmd/whisper-service
+
+service-linux:
+	GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bin/whisper-service ./cmd/whisper-service
+
+service-macos:
+	GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o bin/whisper-service ./cmd/whisper-service
 
 # Build targets
 build: build-windows build-linux build-macos

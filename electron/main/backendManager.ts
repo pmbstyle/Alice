@@ -31,6 +31,8 @@ export class BackendManager {
   private config: BackendManagerConfig
   private isShuttingDown: boolean = false
   private startupPromise: Promise<boolean> | null = null
+  private logFilePath: string | null = null
+  private logStream: fs.WriteStream | null = null
 
   constructor(config: Partial<BackendManagerConfig> = {}) {
     this.config = {
@@ -38,6 +40,57 @@ export class BackendManager {
       port: 8765,
       timeout: 30000, // 30 seconds - Go starts much faster than Python
       ...config,
+    }
+
+    // Initialize log file
+    this.initializeLogFile()
+  }
+
+  /**
+   * Initialize log file for backend output
+   */
+  private initializeLogFile(): void {
+    try {
+      // Get backend directory (where the binary resides)
+      const backendPath = this.getBackendPath()
+      if (!backendPath) {
+        console.error('[BackendManager] Cannot initialize log file - backend path not found')
+        return
+      }
+
+      const backendDir = path.dirname(backendPath)
+      const logsDir = path.join(backendDir, 'logs')
+
+      // Create logs directory if it doesn't exist
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true })
+      }
+
+      // Create log file with timestamp
+      const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0]
+      this.logFilePath = path.join(logsDir, `backend-${timestamp}.log`)
+
+      // Create write stream
+      this.logStream = fs.createWriteStream(this.logFilePath, { flags: 'a' })
+
+      this.writeLog('='.repeat(80))
+      this.writeLog(`Backend Log Started: ${new Date().toISOString()}`)
+      this.writeLog(`Log File: ${this.logFilePath}`)
+      this.writeLog('='.repeat(80))
+
+      console.log(`[BackendManager] Logging to: ${this.logFilePath}`)
+    } catch (error) {
+      console.error('[BackendManager] Failed to initialize log file:', error)
+    }
+  }
+
+  /**
+   * Write a message to the log file
+   */
+  private writeLog(message: string): void {
+    if (this.logStream) {
+      const timestamp = new Date().toISOString()
+      this.logStream.write(`[${timestamp}] ${message}\n`)
     }
   }
 
@@ -171,6 +224,15 @@ export class BackendManager {
     this.isShuttingDown = false
     this.startupPromise = null
     console.log('[BackendManager] Go AI backend stopped')
+
+    // Close log stream
+    if (this.logStream) {
+      this.writeLog('='.repeat(80))
+      this.writeLog(`Backend Log Ended: ${new Date().toISOString()}`)
+      this.writeLog('='.repeat(80))
+      this.logStream.end()
+      this.logStream = null
+    }
   }
 
   /**
@@ -237,6 +299,13 @@ export class BackendManager {
    */
   isReady(): boolean {
     return this.process !== null && !this.process.killed && !this.isShuttingDown
+  }
+
+  /**
+   * Get the current log file path
+   */
+  getLogFilePath(): string | null {
+    return this.logFilePath
   }
 
   /**
@@ -324,13 +393,37 @@ export class BackendManager {
       const output = data.toString().trim()
       if (output) {
         console.log(`[Go Backend] ${output}`)
+        this.writeLog(`[STDOUT] ${output}`)
       }
     })
 
     this.process.stderr?.on('data', (data: Buffer) => {
-      const error = data.toString().trim()
-      if (error) {
-        console.error(`[Go Backend] ${error}`)
+      const output = data.toString().trim()
+      if (output) {
+        // Write all stderr to backend log file
+        this.writeLog(`[STDERR] ${output}`)
+
+        // Go backend writes many info messages to stderr, not just errors
+        // Only log actual errors/warnings to Electron console
+        const isInfoMessage = output.includes('Started GET') ||
+                             output.includes('Started POST') ||
+                             output.includes('Completed GET') ||
+                             output.includes('Completed POST') ||
+                             output.includes('[STT]') ||
+                             output.includes('[TTS]') ||
+                             output.includes('[HttpClient]') ||
+                             output.includes('initialized successfully') ||
+                             output.includes('Successfully') ||
+                             output.includes('will use download fallback') ||
+                             output.includes('No embedded') ||
+                             output.includes('extracted embedded')
+
+        // Only log if it looks like an actual error
+        if (!isInfoMessage && (output.toLowerCase().includes('error') ||
+                               output.toLowerCase().includes('failed') ||
+                               output.toLowerCase().includes('panic'))) {
+          console.error(`[Go Backend] ${output}`)
+        }
       }
     })
 

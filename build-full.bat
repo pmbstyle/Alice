@@ -32,7 +32,17 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
-echo [1/4] Building Go backend...
+echo [1/5] Compiling Protocol Buffers...
+call npm run build:proto
+if %errorlevel% neq 0 (
+    echo.
+    echo [ERROR] Proto compilation failed!
+    pause
+    exit /b 1
+)
+
+echo.
+echo [2/5] Building Go backend...
 call npm run build:go
 if %errorlevel% neq 0 (
     echo.
@@ -42,17 +52,17 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [2/4] Building Vue.js frontend...
+echo [3/5] Building TypeScript and Vue.js...
 call npm run build:web
 if %errorlevel% neq 0 (
     echo.
-    echo [ERROR] Frontend build failed!
+    echo [ERROR] Frontend/TypeScript build failed!
     pause
     exit /b 1
 )
 
 echo.
-echo [3/4] Packaging with Electron Builder...
+echo [4/5] Packaging with Electron Builder...
 echo NOTE: This requires Administrator privileges for symbolic links
 echo.
 
@@ -67,7 +77,7 @@ if %errorlevel% neq 0 (
 )
 
 echo.
-echo [4/4] Build complete!
+echo [5/5] Build complete!
 echo.
 echo ========================================
 echo Build Summary:

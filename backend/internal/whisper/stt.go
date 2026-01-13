@@ -18,6 +18,13 @@ import (
 	"alice-backend/internal/embedded"
 )
 
+// WhisperGRPCClient interface for dependency injection
+type WhisperGRPCClient interface {
+	Transcribe(ctx context.Context, audioData []byte, language string) (string, error)
+	IsConnected() bool
+	HealthCheck(ctx context.Context) (bool, error)
+}
+
 
 // Config holds STT configuration
 type Config struct {
@@ -45,6 +52,10 @@ type STTService struct {
 	config       *Config
 	info         *ServiceInfo
 	assetManager *embedded.AssetManager
+	grpcClient   WhisperGRPCClient
+	useGRPC      bool
+	httpClient   *HttpClient
+	useHTTP      bool
 }
 
 // NewSTTService creates a new STT service
@@ -132,6 +143,40 @@ func (s *STTService) GetInfo() *ServiceInfo {
 	return &info
 }
 
+// SetGRPCClient sets the gRPC client for remote transcription
+func (s *STTService) SetGRPCClient(client WhisperGRPCClient) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.grpcClient = client
+	s.useGRPC = client != nil && client.IsConnected()
+
+	if s.useGRPC {
+		log.Println("STT service configured to use gRPC mode")
+		s.info.Metadata["mode"] = "grpc"
+	} else {
+		log.Println("STT service using CLI mode")
+		s.info.Metadata["mode"] = "cli"
+	}
+}
+
+// SetHTTPClient sets the HTTP client for remote transcription via whisper-server
+func (s *STTService) SetHTTPClient(client *HttpClient) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.httpClient = client
+	s.useHTTP = client != nil && client.IsConnected()
+
+	if s.useHTTP {
+		log.Println("STT service configured to use HTTP mode (whisper-server)")
+		s.info.Metadata["mode"] = "http"
+	} else {
+		log.Println("STT service using CLI mode")
+		s.info.Metadata["mode"] = "cli"
+	}
+}
+
 // TranscribeAudio performs speech transcription using whisper.cpp
 func (s *STTService) TranscribeAudio(ctx context.Context, audioData []byte) (string, error) {
 	return s.TranscribeAudioWithLanguage(ctx, audioData, "")
@@ -147,6 +192,50 @@ func (s *STTService) TranscribeAudioWithLanguage(ctx context.Context, audioData 
 		return "", fmt.Errorf("audio data cannot be empty")
 	}
 
+	// Try HTTP first if enabled and connected (preferred over gRPC)
+	s.mu.RLock()
+	useHTTP := s.useHTTP && s.httpClient != nil
+	s.mu.RUnlock()
+
+	if useHTTP {
+		log.Println("[STT] Using HTTP mode for transcription")
+		text, err := s.httpClient.Transcribe(ctx, audioData, language)
+		if err == nil {
+			log.Printf("[STT] HTTP transcription successful: %s", text)
+			return text, nil
+		}
+
+		// Log HTTP failure and fall back to CLI
+		log.Printf("[STT] HTTP transcription failed, falling back to CLI: %v", err)
+		s.mu.Lock()
+		s.useHTTP = false
+		s.info.Metadata["mode"] = "cli-fallback"
+		s.mu.Unlock()
+	}
+
+	// Try gRPC if enabled and connected (fallback from HTTP)
+	s.mu.RLock()
+	useGRPC := s.useGRPC && s.grpcClient != nil
+	s.mu.RUnlock()
+
+	if useGRPC {
+		log.Println("[STT] Using gRPC mode for transcription")
+		text, err := s.grpcClient.Transcribe(ctx, audioData, language)
+		if err == nil {
+			log.Printf("[STT] gRPC transcription successful: %s", text)
+			return text, nil
+		}
+
+		// Log gRPC failure and fall back to CLI
+		log.Printf("[STT] gRPC transcription failed, falling back to CLI: %v", err)
+		s.mu.Lock()
+		s.useGRPC = false
+		s.info.Metadata["mode"] = "cli-fallback"
+		s.mu.Unlock()
+	}
+
+	// Fallback to CLI mode (existing implementation)
+	log.Println("[STT] Using CLI mode for transcription")
 	samples, err := s.convertAudioToSamples(audioData)
 	if err != nil {
 		return "", fmt.Errorf("failed to convert audio: %w", err)
@@ -233,6 +322,50 @@ func (s *STTService) writeWAVFile(filename string, samples []float32) error {
 	}
 
 	return nil
+}
+
+// hasNVIDIAGPU checks if an NVIDIA GPU with CUDA support is available
+func hasNVIDIAGPU() bool {
+	// Try to run nvidia-smi to detect NVIDIA GPU
+	cmd := exec.Command("nvidia-smi")
+	err := cmd.Run()
+	if err != nil {
+		log.Printf("NVIDIA GPU not detected (nvidia-smi failed): %v", err)
+		return false
+	}
+
+	log.Println("NVIDIA GPU detected via nvidia-smi")
+	return true
+}
+
+// hasCUDALibraries checks if required CUDA libraries are present
+func hasCUDALibraries() bool {
+	// Get the directory where the current executable is located
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Printf("Failed to get executable path: %v", err)
+		return false
+	}
+	exeDir := filepath.Dir(exePath)
+
+	// Check for CUDA libraries in the bin directory relative to executable
+	binDir := filepath.Join(exeDir, "bin")
+
+	requiredLibs := []string{
+		"cublas64_12.dll",
+		"ggml-cuda.dll",
+	}
+
+	for _, lib := range requiredLibs {
+		libPath := filepath.Join(binDir, lib)
+		if _, err := os.Stat(libPath); os.IsNotExist(err) {
+			log.Printf("CUDA library not found: %s", libPath)
+			return false
+		}
+	}
+
+	log.Println("CUDA libraries detected")
+	return true
 }
 
 // transcribeDirectlyWithLanguage performs direct transcription using whisper.cpp binary
@@ -331,8 +464,10 @@ func (s *STTService) transcribeDirectlyWithLanguage(ctx context.Context, samples
 	args := []string{
 		"-m", modelPath,
 		"-f", inputFile,
+		"-ml", "0",      // Max segment length = 0 (no limit) to preserve all content
+		"--prompt", "",  // Empty initial prompt to avoid context from previous transcriptions
 	}
-	
+
 	// Check if this binary supports -otxt flag by testing with --help
 	helpCmd := exec.Command(whisperPath, "--help")
 	helpOutput, _ := helpCmd.CombinedOutput()
@@ -353,7 +488,23 @@ func (s *STTService) transcribeDirectlyWithLanguage(ctx context.Context, samples
 		args = append(args, "-l", langToUse)
 		log.Printf("Using language parameter: %s", langToUse)
 	}
-	
+
+	// GPU detection and configuration
+	hasGPU := hasNVIDIAGPU()
+	hasCUDALibs := hasCUDALibraries()
+
+	if !hasGPU || !hasCUDALibs {
+		// Disable GPU if not available or libraries missing
+		args = append(args, "-ng")
+		if !hasGPU {
+			log.Println("No NVIDIA GPU detected - using CPU mode")
+		} else {
+			log.Println("CUDA libraries not found - using CPU mode")
+		}
+	} else {
+		log.Println("NVIDIA GPU with CUDA libraries detected - using GPU acceleration")
+	}
+
 	log.Printf("Executing whisper: %s %v", whisperPath, args)
 	
 	cmd := exec.CommandContext(ctx, whisperPath, args...)

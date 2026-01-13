@@ -23,6 +23,7 @@
         </option>
         <option value="ollama">Ollama (Local LLMs)</option>
         <option value="lm-studio">LM Studio (Local LLMs)</option>
+        <option value="aws-bedrock">AWS Bedrock (Claude models)</option>
       </select>
     </div>
 
@@ -349,6 +350,167 @@
         </div>
       </div>
     </div>
+
+    <!-- AWS Bedrock Configuration -->
+    <div v-else-if="formData.aiProvider === 'aws-bedrock'" class="space-y-4">
+      <div class="alert alert-info text-sm">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          class="stroke-current shrink-0 w-5 h-5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          ></path>
+        </svg>
+        <div>
+          <p>
+            Get your AWS credentials from the
+            <a
+              href="https://console.aws.amazon.com/iam/home#/security_credentials"
+              target="_blank"
+              class="link"
+              >AWS IAM Console</a
+            >.
+          </p>
+          <p class="mt-2 text-xs">
+            Required IAM permissions: <code class="text-xs">bedrock:InvokeModel</code>,
+            <code class="text-xs">bedrock:InvokeModelWithResponseStream</code>,
+            <code class="text-xs">bedrock:ListFoundationModels</code>
+          </p>
+        </div>
+      </div>
+
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">AWS Access Key ID</span>
+        </label>
+        <input
+          type="password"
+          v-model="formData.awsAccessKeyId"
+          placeholder="AKIA..."
+          class="input input-bordered w-full focus:input-primary"
+          :class="{
+            'input-error':
+              testResult.bedrock.error && !testResult.bedrock.success,
+          }"
+        />
+      </div>
+
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">AWS Secret Access Key</span>
+        </label>
+        <input
+          type="password"
+          v-model="formData.awsSecretAccessKey"
+          placeholder="Enter your secret key"
+          class="input input-bordered w-full focus:input-primary"
+          :class="{
+            'input-error':
+              testResult.bedrock.error && !testResult.bedrock.success,
+          }"
+        />
+      </div>
+
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">AWS Session Token (Optional)</span>
+        </label>
+        <input
+          type="password"
+          v-model="formData.awsSessionToken"
+          placeholder="Only for temporary credentials"
+          class="input input-bordered w-full focus:input-primary"
+        />
+        <label class="label">
+          <span class="label-text-alt">Only needed for temporary credentials (STS)</span>
+        </label>
+      </div>
+
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">AWS Region</span>
+        </label>
+        <select
+          v-model="formData.awsRegion"
+          class="select select-bordered w-full focus:select-primary focus:outline-none"
+        >
+          <option value="us-east-1">US East (N. Virginia)</option>
+          <option value="us-west-2">US West (Oregon)</option>
+          <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+          <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+          <option value="eu-central-1">Europe (Frankfurt)</option>
+          <option value="eu-west-1">Europe (Ireland)</option>
+          <option value="eu-west-2">Europe (London)</option>
+        </select>
+      </div>
+
+      <button
+        @click="$emit('test-bedrock')"
+        class="btn btn-secondary w-full"
+        :disabled="
+          isTesting.bedrock ||
+          !formData.awsAccessKeyId.trim() ||
+          !formData.awsSecretAccessKey.trim() ||
+          !formData.awsRegion.trim()
+        "
+      >
+        <span
+          v-if="isTesting.bedrock"
+          class="loading loading-spinner loading-xs mr-2"
+        ></span>
+        Test AWS Bedrock Connection
+      </button>
+
+      <TestResult :result="testResult.bedrock" />
+
+      <!-- Model Selection for Bedrock -->
+      <div
+        v-if="testResult.bedrock.success && formData.availableModels.length > 0"
+        class="space-y-4"
+      >
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Assistant Model</span>
+          </label>
+          <select
+            v-model="formData.assistantModel"
+            class="select select-bordered w-full focus:select-primary focus:outline-none"
+          >
+            <option
+              v-for="model in formData.availableModels"
+              :key="model"
+              :value="model"
+            >
+              {{ model }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Summarization Model</span>
+          </label>
+          <select
+            v-model="formData.summarizationModel"
+            class="select select-bordered w-full focus:select-primary focus:outline-none"
+          >
+            <option
+              v-for="model in formData.availableModels"
+              :key="model"
+              :value="model"
+            >
+              {{ model }}
+            </option>
+          </select>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -366,6 +528,7 @@ defineEmits<{
   'test-openrouter': []
   'test-ollama': []
   'test-lmstudio': []
+  'test-bedrock': []
   'reset-tests': []
 }>()
 </script>

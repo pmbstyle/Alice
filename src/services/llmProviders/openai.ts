@@ -2,6 +2,7 @@ import type OpenAI from 'openai'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { getOpenAIClient } from '../apiClients'
 import { buildToolsForProvider } from './tools'
+import { buildAssistantSystemPrompt } from '../../prompts/systemPrompt'
 
 export const listOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
   const client = getOpenAIClient()
@@ -52,7 +53,9 @@ export const createOpenAIResponse = async (
   const params: OpenAI.Responses.ResponseCreateParams = {
     model: settings.assistantModel || 'gpt-4.1-mini',
     input: input,
-    instructions: customInstructions || settings.assistantSystemPrompt,
+    instructions:
+      customInstructions ||
+      buildAssistantSystemPrompt(settings.assistantSystemPrompt),
     ...(isOModel || settings.assistantModel.startsWith('gpt-5')
       ? {}
       : {

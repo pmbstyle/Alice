@@ -16,6 +16,7 @@ import { createTurnManager } from '../modules/conversation/turnManager'
 import { createReminderHandler } from '../modules/conversation/reminderHandler'
 import { createChatOrchestrator } from '../modules/conversation/chatOrchestrator'
 import { createBackendService } from '../modules/conversation/backendService'
+import { buildAssistantSystemPrompt } from '../prompts/systemPrompt'
 import type {
   ToolCallHandlerDependencies,
 } from '../modules/conversation/types'
@@ -294,6 +295,8 @@ export const useConversationStore = defineStore('conversation', () => {
   const ttsAbortController = ref<AbortController | null>(null)
   const llmAbortController = ref<AbortController | null>(null)
   const ephemeralEmotionalContext = ref<string | null>(null)
+  const getComposedSystemPrompt = () =>
+    buildAssistantSystemPrompt(settingsStore.config.assistantSystemPrompt)
 
   const chatWithCleanHistory = async () => {
     console.log(
@@ -519,7 +522,7 @@ export const useConversationStore = defineStore('conversation', () => {
         currentResponseId.value = id
       },
       getAiProvider: () => settingsStore.config.aiProvider,
-      getAssistantSystemPrompt: () => settingsStore.config.assistantSystemPrompt,
+      getAssistantSystemPrompt: () => getComposedSystemPrompt(),
       getEphemeralEmotionalContext: () => ephemeralEmotionalContext.value,
       clearEphemeralEmotionalContext: () => {
         ephemeralEmotionalContext.value = null
@@ -548,7 +551,7 @@ export const useConversationStore = defineStore('conversation', () => {
           input,
           responseId,
           true,
-          settingsStore.config.assistantSystemPrompt,
+          getComposedSystemPrompt(),
           signal
         ),
       createAbortController: () => new AbortController(),
@@ -662,8 +665,7 @@ export const useConversationStore = defineStore('conversation', () => {
         ),
       setAudioState: state => setAudioState(state as AudioState),
       isRecordingRequested: () => isRecordingRequested.value,
-      getAssistantSystemPrompt: () =>
-        settingsStore.config.assistantSystemPrompt,
+      getAssistantSystemPrompt: () => getComposedSystemPrompt(),
       getCurrentResponseId: () => currentResponseId.value,
       setCurrentResponseId: responseId => {
         currentResponseId.value = responseId
@@ -969,7 +971,9 @@ export const useConversationStore = defineStore('conversation', () => {
     }
 
     const finalApiInput = [...contextMessages, ...constructedApiInput]
-    const finalInstructions = settingsStore.config.assistantSystemPrompt
+    const finalInstructions = buildAssistantSystemPrompt(
+      settingsStore.config.assistantSystemPrompt
+    )
 
     const assistantMessagePlaceholder: ChatMessage = {
       role: 'assistant',

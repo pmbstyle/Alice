@@ -128,15 +128,34 @@ export const createOpenRouterResponse = async (
     })
     .filter(msg => msg.content.trim())
 
-  if (customInstructions && !messages.some(msg => msg.role === 'system')) {
+  if (customInstructions) {
     const openrouterSystemPrompt =
       customInstructions +
       '\n\nIMPORTANT: You have built-in web search capabilities. When you need to search the web or get current information, you can directly search without using any tools. Do NOT use open_path or other tools for web searches.'
 
-    messages.unshift({
-      role: 'system',
-      content: openrouterSystemPrompt,
-    })
+    const systemIndex = messages.findIndex(msg => msg.role === 'system')
+    if (systemIndex === -1) {
+      messages.unshift({
+        role: 'system',
+        content: openrouterSystemPrompt,
+      })
+    } else {
+      const existing = messages[systemIndex]?.content?.trim() || ''
+      const hasCustom =
+        customInstructions.trim() &&
+        existing.includes(customInstructions.trim())
+      const hasNote = existing.includes(
+        'IMPORTANT: You have built-in web search capabilities.'
+      )
+      let merged = existing
+      if (!hasCustom) {
+        merged = merged ? `${customInstructions}\n\n${merged}` : customInstructions
+      }
+      if (!hasNote) {
+        merged = `${merged}\n\nIMPORTANT: You have built-in web search capabilities. When you need to search the web or get current information, you can directly search without using any tools. Do NOT use open_path or other tools for web searches.`
+      }
+      messages[systemIndex].content = merged.trim()
+    }
   }
 
   const openrouterModel = settings.assistantModel || 'gpt-4.1-mini'

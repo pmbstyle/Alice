@@ -3,9 +3,9 @@ import { defineStore } from 'pinia'
 import { useConversationStore } from './conversationStore'
 import { useGeneralStore } from './generalStore'
 import { reinitializeClients } from '../services/apiClients'
-import defaultSystemPromptFromMD from '../../docs/systemPrompt.md?raw'
+import { DEFAULT_PERSONA_PROMPT } from '../prompts/defaultPersonaPrompt'
 
-export const DEFAULT_ASSISTANT_SYSTEM_PROMPT = defaultSystemPromptFromMD
+export const DEFAULT_ASSISTANT_PERSONA_PROMPT = DEFAULT_PERSONA_PROMPT
 
 const DEFAULT_SUMMARIZATION_SYSTEM_PROMPT = `You are an expert conversation summarizer.
 Your task is to create a **concise and brief** factual summary of the following conversation segment.
@@ -107,7 +107,7 @@ const defaultSettings: AliceSettings = {
   lmStudioBaseUrl: 'http://localhost:1234',
 
   assistantModel: 'gpt-4.1-mini',
-  assistantSystemPrompt: defaultSystemPromptFromMD,
+  assistantSystemPrompt: DEFAULT_PERSONA_PROMPT,
   assistantTemperature: 0.7,
   assistantTopP: 1.0,
   assistantReasoningEffort: 'medium',
@@ -174,7 +174,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   lmStudioBaseUrl: 'LM Studio Base URL',
 
   assistantModel: 'Assistant Model',
-  assistantSystemPrompt: 'Assistant System Prompt',
+  assistantSystemPrompt: 'Assistant Persona Prompt',
   assistantTemperature: 'Assistant Temperature',
   assistantTopP: 'Assistant Top P',
   assistantReasoningEffort: 'Reasoning Effort',

@@ -79,7 +79,7 @@
         <div>
           <div class="flex justify-between items-center mb-1">
             <label for="assistant-system-prompt" class="block text-sm"
-              >Assistant System Prompt</label
+              >Assistant Persona Prompt</label
             >
             <button
               type="button"
@@ -94,7 +94,7 @@
             v-model="currentSettings.assistantSystemPrompt"
             rows="8"
             class="textarea textarea-bordered w-full focus:textarea-primary h-48"
-            placeholder="You are a helpful AI assistant..."
+            placeholder="Describe Alice's voice, tone, and personality..."
           ></textarea>
         </div>
 

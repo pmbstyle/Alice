@@ -219,7 +219,7 @@ import { useSettingsStore, type AliceSettings } from '../stores/settingsStore'
 import { useConversationStore } from '../stores/conversationStore'
 import { heartIcon } from '../utils/assetsImport'
 import { PREDEFINED_OPENAI_TOOLS } from '../utils/assistantTools'
-import { DEFAULT_ASSISTANT_SYSTEM_PROMPT } from '../stores/settingsStore'
+import { DEFAULT_ASSISTANT_PERSONA_PROMPT } from '../stores/settingsStore'
 import { useHotkeyRecording } from '../composables/useHotkeyRecording'
 import { useGoogleAuth } from '../composables/useGoogleAuth'
 import CoreSettingsTab from './settings/CoreSettingsTab.vue'
@@ -361,7 +361,7 @@ function getToolInfo(name: string): { displayName: string; description: string }
 }
 
 const resetSystemPrompt = () => {
-  currentSettings.value.assistantSystemPrompt = DEFAULT_ASSISTANT_SYSTEM_PROMPT
+  currentSettings.value.assistantSystemPrompt = DEFAULT_ASSISTANT_PERSONA_PROMPT
 }
 
 const startRecordingHotkey = (settingKey: keyof AliceSettings) => {

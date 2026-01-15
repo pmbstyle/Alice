@@ -1,0 +1,59 @@
+syntax = "proto3";
+
+package piper.v1;
+
+option go_package = "github.com/pmbstyle/alice/backend/proto/piper/v1;piperv1";
+
+// PiperService provides text-to-speech synthesis via gRPC
+service PiperService {
+  // HealthCheck verifies the service is running and models are loaded
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // Synthesize converts text to speech audio
+  rpc Synthesize(SynthesizeRequest) returns (SynthesizeResponse);
+
+  // GetVoices returns the list of available voice models
+  rpc GetVoices(GetVoicesRequest) returns (GetVoicesResponse);
+}
+
+// HealthCheckRequest is empty as no parameters are needed
+message HealthCheckRequest {}
+
+// HealthCheckResponse contains service status information
+message HealthCheckResponse {
+  string status = 1;                    // "healthy" or "unhealthy"
+  bool model_loaded = 2;                // True if at least one model is available
+  repeated string available_voices = 3; // List of loaded voice names
+}
+
+// SynthesizeRequest contains text and voice parameters for synthesis
+message SynthesizeRequest {
+  string text = 1;   // Text to synthesize (required)
+  string voice = 2;  // Voice model name (e.g., "en_US-amy-medium")
+  float speed = 3;   // Playback speed multiplier (1.0 = normal, default)
+}
+
+// SynthesizeResponse contains the generated audio data
+message SynthesizeResponse {
+  bytes audio_data = 1;  // WAV format audio bytes
+  int32 sample_rate = 2; // Sample rate in Hz (typically 22050)
+  int64 duration_ms = 3; // Processing duration in milliseconds
+}
+
+// GetVoicesRequest is empty as no parameters are needed
+message GetVoicesRequest {}
+
+// Voice represents metadata for a single voice model
+message Voice {
+  string name = 1;        // Voice identifier (e.g., "en_US-amy-medium")
+  string language = 2;    // Language code (e.g., "en-US", "es-MX")
+  string gender = 3;      // "male" or "female"
+  string quality = 4;     // "x_low", "low", "medium", "high"
+  int32 sample_rate = 5;  // Sample rate in Hz
+  string description = 6; // Human-readable description
+}
+
+// GetVoicesResponse contains the list of available voices
+message GetVoicesResponse {
+  repeated Voice voices = 1; // List of all available voice models
+}

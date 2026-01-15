@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"alice-backend/internal/config"
+	grpcPiper "alice-backend/internal/grpc/piper"
 	grpcWhisper "alice-backend/internal/grpc/whisper"
 	"alice-backend/internal/minilm"
 	"alice-backend/internal/piper"
@@ -16,12 +17,13 @@ import (
 
 // Manager coordinates all AI services
 type Manager struct {
-	config           *config.Config
-	sttService       *whisper.STTService
-	ttsService       *piper.TTSService
-	embeddingService *minilm.OnnxEmbeddingService
+	config            *config.Config
+	sttService        *whisper.STTService
+	ttsService        *piper.TTSService
+	embeddingService  *minilm.OnnxEmbeddingService
 	whisperGRPCClient *grpcWhisper.Client
-	mu               sync.RWMutex
+	piperGRPCClient   *grpcPiper.Client
+	mu                sync.RWMutex
 }
 
 // NewManager creates a new model manager
@@ -107,6 +109,29 @@ func (m *Manager) Initialize(ctx context.Context) error {
 		}
 
 		m.ttsService = piper.NewTTSService(ttsConfig)
+
+		// Try to connect to Piper gRPC service if enabled
+		if os.Getenv("PIPER_USE_GRPC") == "true" {
+			grpcAddr := os.Getenv("PIPER_GRPC_ADDR")
+			if grpcAddr == "" {
+				grpcAddr = "localhost:50052"
+			}
+
+			log.Printf("Attempting to connect to Piper gRPC service at %s...", grpcAddr)
+			m.piperGRPCClient = grpcPiper.NewClient(grpcAddr)
+
+			if err := m.piperGRPCClient.ConnectWithRetry(ctx, 5); err != nil {
+				log.Printf("Warning: Failed to connect to Piper gRPC service: %v", err)
+				log.Println("TTS service will use CLI fallback mode")
+			} else {
+				// Set the gRPC client in the TTS service
+				m.ttsService.SetGRPCClient(m.piperGRPCClient)
+				log.Println("✓ Successfully connected to Piper gRPC service")
+			}
+		} else {
+			log.Println("Piper gRPC mode not enabled, using CLI mode")
+		}
+
 		if err := m.ttsService.Initialize(ctx); err != nil {
 			return fmt.Errorf("failed to initialize TTS service: %w", err)
 		}
@@ -167,6 +192,13 @@ func (m *Manager) Shutdown(ctx context.Context) error {
 	if m.whisperGRPCClient != nil {
 		if err := m.whisperGRPCClient.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("Whisper gRPC client close error: %w", err))
+		}
+	}
+
+	// Close Piper gRPC client if connected
+	if m.piperGRPCClient != nil {
+		if err := m.piperGRPCClient.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("Piper gRPC client close error: %w", err))
 		}
 	}
 

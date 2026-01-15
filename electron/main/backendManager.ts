@@ -9,6 +9,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 import axios from 'axios'
 import { fileURLToPath } from 'node:url'
+import { piperServiceManager } from './piperServiceManager'
 
 // ES modules compatibility
 const __filename = fileURLToPath(import.meta.url)
@@ -126,15 +127,34 @@ export class BackendManager {
 
       console.log('[BackendManager] Using backend at:', backendPath)
 
+      // Start Piper gRPC service before backend
+      console.log('[BackendManager] Starting Piper gRPC service...')
+      const piperStarted = await piperServiceManager.start()
+      if (piperStarted) {
+        console.log('[BackendManager] ✓ Piper gRPC service started successfully')
+      } else {
+        console.warn('[BackendManager] Piper gRPC service failed to start, TTS will use CLI fallback')
+      }
+
+      // Add bin directory to PATH for DLL resolution (ONNX Runtime)
+      const backendDir = path.dirname(backendPath)
+      const binDir = path.join(backendDir, 'bin')
+      const pathSeparator = process.platform === 'win32' ? ';' : ':'
+      const updatedPath = `${binDir}${pathSeparator}${process.env.PATH || ''}`
+
       // Set environment variables for Go backend
       const env = {
         ...process.env,
+        PATH: updatedPath,
         ALICE_HOST: this.config.host,
         ALICE_PORT: this.config.port.toString(),
         ALICE_LOG_LEVEL: 'INFO',
         ALICE_ENABLE_STT: 'true',
         ALICE_ENABLE_TTS: 'true', // Enable TTS
         ALICE_ENABLE_EMBEDDINGS: 'true',
+        // Enable Piper gRPC mode if service started successfully
+        PIPER_USE_GRPC: piperStarted ? 'true' : 'false',
+        PIPER_GRPC_ADDR: piperStarted ? 'localhost:50052' : '',
       }
 
       // Spawn Go process
@@ -224,6 +244,11 @@ export class BackendManager {
     this.isShuttingDown = false
     this.startupPromise = null
     console.log('[BackendManager] Go AI backend stopped')
+
+    // Stop Piper gRPC service
+    console.log('[BackendManager] Stopping Piper gRPC service...')
+    await piperServiceManager.stop()
+    console.log('[BackendManager] ✓ Piper gRPC service stopped')
 
     // Close log stream
     if (this.logStream) {

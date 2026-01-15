@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package whisper.v1;
+
+option go_package = "github.com/pmbstyle/alice/backend/proto/whisper/v1;whisperv1";
+
+// WhisperService provides speech-to-text transcription capabilities
+service WhisperService {
+  // HealthCheck returns the health status of the service
+  rpc HealthCheck(HealthCheckRequest) returns (HealthCheckResponse);
+
+  // Transcribe converts audio data to text
+  rpc Transcribe(TranscribeRequest) returns (TranscribeResponse);
+}
+
+// HealthCheckRequest is the request for checking service health
+message HealthCheckRequest {}
+
+// HealthCheckResponse contains the service health status
+message HealthCheckResponse {
+  // status indicates if the service is healthy
+  string status = 1;
+
+  // model_loaded indicates if the Whisper model is loaded in memory
+  bool model_loaded = 2;
+
+  // model_path is the path to the loaded model
+  string model_path = 3;
+}
+
+// TranscribeRequest contains audio data to be transcribed
+message TranscribeRequest {
+  // audio_data is the raw audio bytes (PCM 16-bit, 16kHz, mono)
+  bytes audio_data = 1;
+
+  // language is the optional language code (e.g., "en", "es", "fr")
+  // If empty, auto-detection will be used
+  string language = 2;
+
+  // sample_rate is the audio sample rate in Hz (default: 16000)
+  int32 sample_rate = 3;
+}
+
+// TranscribeResponse contains the transcription result
+message TranscribeResponse {
+  // text is the transcribed text
+  string text = 1;
+
+  // language_detected is the detected language code
+  string language_detected = 2;
+
+  // confidence is the transcription confidence score (0.0 to 1.0)
+  float confidence = 3;
+
+  // duration_ms is the processing time in milliseconds
+  int64 duration_ms = 4;
+}

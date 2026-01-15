@@ -1083,6 +1083,94 @@ function setupFFmpegForUser() {
   }
 }
 
+/**
+ * Build Whisper gRPC service
+ */
+async function buildWhisperService(platform, isWindows) {
+  // Determine output filename
+  const outputName = isWindows ? 'whisper-service.exe' : 'whisper-service'
+  const outputPath = path.join('..', 'resources', 'backend', outputName)
+
+  // Build command
+  const buildCmd = `cd backend && go build -ldflags="-s -w" -o "${outputPath}" ./cmd/whisper-service`
+
+  console.log(`Building Whisper gRPC service for ${platform}...`)
+  console.log(`Command: ${buildCmd}`)
+
+  try {
+    execSync(buildCmd, {
+      stdio: 'inherit',
+      shell: true,
+    })
+
+    // Verify the binary was created
+    const finalPath = path.join(
+      process.cwd(),
+      'resources',
+      'backend',
+      outputName
+    )
+    if (fs.existsSync(finalPath)) {
+      const stats = fs.statSync(finalPath)
+      console.log(
+        `✅ Whisper service built successfully: ${finalPath} (${Math.round(stats.size / 1024 / 1024)}MB)`
+      )
+      return true
+    } else {
+      console.error(`❌ Whisper service binary not found at: ${finalPath}`)
+      return false
+    }
+  } catch (error) {
+    console.error('Error building Whisper service:', error)
+    console.error('Whisper gRPC service will not be available - falling back to CLI mode')
+    return false
+  }
+}
+
+/**
+ * Build Piper gRPC service
+ */
+async function buildPiperService(platform, isWindows) {
+  // Determine output filename
+  const outputName = isWindows ? 'piper-service.exe' : 'piper-service'
+  const outputPath = path.join('..', 'resources', 'backend', outputName)
+
+  // Build command
+  const buildCmd = `cd backend && go build -ldflags="-s -w" -o "${outputPath}" ./cmd/piper-service`
+
+  console.log(`Building Piper gRPC service for ${platform}...`)
+  console.log(`Command: ${buildCmd}`)
+
+  try {
+    execSync(buildCmd, {
+      stdio: 'inherit',
+      shell: true,
+    })
+
+    // Verify the binary was created
+    const finalPath = path.join(
+      process.cwd(),
+      'resources',
+      'backend',
+      outputName
+    )
+    if (fs.existsSync(finalPath)) {
+      const stats = fs.statSync(finalPath)
+      console.log(
+        `✅ Piper service built successfully: ${finalPath} (${Math.round(stats.size / 1024 / 1024)}MB)`
+      )
+      return true
+    } else {
+      console.error(`❌ Piper service binary not found at: ${finalPath}`)
+      return false
+    }
+  } catch (error) {
+    console.error('Error building Piper service:', error)
+    console.error('Piper gRPC service will not be available - falling back to CLI mode')
+    return false
+  }
+}
+
 async function buildGoBackend() {
   const platform = os.platform()
   const isWindows = platform === 'win32'
@@ -1121,6 +1209,14 @@ async function buildGoBackend() {
       console.log(
         `Go backend built successfully: ${finalPath} (${Math.round(stats.size / 1024 / 1024)}MB)`
       )
+
+      // Build Whisper gRPC service
+      console.log('\nBuilding Whisper gRPC service...')
+      await buildWhisperService(platform, isWindows)
+
+      // Build Piper gRPC service
+      console.log('\nBuilding Piper gRPC service...')
+      await buildPiperService(platform, isWindows)
 
       // Setup ffmpeg for out-of-box experience
       console.log('\nSetting up ffmpeg for out-of-box transcription...')

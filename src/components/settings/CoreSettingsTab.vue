@@ -21,6 +21,7 @@
             <option value="openrouter">OpenRouter</option>
             <option value="ollama">Ollama (Local)</option>
             <option value="lm-studio">LM Studio (Local)</option>
+            <option value="aws-bedrock">AWS Bedrock</option>
           </select>
         </div>
         <div>
@@ -147,6 +148,128 @@
             URL where your LM Studio server is running.
           </p>
         </div>
+      </div>
+    </fieldset>
+
+    <!-- AWS Bedrock Configuration -->
+    <fieldset
+      v-if="currentSettings.aiProvider === 'aws-bedrock'"
+      class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+    >
+      <legend class="fieldset-legend">AWS Bedrock Configuration</legend>
+      <div class="space-y-4 p-2">
+        <div class="alert alert-info text-sm">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            class="stroke-current shrink-0 w-5 h-5"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+            ></path>
+          </svg>
+          <div>
+            <p>
+              AWS Bedrock provides access to Claude models. Get your credentials from the
+              <a
+                href="https://console.aws.amazon.com/iam/home#/security_credentials"
+                target="_blank"
+                class="link"
+                >AWS IAM Console</a
+              >.
+            </p>
+            <p class="mt-2 text-xs">
+              Required IAM permissions: <code class="text-xs">bedrock:InvokeModel</code>,
+              <code class="text-xs">bedrock:InvokeModelWithResponseStream</code>,
+              <code class="text-xs">bedrock:ListFoundationModels</code>
+            </p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="aws-access-key" class="block mb-1 text-sm"
+              >AWS Access Key ID *</label
+            >
+            <input
+              id="aws-access-key"
+              type="password"
+              v-model="currentSettings.awsAccessKeyId"
+              class="input focus:outline-none w-full"
+              autocomplete="new-password"
+              placeholder="AKIA..."
+            />
+            <p class="text-xs text-gray-400 mt-1">
+              Your AWS IAM user access key ID.
+            </p>
+          </div>
+
+          <div>
+            <label for="aws-secret-key" class="block mb-1 text-sm"
+              >AWS Secret Access Key *</label
+            >
+            <input
+              id="aws-secret-key"
+              type="password"
+              v-model="currentSettings.awsSecretAccessKey"
+              class="input focus:outline-none w-full"
+              autocomplete="new-password"
+              placeholder="Enter your secret key"
+            />
+            <p class="text-xs text-gray-400 mt-1">
+              Your AWS IAM user secret access key.
+            </p>
+          </div>
+
+          <div>
+            <label for="aws-session-token" class="block mb-1 text-sm"
+              >AWS Session Token (Optional)</label
+            >
+            <input
+              id="aws-session-token"
+              type="password"
+              v-model="currentSettings.awsSessionToken"
+              class="input focus:outline-none w-full"
+              autocomplete="new-password"
+              placeholder="Optional for temporary credentials"
+            />
+            <p class="text-xs text-gray-400 mt-1">
+              Only needed for temporary credentials (STS).
+            </p>
+          </div>
+
+          <div>
+            <label for="aws-region" class="block mb-1 text-sm">AWS Region *</label>
+            <select
+              id="aws-region"
+              v-model="currentSettings.awsRegion"
+              class="select select-bordered w-full focus:select-primary"
+            >
+              <option value="us-east-1">US East (N. Virginia)</option>
+              <option value="us-west-2">US West (Oregon)</option>
+              <option value="ap-southeast-1">Asia Pacific (Singapore)</option>
+              <option value="ap-northeast-1">Asia Pacific (Tokyo)</option>
+              <option value="eu-central-1">Europe (Frankfurt)</option>
+              <option value="eu-west-1">Europe (Ireland)</option>
+              <option value="eu-west-2">Europe (London)</option>
+            </select>
+            <p class="text-xs text-gray-400 mt-1">
+              Select a region where Bedrock is available.
+            </p>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset
+      class="fieldset bg-gray-900/90 border-blue-500/50 rounded-box w-full border p-4"
+    >
+      <legend class="fieldset-legend">Other API Keys</legend>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 p-2">
         <div v-if="currentSettings.sttProvider === 'groq'">
           <label for="groq-key" class="block mb-1 text-sm"
             >Groq API Key (for STT) *</label
@@ -265,6 +388,199 @@
               The word that will activate voice recording. Use simple, common
               words for better recognition.
             </p>
+          </div>
+          <div v-show="currentSettings.localSttEnabled" class="mt-4">
+            <label for="stt-wakeword-sensitivity" class="block mb-2 text-sm"
+              >Wake Word Sensitivity</label
+            >
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-400 min-w-[40px]">Strict</span>
+              <input
+                id="stt-wakeword-sensitivity"
+                type="range"
+                min="0.5"
+                max="0.95"
+                step="0.05"
+                v-model.number="currentSettings.localSttWakeWordSensitivity"
+                class="range range-primary range-sm flex-1"
+                @input="
+                  e =>
+                    $emit(
+                      'update:setting',
+                      'localSttWakeWordSensitivity',
+                      parseFloat(e.target.value)
+                    )
+                "
+              />
+              <span class="text-xs text-gray-400 min-w-[50px]">Flexible</span>
+            </div>
+            <div class="flex justify-between items-center mt-2">
+              <span class="text-xs font-semibold text-blue-400">
+                Current: {{ (currentSettings.localSttWakeWordSensitivity * 100).toFixed(0) }}%
+              </span>
+              <span class="text-xs text-gray-500">
+                Catches variations like "Eloise" → "Alice"
+              </span>
+            </div>
+            <div class="mt-2 p-2 bg-gray-800/50 rounded text-xs text-gray-400">
+              <div class="font-semibold text-gray-300 mb-1">💡 Recommended: 75%</div>
+              <div class="space-y-1">
+                <div>• <strong>85-95%:</strong> Exact or near-exact match only</div>
+                <div>• <strong>70-85%:</strong> Catches common variations (recommended)</div>
+                <div>• <strong>50-70%:</strong> Very flexible, may have false positives</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </fieldset>
+
+    <!-- VAD Noise Filtering Section -->
+    <fieldset
+      class="fieldset bg-gray-900/90 border-orange-500/50 rounded-box w-full border p-4"
+    >
+      <legend class="fieldset-legend">
+        🔇 Voice Activity Detection & Noise Filtering
+      </legend>
+      <div class="p-2">
+        <div class="mb-4 p-3 bg-orange-900/20 border border-orange-500/30 rounded-lg">
+          <div class="flex items-start gap-2">
+            <span class="text-orange-400 text-xl">⚠️</span>
+            <div class="text-xs text-gray-300">
+              <strong class="text-orange-400">Noise Filtering Settings</strong><br>
+              Adjust these settings if background noise (kids talking, pets, TV) is triggering Alice unintentionally.
+              Higher values = stricter filtering = fewer false triggers.
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-4">
+          <!-- VAD Speech Threshold -->
+          <div>
+            <label for="vad-speech-threshold" class="block mb-2 text-sm font-semibold"
+              >VAD Speech Sensitivity</label
+            >
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-400 min-w-[60px]">Sensitive</span>
+              <input
+                id="vad-speech-threshold"
+                type="range"
+                min="0.3"
+                max="0.9"
+                step="0.05"
+                v-model.number="currentSettings.vadSpeechThreshold"
+                class="range range-warning range-sm flex-1"
+                @input="
+                  e =>
+                    $emit(
+                      'update:setting',
+                      'vadSpeechThreshold',
+                      parseFloat(e.target.value)
+                    )
+                "
+              />
+              <span class="text-xs text-gray-400 min-w-[60px]">Strict</span>
+            </div>
+            <div class="flex justify-between items-center mt-2">
+              <span class="text-xs font-semibold text-orange-400">
+                Current: {{ (currentSettings.vadSpeechThreshold * 100).toFixed(0) }}%
+              </span>
+              <span class="text-xs text-gray-500">
+                Higher = ignores more background sounds
+              </span>
+            </div>
+            <div class="mt-2 text-xs text-gray-400">
+              <strong>Recommended for noisy environments:</strong> 60-70%
+            </div>
+          </div>
+
+          <!-- Minimum Speech Duration -->
+          <div>
+            <label for="vad-min-duration" class="block mb-2 text-sm font-semibold"
+              >Minimum Speech Duration</label
+            >
+            <div class="flex items-center gap-3">
+              <input
+                id="vad-min-duration"
+                type="range"
+                min="200"
+                max="2000"
+                step="100"
+                v-model.number="currentSettings.vadMinSpeechDuration"
+                class="range range-warning range-sm flex-1"
+                @input="
+                  e =>
+                    $emit(
+                      'update:setting',
+                      'vadMinSpeechDuration',
+                      parseInt((e.target as HTMLInputElement).value)
+                    )
+                "
+              />
+            </div>
+            <div class="flex justify-between items-center mt-2">
+              <span class="text-xs font-semibold text-orange-400">
+                Current: {{ currentSettings.vadMinSpeechDuration }}ms
+              </span>
+              <span class="text-xs text-gray-500">
+                Ignores speech shorter than this
+              </span>
+            </div>
+            <div class="mt-2 text-xs text-gray-400">
+              <strong>Recommended for filtering kids' brief shouts:</strong> 800-1200ms
+            </div>
+          </div>
+
+          <!-- Minimum Audio Energy -->
+          <div>
+            <label for="vad-min-energy" class="block mb-2 text-sm font-semibold"
+              >Minimum Audio Volume</label
+            >
+            <div class="flex items-center gap-3">
+              <span class="text-xs text-gray-400 min-w-[40px]">Quiet</span>
+              <input
+                id="vad-min-energy"
+                type="range"
+                min="0.01"
+                max="0.15"
+                step="0.01"
+                v-model.number="currentSettings.vadMinAudioEnergy"
+                class="range range-warning range-sm flex-1"
+                @input="
+                  e =>
+                    $emit(
+                      'update:setting',
+                      'vadMinAudioEnergy',
+                      parseFloat(e.target.value)
+                    )
+                "
+              />
+              <span class="text-xs text-gray-400 min-w-[40px]">Loud</span>
+            </div>
+            <div class="flex justify-between items-center mt-2">
+              <span class="text-xs font-semibold text-orange-400">
+                Current: {{ (currentSettings.vadMinAudioEnergy * 100).toFixed(1) }}%
+              </span>
+              <span class="text-xs text-gray-500">
+                Ignores sounds quieter than this
+              </span>
+            </div>
+            <div class="mt-2 text-xs text-gray-400">
+              <strong>Recommended for distant/background voices:</strong> 0.05-0.08
+            </div>
+          </div>
+
+          <!-- Reset to Defaults -->
+          <div class="pt-2 border-t border-gray-700">
+            <button
+              @click="resetVadDefaults"
+              class="btn btn-sm btn-outline btn-warning"
+            >
+              Reset to Defaults
+            </button>
+            <span class="ml-2 text-xs text-gray-500">
+              Default: Threshold 50%, Duration 500ms, Energy 2%
+            </span>
           </div>
         </div>
       </div>
@@ -1002,6 +1318,12 @@ const removeRagDocuments = async (pathItem: string) => {
     isIndexingRag.value = false
     await refreshRagStats()
   }
+}
+
+const resetVadDefaults = () => {
+  emit('update:setting', 'vadSpeechThreshold', 0.5)
+  emit('update:setting', 'vadMinSpeechDuration', 500)
+  emit('update:setting', 'vadMinAudioEnergy', 0.02)
 }
 
 </script>

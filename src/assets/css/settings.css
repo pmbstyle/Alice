@@ -1,3 +1,52 @@
 .input-field {
   @apply w-full p-2 bg-gray-700 border border-gray-600 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-colors;
 }
+
+/* Fix dropdown option text visibility */
+select option {
+  background-color: #1f2937 !important;
+  color: #ffffff !important;
+}
+
+select {
+  background-color: #1f2937 !important;
+  color: #ffffff !important;
+}
+
+/* Fix input text visibility */
+input[type="text"],
+input[type="password"],
+input[type="url"],
+input[type="email"],
+input[type="number"],
+textarea {
+  background-color: #1f2937 !important;
+  color: #ffffff !important;
+}
+
+/* Fix placeholder text */
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af !important;
+  opacity: 0.7;
+}
+
+/* Fix fieldset legend text visibility */
+.fieldset-legend,
+fieldset legend,
+legend {
+  color: #ffffff !important;
+}
+
+/* Fix tab text visibility */
+.tab,
+[role="tab"] {
+  color: #d1d5db !important;
+}
+
+/* Fix selected tab text */
+.tab-active,
+.tab[aria-selected="true"],
+[role="tab"][aria-selected="true"] {
+  color: #1f2937 !important;
+}

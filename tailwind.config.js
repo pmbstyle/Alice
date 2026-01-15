@@ -5,4 +5,8 @@ export default {
     extend: {},
   },
   plugins: [require('daisyui')],
+  daisyui: {
+    themes: ['dark'], // Force dark theme
+    darkTheme: 'dark', // Set dark as the default
+  },
 }

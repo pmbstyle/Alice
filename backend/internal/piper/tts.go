@@ -21,6 +21,13 @@ import (
 	"alice-backend/internal/embedded"
 )
 
+// PiperGRPCClient is an interface for the Piper gRPC client (for dependency injection)
+type PiperGRPCClient interface {
+	Synthesize(ctx context.Context, text, voice string, speed float32) ([]byte, error)
+	IsConnected() bool
+	HealthCheck(ctx context.Context) (bool, error)
+}
+
 // TTSService provides text-to-speech functionality using Piper
 type TTSService struct {
 	mu           sync.RWMutex
@@ -30,6 +37,8 @@ type TTSService struct {
 	info         *ServiceInfo
 	defaultVoice string
 	assetManager *embedded.AssetManager
+	grpcClient   PiperGRPCClient // gRPC client for service mode
+	useGRPC      bool            // Flag to enable gRPC mode
 }
 
 // Config holds TTS configuration
@@ -113,7 +122,8 @@ func (s *TTSService) Initialize(ctx context.Context) error {
 }
 
 func (s *TTSService) loadVoices() {
-	voices := []*Voice{
+	// Define all available voices (metadata only)
+	allVoices := []*Voice{
 		{
 			Name:        "en_US-amy-medium",
 			Language:    "en-US",
@@ -169,6 +179,14 @@ func (s *TTSService) loadVoices() {
 			Quality:     "medium",
 			SampleRate:  22050,
 			Description: "Teresa - Spanish MX female voice (Piper)",
+		},
+		{
+			Name:        "es_MX-laura-high",
+			Language:    "es-MX",
+			Gender:      "female",
+			Quality:     "high",
+			SampleRate:  22050,
+			Description: "Laura - Spanish MX female voice (Piper)",
 		},
 		{
 			Name:        "fr_FR-siwis-medium",
@@ -306,18 +324,62 @@ func (s *TTSService) loadVoices() {
 		},
 	}
 
-	s.voices = make(map[string]*Voice)
-	s.info.Voices = voices
-
-	for _, voice := range voices {
-		s.voices[voice.Name] = voice
+	// Check which voices have models available (installed)
+	modelDir := "models/piper"
+	if s.config.ModelPath != "" {
+		modelDir = s.config.ModelPath
 	}
+
+	s.voices = make(map[string]*Voice)
+	installedVoices := []*Voice{}
+
+	for _, voice := range allVoices {
+		// Check if model files exist
+		modelFile := filepath.Join(modelDir, voice.Name+".onnx")
+		configFile := filepath.Join(modelDir, voice.Name+".onnx.json")
+
+		// Check embedded assets
+		embeddedModel := s.assetManager.GetVoiceModelPath(voice.Name)
+		embeddedConfig := embeddedModel + ".json"
+
+		isInstalled := false
+		if s.assetManager.IsAssetAvailable(embeddedModel) && s.assetManager.IsAssetAvailable(embeddedConfig) {
+			isInstalled = true
+			log.Printf("Found embedded voice: %s", voice.Name)
+		} else if _, err := os.Stat(modelFile); err == nil {
+			if _, err := os.Stat(configFile); err == nil {
+				isInstalled = true
+				log.Printf("Found installed voice: %s", voice.Name)
+			}
+		}
+
+		// Always register all voices in the map (for UI), but mark which are ready
+		s.voices[voice.Name] = voice
+
+		// Only add to installed list if model exists
+		if isInstalled {
+			installedVoices = append(installedVoices, voice)
+		}
+	}
+
+	s.info.Voices = installedVoices // Only show installed voices in service info
+	log.Printf("Registered %d voices (%d installed, %d available for download)",
+		len(s.voices), len(installedVoices), len(allVoices)-len(installedVoices))
 }
 
 func (s *TTSService) IsReady() bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.ready
+}
+
+// SetGRPCClient sets the gRPC client for the TTS service
+func (s *TTSService) SetGRPCClient(client PiperGRPCClient) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.grpcClient = client
+	s.useGRPC = true
+	log.Println("[TTSService] gRPC client enabled")
 }
 
 func (s *TTSService) GetVoices() []*Voice {
@@ -340,6 +402,108 @@ func (s *TTSService) GetInfo() *ServiceInfo {
 	return &info
 }
 
+// synthesizeChunked splits long text into chunks and synthesizes each chunk separately
+func (s *TTSService) synthesizeChunked(ctx context.Context, text, voice string, maxChunkSize int) ([]byte, error) {
+	chunks := splitTextIntoChunks(text, maxChunkSize)
+	log.Printf("[TTSService] Split text into %d chunks", len(chunks))
+
+	var allAudioData []byte
+	wavHeaderSize := 44
+
+	for i, chunk := range chunks {
+		log.Printf("[TTSService] Synthesizing chunk %d/%d (%d chars)", i+1, len(chunks), len(chunk))
+
+		// Synthesize this chunk
+		var chunkAudio []byte
+		var err error
+
+		// Try gRPC first if available
+		s.mu.RLock()
+		useGRPC := s.useGRPC && s.grpcClient != nil && s.grpcClient.IsConnected()
+		s.mu.RUnlock()
+
+		if useGRPC {
+			speed := s.config.Speed
+			if speed == 0 {
+				speed = 1.0
+			}
+			chunkAudio, err = s.grpcClient.Synthesize(ctx, chunk, voice, speed)
+		} else {
+			chunkAudio, err = s.synthesizeWithPiper(ctx, chunk, voice)
+		}
+
+		if err != nil {
+			log.Printf("[TTSService] Failed to synthesize chunk %d: %v", i+1, err)
+			return nil, fmt.Errorf("failed to synthesize chunk %d: %w", i+1, err)
+		}
+
+		// For first chunk, include WAV header
+		if i == 0 {
+			allAudioData = append(allAudioData, chunkAudio...)
+		} else {
+			// For subsequent chunks, skip WAV header and append only audio data
+			if len(chunkAudio) > wavHeaderSize {
+				allAudioData = append(allAudioData, chunkAudio[wavHeaderSize:]...)
+			}
+		}
+	}
+
+	// Update WAV header with correct total size
+	if len(allAudioData) > wavHeaderSize {
+		totalSize := uint32(len(allAudioData) - 8)
+		allAudioData[4] = byte(totalSize)
+		allAudioData[5] = byte(totalSize >> 8)
+		allAudioData[6] = byte(totalSize >> 16)
+		allAudioData[7] = byte(totalSize >> 24)
+
+		dataSize := uint32(len(allAudioData) - wavHeaderSize)
+		allAudioData[40] = byte(dataSize)
+		allAudioData[41] = byte(dataSize >> 8)
+		allAudioData[42] = byte(dataSize >> 16)
+		allAudioData[43] = byte(dataSize >> 24)
+	}
+
+	log.Printf("[TTSService] Chunked synthesis complete: %d total bytes", len(allAudioData))
+	return allAudioData, nil
+}
+
+// splitTextIntoChunks splits text into chunks at sentence boundaries
+func splitTextIntoChunks(text string, maxChunkSize int) []string {
+	// If text is shorter than max, return as-is
+	if len(text) <= maxChunkSize {
+		return []string{text}
+	}
+
+	var chunks []string
+	sentences := strings.Split(text, ". ")
+
+	currentChunk := ""
+	for i, sentence := range sentences {
+		// Add period back except for last sentence
+		if i < len(sentences)-1 {
+			sentence = sentence + "."
+		}
+
+		// If adding this sentence would exceed max, start new chunk
+		if len(currentChunk)+len(sentence) > maxChunkSize && currentChunk != "" {
+			chunks = append(chunks, strings.TrimSpace(currentChunk))
+			currentChunk = sentence
+		} else {
+			if currentChunk != "" {
+				currentChunk += " "
+			}
+			currentChunk += sentence
+		}
+	}
+
+	// Add final chunk
+	if currentChunk != "" {
+		chunks = append(chunks, strings.TrimSpace(currentChunk))
+	}
+
+	return chunks
+}
+
 func (s *TTSService) Synthesize(ctx context.Context, text string, voice string) ([]byte, error) {
 	if !s.IsReady() {
 		return nil, fmt.Errorf("TTS service is not ready")
@@ -356,7 +520,27 @@ func (s *TTSService) Synthesize(ctx context.Context, text string, voice string) 
 		}
 	}
 
+	// Split long text into chunks to avoid buffer limits
+	const maxChunkSize = 500 // characters per chunk
+	if len(text) > maxChunkSize {
+		log.Printf("[TTSService] Text is long (%d chars), splitting into chunks", len(text))
+		return s.synthesizeChunked(ctx, text, voice, maxChunkSize)
+	}
+
+	// Try gRPC mode if available
 	s.mu.RLock()
+	if s.useGRPC && s.grpcClient != nil && s.grpcClient.IsConnected() {
+		s.mu.RUnlock()
+		log.Printf("[TTSService] Using Piper gRPC service for synthesis")
+		speed := s.config.Speed
+		if speed == 0 {
+			speed = 1.0
+		}
+		return s.grpcClient.Synthesize(ctx, text, voice, speed)
+	}
+
+	// Fallback to CLI mode
+	log.Printf("[TTSService] Using Piper CLI mode for synthesis")
 	selectedVoice, exists := s.voices[voice]
 	
 	if !exists {

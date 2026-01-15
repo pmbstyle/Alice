@@ -25,16 +25,28 @@ export interface AliceSettings {
   VITE_GROQ_API_KEY: string
   VITE_GOOGLE_API_KEY: string
   sttProvider: 'openai' | 'groq' | 'google' | 'local'
-  aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
+  aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio' | 'aws-bedrock'
 
   // Local Go Backend STT settings
   localSttModel: string
   localSttLanguage: string
   localSttEnabled: boolean
   localSttWakeWord: string
+  localSttWakeWordSensitivity: number
+
+  // VAD (Voice Activity Detection) settings
+  vadSpeechThreshold: number
+  vadMinSpeechDuration: number
+  vadMinAudioEnergy: number
 
   ollamaBaseUrl: string
   lmStudioBaseUrl: string
+
+  // AWS Bedrock credentials
+  awsAccessKeyId: string
+  awsSecretAccessKey: string
+  awsSessionToken: string
+  awsRegion: string
 
   assistantModel: string
   assistantSystemPrompt: string
@@ -86,7 +98,8 @@ function hasMinimumConfigForOnboarding(config: AliceSettings): boolean {
       config.VITE_OPENAI_API_KEY?.trim() ||
       config.VITE_OPENROUTER_API_KEY?.trim() ||
       config.ollamaBaseUrl?.trim() ||
-      config.lmStudioBaseUrl?.trim()
+      config.lmStudioBaseUrl?.trim() ||
+      config.awsAccessKeyId?.trim()
   )
 }
 
@@ -102,9 +115,20 @@ const defaultSettings: AliceSettings = {
   localSttLanguage: 'auto',
   localSttEnabled: false,
   localSttWakeWord: 'alice',
+  localSttWakeWordSensitivity: 0.75,
+
+  // VAD defaults
+  vadSpeechThreshold: 0.5,        // 0-1, higher = less sensitive (default: 0.5)
+  vadMinSpeechDuration: 500,      // milliseconds, minimum speech length (default: 500ms)
+  vadMinAudioEnergy: 0.02,        // 0-1, minimum audio energy to process (default: 0.02)
 
   ollamaBaseUrl: 'http://localhost:11434',
   lmStudioBaseUrl: 'http://localhost:1234',
+
+  awsAccessKeyId: '',
+  awsSecretAccessKey: '',
+  awsSessionToken: '',
+  awsRegion: 'us-east-1',
 
   assistantModel: 'gpt-4.1-mini',
   assistantSystemPrompt: DEFAULT_PERSONA_PROMPT,
@@ -169,9 +193,20 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   localSttLanguage: 'Language',
   localSttEnabled: 'Enable Wake Word',
   localSttWakeWord: 'Wake Word',
+  localSttWakeWordSensitivity: 'Wake Word Sensitivity',
+
+  // VAD labels
+  vadSpeechThreshold: 'VAD Speech Threshold',
+  vadMinSpeechDuration: 'Minimum Speech Duration (ms)',
+  vadMinAudioEnergy: 'Minimum Audio Energy',
 
   ollamaBaseUrl: 'Ollama Base URL',
   lmStudioBaseUrl: 'LM Studio Base URL',
+
+  awsAccessKeyId: 'AWS Access Key ID',
+  awsSecretAccessKey: 'AWS Secret Access Key',
+  awsSessionToken: 'AWS Session Token (Optional)',
+  awsRegion: 'AWS Region',
 
   assistantModel: 'Assistant Model',
   assistantSystemPrompt: 'Assistant Persona Prompt',
@@ -289,6 +324,7 @@ export const useSettingsStore = defineStore('settings', () => {
       'openrouter',
       'ollama',
       'lm-studio',
+      'aws-bedrock',
     ] as const
     if (!validAIProviders.includes(validated.aiProvider as any)) {
       validated.aiProvider = 'openai'
@@ -355,6 +391,8 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('ollamaBaseUrl')
     } else if (settings.value.aiProvider === 'lm-studio') {
       essentialKeys.push('lmStudioBaseUrl')
+    } else if (settings.value.aiProvider === 'aws-bedrock') {
+      essentialKeys.push('awsAccessKeyId', 'awsSecretAccessKey', 'awsRegion')
     }
 
     if (requiresOpenAIKey(settings.value)) {
@@ -404,6 +442,14 @@ export const useSettingsStore = defineStore('settings', () => {
 
     if (settings.value.aiProvider === 'lm-studio') {
       return !!settings.value.lmStudioBaseUrl?.trim()
+    }
+
+    if (settings.value.aiProvider === 'aws-bedrock') {
+      return !!(
+        settings.value.awsAccessKeyId?.trim() &&
+        settings.value.awsSecretAccessKey?.trim() &&
+        settings.value.awsRegion?.trim()
+      )
     }
 
     return true
@@ -640,6 +686,7 @@ export const useSettingsStore = defineStore('settings', () => {
         | 'openrouter'
         | 'ollama'
         | 'lm-studio'
+        | 'aws-bedrock'
     }
     if (key === 'assistantReasoningEffort') {
       settings.value[key] = value as 'minimal' | 'low' | 'medium' | 'high'
@@ -679,6 +726,10 @@ export const useSettingsStore = defineStore('settings', () => {
       key === 'VITE_OPENROUTER_API_KEY' ||
       key === 'ollamaBaseUrl' ||
       key === 'lmStudioBaseUrl' ||
+      key === 'awsAccessKeyId' ||
+      key === 'awsSecretAccessKey' ||
+      key === 'awsSessionToken' ||
+      key === 'awsRegion' ||
       key === 'aiProvider'
     ) {
       coreOpenAISettingsValid.value = false
@@ -727,6 +778,12 @@ export const useSettingsStore = defineStore('settings', () => {
 
         ollamaBaseUrl: settings.value.ollamaBaseUrl,
         lmStudioBaseUrl: settings.value.lmStudioBaseUrl,
+
+        awsAccessKeyId: settings.value.awsAccessKeyId,
+        awsSecretAccessKey: settings.value.awsSecretAccessKey,
+        awsSessionToken: settings.value.awsSessionToken,
+        awsRegion: settings.value.awsRegion,
+
         assistantModel: settings.value.assistantModel,
         assistantSystemPrompt: settings.value.assistantSystemPrompt,
         assistantTemperature: settings.value.assistantTemperature,
@@ -831,6 +888,25 @@ export const useSettingsStore = defineStore('settings', () => {
         isSaving.value = false
         return
       }
+    } else if (currentConfigForTest.aiProvider === 'aws-bedrock') {
+      if (!currentConfigForTest.awsAccessKeyId?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.awsAccessKeyId}' is missing.`
+        generalStore.setStatus('error', 'AWS Access Key ID is required for Bedrock', 'error')
+        isSaving.value = false
+        return
+      }
+      if (!currentConfigForTest.awsSecretAccessKey?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.awsSecretAccessKey}' is missing.`
+        generalStore.setStatus('error', 'AWS Secret Access Key is required for Bedrock', 'error')
+        isSaving.value = false
+        return
+      }
+      if (!currentConfigForTest.awsRegion?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.awsRegion}' is missing.`
+        generalStore.setStatus('error', 'AWS Region is required for Bedrock', 'error')
+        isSaving.value = false
+        return
+      }
     }
 
     if (
@@ -874,6 +950,7 @@ export const useSettingsStore = defineStore('settings', () => {
         openrouter: 'OpenRouter',
         ollama: 'Ollama',
         'lm-studio': 'LM Studio',
+        'aws-bedrock': 'AWS Bedrock',
       }
       const providerName =
         providerNameMap[currentConfigForTest.aiProvider] ||
@@ -890,6 +967,7 @@ export const useSettingsStore = defineStore('settings', () => {
           openrouter: 'OpenRouter',
           ollama: 'Ollama',
           'lm-studio': 'LM Studio',
+          'aws-bedrock': 'AWS Bedrock',
         }
         const providerName =
           providerNameMap[currentConfigForTest.aiProvider] ||
@@ -906,6 +984,7 @@ export const useSettingsStore = defineStore('settings', () => {
           openrouter: 'OpenRouter',
           ollama: 'Ollama',
           'lm-studio': 'LM Studio',
+          'aws-bedrock': 'AWS Bedrock',
         }
         const providerName =
           providerNameMap[currentConfigForTest.aiProvider] ||
@@ -954,13 +1033,17 @@ export const useSettingsStore = defineStore('settings', () => {
     sttProvider: 'openai' | 'groq' | 'google' | 'local'
     ttsProvider?: 'openai' | 'google' | 'local'
     embeddingProvider?: 'openai' | 'local'
-    aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
+    aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio' | 'aws-bedrock'
     assistantModel?: string
     summarizationModel?: string
     VITE_GROQ_API_KEY: string
     VITE_GOOGLE_API_KEY: string
     ollamaBaseUrl?: string
     lmStudioBaseUrl?: string
+    awsAccessKeyId?: string
+    awsSecretAccessKey?: string
+    awsSessionToken?: string
+    awsRegion?: string
     useLocalModels?: boolean
     localSttLanguage?: string
   }) {
@@ -1000,6 +1083,19 @@ export const useSettingsStore = defineStore('settings', () => {
     }
     if (onboardingData.lmStudioBaseUrl) {
       settings.value.lmStudioBaseUrl = onboardingData.lmStudioBaseUrl
+    }
+
+    if (onboardingData.awsAccessKeyId) {
+      settings.value.awsAccessKeyId = onboardingData.awsAccessKeyId
+    }
+    if (onboardingData.awsSecretAccessKey) {
+      settings.value.awsSecretAccessKey = onboardingData.awsSecretAccessKey
+    }
+    if (onboardingData.awsSessionToken) {
+      settings.value.awsSessionToken = onboardingData.awsSessionToken
+    }
+    if (onboardingData.awsRegion) {
+      settings.value.awsRegion = onboardingData.awsRegion
     }
 
     settings.value.onboardingCompleted = true

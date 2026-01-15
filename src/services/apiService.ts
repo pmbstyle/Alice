@@ -7,6 +7,7 @@ import {
   getGroqClient,
   getOllamaClient,
   getLMStudioClient,
+  getBedrockClient,
 } from './apiClients'
 import {
   createOpenAIResponse as createOpenAIResponseWithOpenAI,
@@ -21,8 +22,14 @@ import {
   createLMStudioResponse,
   listLMStudioModels,
 } from './llmProviders/lmStudio'
+import {
+  createBedrockResponse,
+  listBedrockModels,
+} from './llmProviders/bedrock'
 import type { AppChatMessageContentPart } from '../types/chat'
 import type { RagSearchResult } from '../types/rag'
+
+console.log('🟢 API Service loaded with Bedrock imports')
 
 /**
  * Parse WAV file ArrayBuffer and extract raw PCM audio data as Float32Array
@@ -89,6 +96,9 @@ function getAIClient(): OpenAI {
       return getOllamaClient()
     case 'lm-studio':
       return getLMStudioClient()
+    case 'aws-bedrock':
+      // Bedrock uses AWS SDK, not OpenAI client
+      throw new Error('Bedrock does not use OpenAI client. Use createBedrockResponse directly.')
     default:
       return getOpenAIClient()
   }
@@ -105,6 +115,16 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
   if (settings.aiProvider === 'lm-studio') {
     return listLMStudioModels()
   }
+  if (settings.aiProvider === 'aws-bedrock') {
+    // Bedrock returns string[], convert to OpenAI.Models.Model[]
+    const modelIds = await listBedrockModels()
+    return modelIds.map(id => ({
+      id,
+      object: 'model' as const,
+      created: 0,
+      owned_by: 'amazon-bedrock',
+    }))
+  }
   return listOpenAIModels()
 }
 
@@ -116,6 +136,8 @@ export const createOpenAIResponse = async (
   signal?: AbortSignal
 ): Promise<any> => {
   const settings = useSettingsStore().config
+
+  console.log('createOpenAIResponse called with provider:', settings.aiProvider)
 
   if (settings.aiProvider === 'openrouter') {
     return createOpenRouterResponse(
@@ -137,6 +159,16 @@ export const createOpenAIResponse = async (
   }
   if (settings.aiProvider === 'lm-studio') {
     return createLMStudioResponse(
+      input,
+      previousResponseId,
+      stream,
+      customInstructions,
+      signal
+    )
+  }
+  if (settings.aiProvider === 'aws-bedrock') {
+    console.log('Calling createBedrockResponse with input:', input)
+    return createBedrockResponse(
       input,
       previousResponseId,
       stream,
@@ -673,7 +705,6 @@ export const createSummarizationResponse = async (
   systemPrompt: string
 ): Promise<string | null> => {
   const settings = useSettingsStore().config
-  const client = getAIClient()
   const combinedText = messagesToSummarize
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
@@ -683,6 +714,7 @@ export const createSummarizationResponse = async (
     settings.aiProvider === 'ollama' ||
     settings.aiProvider === 'lm-studio'
   ) {
+    const client = getAIClient()
     const response = await client.chat.completions.create({
       model: summarizationModel,
       messages: [
@@ -693,7 +725,20 @@ export const createSummarizationResponse = async (
     } as any)
 
     return response.choices[0]?.message?.content?.trim() || null
+  } else if (settings.aiProvider === 'aws-bedrock') {
+    // For Bedrock, use the Bedrock-specific response function
+    const input = [
+      { role: 'user', content: [{ type: 'input_text', text: combinedText }] }
+    ]
+    const response = await createBedrockResponse(input, null, false, systemPrompt)
+
+    const textPart = response.output?.[0]?.content?.[0]
+    if (textPart?.type === 'output_text') {
+      return textPart.text.trim()
+    }
+    return null
   } else {
+    const client = getAIClient()
     const response = await client.responses.create({
       model: summarizationModel,
       input: [
@@ -727,7 +772,6 @@ export const createContextAnalysisResponse = async (
   analysisModel: string
 ): Promise<string | null> => {
   const settings = useSettingsStore().config
-  const client = getAIClient()
   const analysisSystemPrompt = `You are an expert in emotional intelligence. Analyze the tone and emotional state of the 'user' in the following conversation transcript. Provide a single, concise sentence describing their likely emotional state. Do not add any extra commentary.`
   const combinedText = messagesToAnalyze
     .map(msg => `${msg.role}: ${msg.content}`)
@@ -738,6 +782,7 @@ export const createContextAnalysisResponse = async (
     settings.aiProvider === 'ollama' ||
     settings.aiProvider === 'lm-studio'
   ) {
+    const client = getAIClient()
     const response = await client.chat.completions.create({
       model: analysisModel,
       messages: [
@@ -750,7 +795,20 @@ export const createContextAnalysisResponse = async (
     return (
       response.choices[0]?.message?.content?.trim().replace(/"/g, '') || null
     )
+  } else if (settings.aiProvider === 'aws-bedrock') {
+    // For Bedrock, use the Bedrock-specific response function
+    const input = [
+      { role: 'user', content: [{ type: 'input_text', text: combinedText }] }
+    ]
+    const response = await createBedrockResponse(input, null, false, analysisSystemPrompt)
+
+    const textPart = response.output?.[0]?.content?.[0]
+    if (textPart?.type === 'output_text') {
+      return textPart.text.trim().replace(/"/g, '')
+    }
+    return null
   } else {
+    const client = getAIClient()
     const response = await client.responses.create({
       model: analysisModel,
       input: [

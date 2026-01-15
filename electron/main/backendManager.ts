@@ -9,6 +9,7 @@ import * as path from 'path'
 import * as fs from 'fs'
 import axios from 'axios'
 import { fileURLToPath } from 'node:url'
+import { piperServiceManager } from './piperServiceManager'
 
 // ES modules compatibility
 const __filename = fileURLToPath(import.meta.url)
@@ -31,6 +32,8 @@ export class BackendManager {
   private config: BackendManagerConfig
   private isShuttingDown: boolean = false
   private startupPromise: Promise<boolean> | null = null
+  private logFilePath: string | null = null
+  private logStream: fs.WriteStream | null = null
 
   constructor(config: Partial<BackendManagerConfig> = {}) {
     this.config = {
@@ -38,6 +41,57 @@ export class BackendManager {
       port: 8765,
       timeout: 30000, // 30 seconds - Go starts much faster than Python
       ...config,
+    }
+
+    // Initialize log file
+    this.initializeLogFile()
+  }
+
+  /**
+   * Initialize log file for backend output
+   */
+  private initializeLogFile(): void {
+    try {
+      // Get backend directory (where the binary resides)
+      const backendPath = this.getBackendPath()
+      if (!backendPath) {
+        console.error('[BackendManager] Cannot initialize log file - backend path not found')
+        return
+      }
+
+      const backendDir = path.dirname(backendPath)
+      const logsDir = path.join(backendDir, 'logs')
+
+      // Create logs directory if it doesn't exist
+      if (!fs.existsSync(logsDir)) {
+        fs.mkdirSync(logsDir, { recursive: true })
+      }
+
+      // Create log file with timestamp
+      const timestamp = new Date().toISOString().replace(/:/g, '-').split('.')[0]
+      this.logFilePath = path.join(logsDir, `backend-${timestamp}.log`)
+
+      // Create write stream
+      this.logStream = fs.createWriteStream(this.logFilePath, { flags: 'a' })
+
+      this.writeLog('='.repeat(80))
+      this.writeLog(`Backend Log Started: ${new Date().toISOString()}`)
+      this.writeLog(`Log File: ${this.logFilePath}`)
+      this.writeLog('='.repeat(80))
+
+      console.log(`[BackendManager] Logging to: ${this.logFilePath}`)
+    } catch (error) {
+      console.error('[BackendManager] Failed to initialize log file:', error)
+    }
+  }
+
+  /**
+   * Write a message to the log file
+   */
+  private writeLog(message: string): void {
+    if (this.logStream) {
+      const timestamp = new Date().toISOString()
+      this.logStream.write(`[${timestamp}] ${message}\n`)
     }
   }
 
@@ -73,15 +127,34 @@ export class BackendManager {
 
       console.log('[BackendManager] Using backend at:', backendPath)
 
+      // Start Piper gRPC service before backend
+      console.log('[BackendManager] Starting Piper gRPC service...')
+      const piperStarted = await piperServiceManager.start()
+      if (piperStarted) {
+        console.log('[BackendManager] ✓ Piper gRPC service started successfully')
+      } else {
+        console.warn('[BackendManager] Piper gRPC service failed to start, TTS will use CLI fallback')
+      }
+
+      // Add bin directory to PATH for DLL resolution (ONNX Runtime)
+      const backendDir = path.dirname(backendPath)
+      const binDir = path.join(backendDir, 'bin')
+      const pathSeparator = process.platform === 'win32' ? ';' : ':'
+      const updatedPath = `${binDir}${pathSeparator}${process.env.PATH || ''}`
+
       // Set environment variables for Go backend
       const env = {
         ...process.env,
+        PATH: updatedPath,
         ALICE_HOST: this.config.host,
         ALICE_PORT: this.config.port.toString(),
         ALICE_LOG_LEVEL: 'INFO',
         ALICE_ENABLE_STT: 'true',
         ALICE_ENABLE_TTS: 'true', // Enable TTS
         ALICE_ENABLE_EMBEDDINGS: 'true',
+        // Enable Piper gRPC mode if service started successfully
+        PIPER_USE_GRPC: piperStarted ? 'true' : 'false',
+        PIPER_GRPC_ADDR: piperStarted ? 'localhost:50052' : '',
       }
 
       // Spawn Go process
@@ -171,6 +244,20 @@ export class BackendManager {
     this.isShuttingDown = false
     this.startupPromise = null
     console.log('[BackendManager] Go AI backend stopped')
+
+    // Stop Piper gRPC service
+    console.log('[BackendManager] Stopping Piper gRPC service...')
+    await piperServiceManager.stop()
+    console.log('[BackendManager] ✓ Piper gRPC service stopped')
+
+    // Close log stream
+    if (this.logStream) {
+      this.writeLog('='.repeat(80))
+      this.writeLog(`Backend Log Ended: ${new Date().toISOString()}`)
+      this.writeLog('='.repeat(80))
+      this.logStream.end()
+      this.logStream = null
+    }
   }
 
   /**
@@ -237,6 +324,13 @@ export class BackendManager {
    */
   isReady(): boolean {
     return this.process !== null && !this.process.killed && !this.isShuttingDown
+  }
+
+  /**
+   * Get the current log file path
+   */
+  getLogFilePath(): string | null {
+    return this.logFilePath
   }
 
   /**
@@ -324,13 +418,37 @@ export class BackendManager {
       const output = data.toString().trim()
       if (output) {
         console.log(`[Go Backend] ${output}`)
+        this.writeLog(`[STDOUT] ${output}`)
       }
     })
 
     this.process.stderr?.on('data', (data: Buffer) => {
-      const error = data.toString().trim()
-      if (error) {
-        console.error(`[Go Backend] ${error}`)
+      const output = data.toString().trim()
+      if (output) {
+        // Write all stderr to backend log file
+        this.writeLog(`[STDERR] ${output}`)
+
+        // Go backend writes many info messages to stderr, not just errors
+        // Only log actual errors/warnings to Electron console
+        const isInfoMessage = output.includes('Started GET') ||
+                             output.includes('Started POST') ||
+                             output.includes('Completed GET') ||
+                             output.includes('Completed POST') ||
+                             output.includes('[STT]') ||
+                             output.includes('[TTS]') ||
+                             output.includes('[HttpClient]') ||
+                             output.includes('initialized successfully') ||
+                             output.includes('Successfully') ||
+                             output.includes('will use download fallback') ||
+                             output.includes('No embedded') ||
+                             output.includes('extracted embedded')
+
+        // Only log if it looks like an actual error
+        if (!isInfoMessage && (output.toLowerCase().includes('error') ||
+                               output.toLowerCase().includes('failed') ||
+                               output.toLowerCase().includes('panic'))) {
+          console.error(`[Go Backend] ${output}`)
+        }
       }
     })
 

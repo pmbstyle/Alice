@@ -69,7 +69,7 @@
     "electron-updater": "^6.6.2",
     "cheerio": "^1.0.0-rc.12",
     "googleapis": "^166.0.0",
-    "groq-sdk": "^0.29.0",
+    "groq-sdk": "^0.37.0",
     "hnswlib-node": "^3.0.0",
     "marked": "^15.0.11",
     "mammoth": "^1.9.0",

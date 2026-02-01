@@ -71,7 +71,7 @@
     "googleapis": "^166.0.0",
     "groq-sdk": "^0.29.0",
     "hnswlib-node": "^3.0.0",
-    "marked": "^15.0.11",
+    "marked": "^17.0.1",
     "mammoth": "^1.9.0",
     "node-cron": "^4.2.1",
     "path": "^0.12.7",

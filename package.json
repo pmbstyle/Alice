@@ -79,7 +79,7 @@
     "prettier": "^3.7.4",
     "turndown": "^7.2.0",
     "vue-router": "^4.4.0",
-    "ws": "^8.18.3"
+    "ws": "^8.19.0"
   },
   "optionalDependencies": {
     "@rollup/rollup-linux-x64-gnu": "4.52.5"

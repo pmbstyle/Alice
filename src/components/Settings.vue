@@ -72,7 +72,7 @@
         <CoreSettingsTab
           v-if="activeTab === 'core'"
           :current-settings="currentSettings"
-          @update:setting="(key, value) => (currentSettings[key] = value)"
+          @update:setting="updateCurrentSetting"
         />
 
         <AssistantSettingsTab
@@ -109,14 +109,12 @@
           @remove-command="removeCommand"
         />
 
-        <MemoryManager
-          v-if="activeTab === 'memories'"
-        />
+        <MemoryManager v-if="activeTab === 'memories'" />
 
         <UserCustomizationTab
           v-if="activeTab === 'customization'"
           :current-settings="currentSettings"
-          @update:setting="(key, value) => (currentSettings[key] = value)"
+          @update:setting="updateCurrentSetting"
         />
       </div>
 
@@ -130,11 +128,7 @@
             v-if="settingsStore.isSaving"
             class="loading loading-spinner loading-sm"
           ></span>
-          {{
-            settingsStore.isSaving
-              ? 'Saving & Testing...'
-              : 'Save & Reload'
-          }}
+          {{ settingsStore.isSaving ? 'Saving & Testing...' : 'Save & Reload' }}
         </button>
       </div>
 
@@ -306,7 +300,10 @@ const refreshModels = async () => {
   }
 }
 
-function getToolInfo(name: string): { displayName: string; description: string } {
+function getToolInfo(name: string): {
+  displayName: string
+  description: string
+} {
   const nameMap: Record<string, string> = {
     get_current_datetime: 'Current Date & Time',
     open_path: 'Open Apps/URLs',
@@ -329,27 +326,36 @@ function getToolInfo(name: string): { displayName: string; description: string }
 
   const descriptionMap: Record<string, string> = {
     get_current_datetime: 'Allows Alice to get the current date and time',
-    open_path: 'Allows Alice to open apps, URLs, files, and folders on the user\'s computer',
-    manage_clipboard: 'Alice can read and write to the user\'s clipboard',
+    open_path:
+      "Allows Alice to open apps, URLs, files, and folders on the user's computer",
+    manage_clipboard: "Alice can read and write to the user's clipboard",
     save_memory: 'Alice can store memories (long term memory)',
     delete_memory: 'Alice can delete memories (long term memory)',
     recall_memories: 'Alice can recall memories (long term memory)',
-    list_directory: 'Alice can list the files and folders on the user\'s computer',
-    execute_command: 'Alice can execute shell commands on the user\'s computer',
+    list_directory:
+      "Alice can list the files and folders on the user's computer",
+    execute_command: "Alice can execute shell commands on the user's computer",
     schedule_task: 'Alice can schedule tasks to run on a recurring basis',
     manage_scheduled_tasks: 'Alice can manage scheduled tasks',
     get_calendar_events: 'Google Calendar integration to get calendar events',
-    create_calendar_event: 'Google Calendar integration to create calendar events',
-    update_calendar_event: 'Google Calendar integration to update calendar events',
-    delete_calendar_event: 'Google Calendar integration to delete calendar events',
+    create_calendar_event:
+      'Google Calendar integration to create calendar events',
+    update_calendar_event:
+      'Google Calendar integration to update calendar events',
+    delete_calendar_event:
+      'Google Calendar integration to delete calendar events',
     get_unread_emails: 'Google Gmail integration to get unread emails',
     search_emails: 'Google Gmail integration to search emails',
     get_email_content: 'Google Gmail integration to get email content',
-    search_torrents: 'Alice can search for torrents on the internet (requires Jackett)',
-    add_torrent_to_qb: 'Alice can add a torrent to qBittorrent (requires qBittorrent)',
-    browser_context: 'Alice can get information about the current webpage in users browser (requires browser extension)',
+    search_torrents:
+      'Alice can search for torrents on the internet (requires Jackett)',
+    add_torrent_to_qb:
+      'Alice can add a torrent to qBittorrent (requires qBittorrent)',
+    browser_context:
+      'Alice can get information about the current webpage in users browser (requires browser extension)',
     perform_web_search: 'For models that lack web search capabilities (Tavily)',
-    searxng_web_search: 'For models that lack web search capabilities (SearXNG)',
+    searxng_web_search:
+      'For models that lack web search capabilities (SearXNG)',
   }
 
   return {
@@ -370,6 +376,13 @@ const startRecordingHotkey = (settingKey: keyof AliceSettings) => {
 
 const clearHotkey = (settingKey: keyof AliceSettings) => {
   clearHotkeyComposable(settingKey, currentSettings.value)
+}
+
+const updateCurrentSetting = (
+  key: keyof AliceSettings,
+  value: string | boolean | number | string[]
+) => {
+  ;(currentSettings.value as any)[key] = value
 }
 
 function isToolConfigured(toolName: string): boolean {
@@ -491,7 +504,7 @@ const handleSaveAndTestSettings = async () => {
         type: 'settings-saved',
         success: success,
         validationComplete: true,
-        settingsChanged: true
+        settingsChanged: true,
       })
     } catch (error) {
       console.error('Failed to notify main window of settings changes:', error)

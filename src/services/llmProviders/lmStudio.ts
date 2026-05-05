@@ -26,7 +26,9 @@ export const createLMStudioResponse = async (
       if (item.role === 'user') {
         if (Array.isArray(item.content)) {
           const textParts = item.content
-            .filter((part: any) => part.type === 'input_text' && part.text?.trim())
+            .filter(
+              (part: any) => part.type === 'input_text' && part.text?.trim()
+            )
             .map((part: any) => part.text)
             .join(' ')
 
@@ -83,7 +85,7 @@ export const createLMStudioResponse = async (
           typeof item.content === 'string'
             ? item.content
             : Array.isArray(item.content)
-              ? item.content.map(p => p.text || '').join(' ')
+              ? item.content.map((p: any) => p.text || '').join(' ')
               : 'You are a helpful assistant.'
 
         return {

@@ -61,7 +61,6 @@ marked.use({
   },
   gfm: true,
   breaks: true,
-  headerIds: false,
 })
 
 const messageMarkdown = (text: string): string => {

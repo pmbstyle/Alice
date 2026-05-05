@@ -1,8 +1,5 @@
 import type OpenAI from 'openai'
-import type {
-  ToolCallHandler,
-  ToolCallHandlerDependencies,
-} from './types'
+import type { ToolCallHandler, ToolCallHandlerDependencies } from './types'
 import type { AudioState } from '../../stores/generalStore'
 
 const PREVIOUS_RESPONSE_NOT_FOUND = 'Previous response with id'
@@ -38,7 +35,7 @@ export function createToolCallHandler(
     }): Promise<void> {
       const functionName = toolCall.name
       const functionArgs =
-        (toolCall.arguments as object | undefined) ?? {}
+        (toolCall.arguments as unknown as object | undefined) ?? {}
 
       const statusMessage = dependencies.getToolStatusMessage(
         functionName,
@@ -66,21 +63,15 @@ export function createToolCallHandler(
         content: resultString,
       })
 
-      const isNewChainAfterTool =
-        dependencies.getCurrentResponseId() === null
-      const nextApiInput = await dependencies.buildApiInput(
-        isNewChainAfterTool
-      )
+      const isNewChainAfterTool = dependencies.getCurrentResponseId() === null
+      const nextApiInput = await dependencies.buildApiInput(isNewChainAfterTool)
 
-      const placeholderTempId =
-        dependencies.createAssistantPlaceholder()
+      const placeholderTempId = dependencies.createAssistantPlaceholder()
 
       const abortController = dependencies.createAbortController()
       dependencies.setLlmAbortController(abortController)
 
-      const attemptContinuation = async (
-        responseId: string | null
-      ) => {
+      const attemptContinuation = async (responseId: string | null) => {
         const systemPrompt = dependencies.getAssistantSystemPrompt()
         const stream = await dependencies.createOpenAIResponse(
           nextApiInput,
@@ -89,11 +80,7 @@ export function createToolCallHandler(
           systemPrompt,
           abortController.signal
         )
-        await dependencies.processStream(
-          stream,
-          placeholderTempId,
-          true
-        )
+        await dependencies.processStream(stream, placeholderTempId, true)
       }
 
       try {
@@ -132,9 +119,7 @@ export function createToolCallHandler(
         }
 
         const errorContent = dependencies.parseErrorMessage(error)
-        dependencies.updateMessageContent(placeholderTempId, [
-          errorContent,
-        ])
+        dependencies.updateMessageContent(placeholderTempId, [errorContent])
 
         const nextAudioState: AudioState = dependencies.isRecordingRequested()
           ? 'LISTENING'
@@ -144,4 +129,3 @@ export function createToolCallHandler(
     },
   }
 }
-

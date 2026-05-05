@@ -1,8 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import type { RouteRecordRaw } from 'vue-router'
 import { useSettingsStore } from '../stores/settingsStore'
 import MainComponent from '../components/Main.vue'
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   {
     path: '/',
     name: 'Main',

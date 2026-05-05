@@ -76,7 +76,7 @@ export interface StreamHandlerDependencies {
     generationId: string,
     base64: string,
     partialIndex: number
-  ): Promise<void>
+  ): Promise<any>
   handleImageFinal(generationId: string, base64: string): Promise<void>
   enqueueSpeech(sentence: string): Promise<void>
   setAudioState(state: string): void
@@ -120,7 +120,7 @@ export interface ToolCallHandlerDependencies {
     stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
     placeholderTempId: string,
     isContinuationAfterTool: boolean
-  ): Promise<void>
+  ): Promise<any>
   parseErrorMessage(error: unknown): AppChatMessageContentPart
   updateMessageContent(
     placeholderTempId: string,

@@ -148,7 +148,7 @@ describe('createApiInputBuilder', () => {
         item.role === 'user' &&
         Array.isArray(item.content) &&
         item.content.some(
-          part =>
+          (part: any) =>
             part.type === 'input_text' &&
             part.text === '[User previously sent an image]'
         )

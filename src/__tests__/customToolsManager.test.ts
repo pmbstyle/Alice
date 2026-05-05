@@ -16,7 +16,7 @@ import os from 'node:os'
 const testRoot = mkdtempSync(path.join(os.tmpdir(), 'alice-custom-tools-'))
 const userDataDir = path.join(testRoot, 'user-data')
 mkdirSync(userDataDir, { recursive: true })
-let cwdSpy: ReturnType<typeof vi.spyOn> | null = null
+let cwdSpy: any = null
 
 vi.mock('electron', () => ({
   app: {
@@ -98,9 +98,9 @@ describe('customToolsManager', () => {
     expect(snapshot.tools).toHaveLength(1)
     const [tool] = snapshot.tools
     expect(tool.isValid).toBe(false)
-    expect(tool.errors.some(error => error.includes('customization directory'))).toBe(
-      true
-    )
+    expect(
+      tool.errors.some(error => error.includes('customization directory'))
+    ).toBe(true)
   })
 
   it('normalizes parameters when missing type', async () => {
@@ -198,5 +198,4 @@ describe('customToolsManager', () => {
     const snapshotAfterDelete = await deleteCustomTool(toolId)
     expect(snapshotAfterDelete.tools).toHaveLength(0)
   })
-
 })

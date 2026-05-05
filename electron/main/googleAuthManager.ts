@@ -112,7 +112,10 @@ export async function getAuthenticatedClient() {
   const tokens = await loadTokens()
   if (tokens) {
     oAuth2Client.setCredentials(tokens)
-    if (oAuth2Client.isTokenExpiring && oAuth2Client.isTokenExpiring()) {
+    const expiryDate = oAuth2Client.credentials.expiry_date
+    const shouldRefresh =
+      typeof expiryDate === 'number' && expiryDate <= Date.now() + 300000
+    if (shouldRefresh) {
       try {
         console.log(
           '[GoogleAuthManager] Access token is expiring, attempting refresh.'

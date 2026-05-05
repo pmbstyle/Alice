@@ -4,15 +4,17 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { nextTick, onMounted, onBeforeUnmount, ref } from 'vue'
 
-let startX, startY
-let currentX, currentY
+let startX = 0
+let startY = 0
+let currentX = 0
+let currentY = 0
 let isSelecting = false
-const canvasRef = ref(null)
-let ctx = null
-let animationFrameId = null
+const canvasRef = ref<HTMLCanvasElement | null>(null)
+let ctx: CanvasRenderingContext2D | null = null
+let animationFrameId: number | null = null
 
 function startAnimationLoop() {
   if (animationFrameId !== null) return
@@ -41,6 +43,7 @@ function resizeCanvas() {
   canvas.style.width = `${width}px`
   canvas.style.height = `${height}px`
   ctx = canvas.getContext('2d')
+  if (!ctx) return
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
   draw()
 }
@@ -64,7 +67,7 @@ function draw() {
   ctx.strokeRect(x + 1, y + 1, Math.max(0, w - 2), Math.max(0, h - 2))
 }
 
-function onMouseDown(e) {
+function onMouseDown(e: MouseEvent) {
   console.log('Mouse down detected', e.clientX, e.clientY)
   resizeCanvas()
   startX = e.clientX
@@ -76,14 +79,14 @@ function onMouseDown(e) {
   startAnimationLoop()
 }
 
-function onMouseMove(e) {
+function onMouseMove(e: MouseEvent) {
   if (!isSelecting) return
   currentX = e.clientX
   currentY = e.clientY
   draw()
 }
 
-async function onMouseUp(e) {
+async function onMouseUp(_e: MouseEvent) {
   if (!isSelecting) return
   console.log('Mouse up detected')
   const rect = {
@@ -118,10 +121,10 @@ async function onMouseUp(e) {
           maxHeight: screen.height,
         },
       },
-    })
+    } as any)
 
     const track = image.getVideoTracks()[0]
-    const capture = new ImageCapture(track)
+    const capture = new ImageCapture(track) as any
     const bitmap = await capture.grabFrame()
     track.stop()
 
@@ -129,6 +132,7 @@ async function onMouseUp(e) {
     canvas.width = rect.width
     canvas.height = rect.height
     const context = canvas.getContext('2d')
+    if (!context) return
     context.drawImage(
       bitmap,
       rect.x,
@@ -149,7 +153,7 @@ async function onMouseUp(e) {
   }
 }
 
-function onKeyDown(e) {
+function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape') {
     isSelecting = false
     draw()

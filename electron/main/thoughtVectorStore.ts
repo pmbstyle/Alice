@@ -3,8 +3,10 @@ import path from 'node:path'
 import fs from 'node:fs/promises'
 import HnswlibNode from 'hnswlib-node'
 const { HierarchicalNSW } = HnswlibNode
+type HierarchicalNSWIndex = InstanceType<typeof HierarchicalNSW>
 import Database from 'better-sqlite3'
 import { randomUUID } from 'node:crypto'
+type SQLiteDatabase = any
 
 const OPENAI_VECTOR_DIMENSION = 1536 // OpenAI embedding dimension
 const LOCAL_VECTOR_DIMENSION = 384 // all-MiniLM-L6-v2 embedding dimension (Go backend)
@@ -58,12 +60,12 @@ export interface MemoryRecord {
   embedding?: number[] | Buffer
 }
 
-let hnswOpenAIIndex: HierarchicalNSW | null = null
-let hnswLocalIndex: HierarchicalNSW | null = null
+let hnswOpenAIIndex: HierarchicalNSWIndex | null = null
+let hnswLocalIndex: HierarchicalNSWIndex | null = null
 
 let openAILabelToThoughtId: Map<number, string> = new Map()
 let localLabelToThoughtId: Map<number, string> = new Map()
-let db: Database.Database | null = null
+let db: SQLiteDatabase | null = null
 let isStoreInitialized = false
 
 function initDB() {
@@ -485,7 +487,7 @@ async function loadIndexAndSyncWithDB() {
 
 async function loadProviderIndex(
   provider: 'openai' | 'local',
-  index: HierarchicalNSW,
+  index: HierarchicalNSWIndex,
   indexFilePath: string,
   numEmbeddings: number
 ) {
@@ -781,12 +783,12 @@ export async function deleteAllThoughtVectors(): Promise<void> {
 
   // Clear both indices and mappings
   if (hnswOpenAIIndex) {
-    hnswOpenAIIndex.clearPoints()
+    hnswOpenAIIndex = new HierarchicalNSW('cosine', OPENAI_VECTOR_DIMENSION)
     hnswOpenAIIndex.initIndex(MAX_ELEMENTS_HNSW)
     openAILabelToThoughtId.clear()
   }
   if (hnswLocalIndex) {
-    hnswLocalIndex.clearPoints()
+    hnswLocalIndex = new HierarchicalNSW('cosine', LOCAL_VECTOR_DIMENSION)
     hnswLocalIndex.initIndex(MAX_ELEMENTS_HNSW)
     localLabelToThoughtId.clear()
   }
@@ -818,7 +820,7 @@ export async function ensureSaveOnQuit(): Promise<void> {
   }
 }
 
-export function getDBInstance(): Database.Database {
+export function getDBInstance(): SQLiteDatabase {
   if (!db) {
     initDB()
   }

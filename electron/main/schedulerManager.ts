@@ -105,7 +105,7 @@ export async function scheduleTask(
       return false
     }
 
-    const cronJob = cron.schedule(
+    const cronJob = cron.createTask(
       task.cronExpression,
       async () => {
         console.log(`[SchedulerManager] Executing task: ${task.name}`)
@@ -115,7 +115,6 @@ export async function scheduleTask(
         updateTaskLastRun(task.id, now)
       },
       {
-        scheduled: false,
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       }
     )

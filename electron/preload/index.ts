@@ -1,7 +1,8 @@
 import { ipcRenderer, contextBridge } from 'electron'
 contextBridge.exposeInMainWorld('electron', {
-  resize: dimensions => ipcRenderer.send('resize', dimensions),
-  mini: minimize => ipcRenderer.send('mini', minimize),
+  resize: (dimensions: { width: number; height: number }) =>
+    ipcRenderer.send('resize', dimensions),
+  mini: (minimize: { minimize: boolean }) => ipcRenderer.send('mini', minimize),
   screenshot: () => ipcRenderer.send('screenshot'),
   showOverlay: () => ipcRenderer.send('show-overlay'),
   getScreenshot: () => ipcRenderer.send('get-screenshot'),
@@ -55,69 +56,6 @@ contextBridge.exposeInMainWorld('httpAPI', {
   }) => ipcRenderer.invoke('http:request', args),
 })
 
-contextBridge.exposeInMainWorld('pythonAPI', {
-  // Python Backend Management
-  start: () => ipcRenderer.invoke('python:start'),
-  stop: () => ipcRenderer.invoke('python:stop'),
-  restart: () => ipcRenderer.invoke('python:restart'),
-  health: () => ipcRenderer.invoke('python:health'),
-  serviceStatus: () => ipcRenderer.invoke('python:service-status'),
-
-  // STT (Speech-to-Text)
-  stt: {
-    transcribeAudio: (
-      audioData: number[],
-      sampleRate?: number,
-      language?: string
-    ) =>
-      ipcRenderer.invoke('python:stt:transcribe-audio', {
-        audioData,
-        sampleRate,
-        language,
-      }),
-    transcribeFile: (file: Blob, language?: string) =>
-      ipcRenderer.invoke('python:stt:transcribe-file', { file, language }),
-    isReady: () => ipcRenderer.invoke('python:stt:ready'),
-    getInfo: () => ipcRenderer.invoke('python:stt:info'),
-  },
-
-  // TTS (Text-to-Speech)
-  tts: {
-    synthesize: (text: string, voice?: string) =>
-      ipcRenderer.invoke('python:tts:synthesize', { text, voice }),
-    getVoices: () => ipcRenderer.invoke('python:tts:voices'),
-    test: () => ipcRenderer.invoke('python:tts:test'),
-    isReady: () => ipcRenderer.invoke('python:tts:ready'),
-    getInfo: () => ipcRenderer.invoke('python:tts:info'),
-  },
-
-  // Embeddings
-  embeddings: {
-    generate: (text: string) =>
-      ipcRenderer.invoke('python:embeddings:generate', { text }),
-    generateBatch: (texts: string[]) =>
-      ipcRenderer.invoke('python:embeddings:generate-batch', { texts }),
-    similarity: (embedding1: number[], embedding2: number[]) =>
-      ipcRenderer.invoke('python:embeddings:similarity', {
-        embedding1,
-        embedding2,
-      }),
-    search: (
-      queryEmbedding: number[],
-      candidateEmbeddings: number[][],
-      topK?: number
-    ) =>
-      ipcRenderer.invoke('python:embeddings:search', {
-        queryEmbedding,
-        candidateEmbeddings,
-        topK,
-      }),
-    test: () => ipcRenderer.invoke('python:embeddings:test'),
-    isReady: () => ipcRenderer.invoke('python:embeddings:ready'),
-    getInfo: () => ipcRenderer.invoke('python:embeddings:info'),
-  },
-})
-
 contextBridge.exposeInMainWorld('customToolsAPI', {
   list: () => ipcRenderer.invoke('custom-tools:list'),
   refresh: () => ipcRenderer.invoke('custom-tools:list'),
@@ -131,8 +69,7 @@ contextBridge.exposeInMainWorld('customToolsAPI', {
   upsert: (tool: any) => ipcRenderer.invoke('custom-tools:upsert', tool),
   toggle: (id: string, enabled: boolean) =>
     ipcRenderer.invoke('custom-tools:toggle', { id, enabled }),
-  delete: (id: string) =>
-    ipcRenderer.invoke('custom-tools:delete', { id }),
+  delete: (id: string) => ipcRenderer.invoke('custom-tools:delete', { id }),
   execute: (name: string, args?: Record<string, any>) =>
     ipcRenderer.invoke('custom-tools:execute', { name, args }),
 })

@@ -32,7 +32,7 @@
             v-model="currentSettings.sttProvider"
             class="select select-bordered w-full focus:select-primary"
             @change="
-              e => $emit('update:setting', 'sttProvider', e.target.value)
+              e => $emit('update:setting', 'sttProvider', getTargetValue(e))
             "
           >
             <option value="openai">OpenAI (gpt-4o-transcribe)</option>
@@ -47,13 +47,16 @@
             currentSettings.sttProvider === 'local'
           "
         >
-          <label for="stt-language" class="block mb-1 text-sm">Language *</label>
+          <label for="stt-language" class="block mb-1 text-sm"
+            >Language *</label
+          >
           <select
             id="stt-language"
             v-model="currentSettings.localSttLanguage"
             class="select select-bordered w-full focus:select-primary"
             @change="
-              e => $emit('update:setting', 'localSttLanguage', e.target.value)
+              e =>
+                $emit('update:setting', 'localSttLanguage', getTargetValue(e))
             "
           >
             <option value="auto">Auto-detect</option>
@@ -211,7 +214,7 @@
               v-model="currentSettings.localSttModel"
               class="select select-bordered w-full focus:select-primary"
               @change="
-                e => $emit('update:setting', 'localSttModel', e.target.value)
+                e => $emit('update:setting', 'localSttModel', getTargetValue(e))
               "
             >
               <option value="whisper-tiny.en">
@@ -239,7 +242,7 @@
                   $emit(
                     'update:setting',
                     'localSttEnabled',
-                    e.target.value === 'true'
+                    getTargetValue(e) === 'true'
                   )
               "
             >
@@ -257,7 +260,8 @@
               v-model="currentSettings.localSttWakeWord"
               class="input input-bordered w-full focus:input-primary"
               @change="
-                e => $emit('update:setting', 'localSttWakeWord', e.target.value)
+                e =>
+                  $emit('update:setting', 'localSttWakeWord', getTargetValue(e))
               "
               placeholder="alice"
             />
@@ -326,7 +330,7 @@
             v-model="currentSettings.googleTtsVoice"
             class="select select-bordered w-full focus:select-primary"
             @change="
-              e => $emit('update:setting', 'googleTtsVoice', e.target.value)
+              e => $emit('update:setting', 'googleTtsVoice', getTargetValue(e))
             "
           >
             <option value="en-US-Journey-F">Journey F (Fem)</option>
@@ -406,9 +410,7 @@
               class="flex items-center justify-between text-xs text-gray-400"
             >
               <span>
-                {{
-                  availableVoices.filter(v => v.gender !== 'male').length
-                }}
+                {{ availableVoices.filter(v => v.gender !== 'male').length }}
                 voice{{
                   availableVoices.filter(v => v.gender !== 'male').length !== 1
                     ? 's'
@@ -639,6 +641,10 @@ const isIndexingRag = ref(false)
 const ragStatusMessage = ref('')
 
 let statusInterval: NodeJS.Timeout | null = null
+
+const getTargetValue = (event: Event): string => {
+  return (event.target as HTMLInputElement | HTMLSelectElement).value
+}
 
 const updateServiceStatus = async () => {
   try {
@@ -1003,5 +1009,4 @@ const removeRagDocuments = async (pathItem: string) => {
     await refreshRagStats()
   }
 }
-
 </script>

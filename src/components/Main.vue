@@ -62,10 +62,7 @@ import {
   indexMessageForThoughts,
   uploadFileToOpenAI,
 } from '../services/apiService'
-import type {
-  ChatMessage,
-  AppChatMessageContentPart,
-} from '../types/chat'
+import type { ChatMessage, AppChatMessageContentPart } from '../types/chat'
 import { useAudioProcessing } from '../composables/useAudioProcessing'
 import { useAudioPlayback } from '../composables/useAudioPlayback'
 import { useScreenshot } from '../composables/useScreenshot'
@@ -363,9 +360,8 @@ const processRequest = async (
 
     setTimeout(() => {
       if (
-        (generalStore.audioState === 'WAITING_FOR_RESPONSE' ||
-          generalStore.audioState === 'PROCESSING_AUDIO') &&
-        generalStore.audioState !== 'GENERATING_IMAGE'
+        generalStore.audioState === 'WAITING_FOR_RESPONSE' ||
+        generalStore.audioState === 'PROCESSING_AUDIO'
       ) {
         console.log(
           '[Safety Recovery] Detected stuck audio state, resetting to interactive mode'

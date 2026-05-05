@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useCustomToolsStore } from '../customToolsStore'
-import type { CustomToolsSnapshot, ValidatedCustomTool } from '../../../types/customTools'
+import type {
+  CustomToolsSnapshot,
+  ValidatedCustomTool,
+} from '../../../types/customTools'
 
 const baseTool: ValidatedCustomTool = {
   id: 'tool-1',
@@ -10,7 +13,11 @@ const baseTool: ValidatedCustomTool = {
   enabled: true,
   strict: false,
   parameters: { type: 'object', properties: {} },
-  handler: { type: 'script', entry: 'custom-tool-scripts/example.js', runtime: 'node' },
+  handler: {
+    type: 'script',
+    entry: 'custom-tool-scripts/example.js',
+    runtime: 'node',
+  },
   errors: [],
   isValid: true,
 }
@@ -22,12 +29,6 @@ const snapshot = (): CustomToolsSnapshot => ({
   lastModified: Date.now(),
 })
 
-declare global {
-  interface Window {
-    customToolsAPI?: any
-  }
-}
-
 function installMockAPI() {
   const snap = snapshot()
   const api = {
@@ -36,10 +37,18 @@ function installMockAPI() {
     replaceJson: vi.fn().mockResolvedValue({ success: true, data: snap }),
     uploadScript: vi
       .fn()
-      .mockResolvedValue({ success: true, data: { relativePath: 'custom-tool-scripts/file.js', absolutePath: '/abs/file.js' } }),
+      .mockResolvedValue({
+        success: true,
+        data: {
+          relativePath: 'custom-tool-scripts/file.js',
+          absolutePath: '/abs/file.js',
+        },
+      }),
     upsert: vi.fn().mockResolvedValue({ success: true, data: snap }),
     toggle: vi.fn().mockResolvedValue({ success: true, data: snap }),
-    delete: vi.fn().mockResolvedValue({ success: true, data: { ...snap, tools: [] } }),
+    delete: vi
+      .fn()
+      .mockResolvedValue({ success: true, data: { ...snap, tools: [] } }),
   }
   ;(globalThis as any).window = { customToolsAPI: api }
   return api

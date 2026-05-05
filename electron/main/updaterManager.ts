@@ -12,8 +12,8 @@ const { autoUpdater } = pkg
 const IS_DEV = !!process.env.VITE_DEV_SERVER_URL
 
 export function initializeUpdater(): void {
+  log.transports.file.level = 'info'
   autoUpdater.logger = log
-  autoUpdater.logger.transports.file.level = 'info'
   log.info('App starting...')
 
   log.info(`[AutoUpdater] Environment - IS_DEV: ${IS_DEV}`)

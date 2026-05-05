@@ -1,8 +1,5 @@
 import type { Ref } from 'vue'
-import type {
-  AppChatMessageContentPart,
-  ChatMessage,
-} from '../../types/chat'
+import type { AppChatMessageContentPart, ChatMessage } from '../../types/chat'
 
 function generateLocalId() {
   return `local-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
@@ -83,10 +80,7 @@ export function createHistoryManager(
     return message.content as AppChatMessageContentPart[]
   }
 
-  const appendMessageDeltaByTempId = (
-    tempId: string,
-    delta: string
-  ): void => {
+  const appendMessageDeltaByTempId = (tempId: string, delta: string): void => {
     const index = findMessageIndexByTempId(tempId)
     if (index === -1) {
       console.warn(
@@ -98,9 +92,9 @@ export function createHistoryManager(
     const message = chatHistory.value[index]
     const contentParts = ensureTextArray(message)
 
-    let firstTextPart = contentParts.find(
-      p => p.type === 'app_text'
-    ) as AppChatMessageContentPart | undefined
+    let firstTextPart = contentParts.find(p => p.type === 'app_text') as
+      | AppChatMessageContentPart
+      | undefined
 
     if (!firstTextPart) {
       firstTextPart = { type: 'app_text', text: '' }
@@ -118,8 +112,8 @@ export function createHistoryManager(
         type: 'app_error',
         text: errorText,
         errorType: 'api_error',
-        errorCode: null,
-        errorParam: null,
+        errorCode: undefined,
+        errorParam: undefined,
         originalError: { message: errorText },
       }
 
@@ -144,10 +138,7 @@ export function createHistoryManager(
 
     const message = chatHistory.value[index]
     if (typeof message.content === 'string') {
-      message.content = [
-        { type: 'app_text', text: message.content },
-        part,
-      ]
+      message.content = [{ type: 'app_text', text: message.content }, part]
     } else if (Array.isArray(message.content)) {
       message.content.push(part)
     } else {
@@ -286,4 +277,3 @@ export function createHistoryManager(
     updateMessageToolCallsByTempId,
   }
 }
-

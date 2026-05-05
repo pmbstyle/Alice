@@ -16,6 +16,8 @@
           :is-testing="isTesting"
           @test-openai="testOpenAIKey"
           @test-openrouter="testOpenRouterKey"
+          @test-zai="testZAIKey"
+          @test-minimax="testMiniMaxKey"
           @test-ollama="testOllamaConnection"
           @test-lmstudio="testLMStudioConnection"
           @reset-tests="resetTestResults"
@@ -57,6 +59,11 @@ import AIProviderStep from './steps/AIProviderStep.vue'
 import VoiceModelsStep from './steps/VoiceModelsStep.vue'
 import FinalSetupStep from './steps/FinalSetupStep.vue'
 import OpenAI from 'openai'
+import {
+  MINIMAX_OPENAI_BASE_URL,
+  ZAI_CODING_BASE_URL,
+  type AIProviderKey,
+} from '../../services/llmProviders/providerCatalog'
 
 const step = ref(1)
 const settingsStore = useSettingsStore()
@@ -65,7 +72,9 @@ const scrollContainer = ref<HTMLElement>()
 const formData = reactive({
   VITE_OPENAI_API_KEY: '',
   VITE_OPENROUTER_API_KEY: '',
-  aiProvider: 'openai' as 'openai' | 'openrouter' | 'ollama' | 'lm-studio',
+  VITE_ZAI_API_KEY: '',
+  VITE_MINIMAX_API_KEY: '',
+  aiProvider: 'openai' as AIProviderKey,
   assistantModel: 'gpt-4o-mini' as string,
   summarizationModel: 'gpt-4o-mini' as string,
   sttProvider: 'openai' as 'openai' | 'groq' | 'google' | 'local',
@@ -75,6 +84,8 @@ const formData = reactive({
   VITE_GOOGLE_API_KEY: '',
   ollamaBaseUrl: 'http://localhost:11434',
   lmStudioBaseUrl: 'http://localhost:1234',
+  zaiBaseUrl: ZAI_CODING_BASE_URL,
+  minimaxBaseUrl: MINIMAX_OPENAI_BASE_URL,
   useLocalModels: false,
   availableModels: [] as string[],
   localSttLanguage: 'auto',
@@ -83,6 +94,8 @@ const formData = reactive({
 const isTesting = reactive({
   openai: false,
   openrouter: false,
+  zai: false,
+  minimax: false,
   ollama: false,
   lmStudio: false,
 })
@@ -90,6 +103,8 @@ const isTesting = reactive({
 const testResult = reactive({
   openai: { success: false, error: '' },
   openrouter: { success: false, error: '' },
+  zai: { success: false, error: '' },
+  minimax: { success: false, error: '' },
   ollama: { success: false, error: '' },
   lmStudio: { success: false, error: '' },
 })
@@ -119,7 +134,9 @@ const canContinue = computed(() => {
       if (
         (formData.aiProvider === 'ollama' ||
           formData.aiProvider === 'lm-studio' ||
-          formData.aiProvider === 'openrouter') &&
+          formData.aiProvider === 'openrouter' ||
+          formData.aiProvider === 'zai' ||
+          formData.aiProvider === 'minimax') &&
         !formData.VITE_OPENAI_API_KEY.trim()
       ) {
         return false
@@ -173,6 +190,12 @@ watch(
     if (newProvider === 'openai' || newProvider === 'openrouter') {
       formData.assistantModel = 'gpt-4o-mini'
       formData.summarizationModel = 'gpt-4o-mini'
+    } else if (newProvider === 'zai') {
+      formData.assistantModel = 'glm-5.1'
+      formData.summarizationModel = 'glm-5.1'
+    } else if (newProvider === 'minimax') {
+      formData.assistantModel = 'MiniMax-M2.7'
+      formData.summarizationModel = 'MiniMax-M2.7'
     }
   }
 )
@@ -184,12 +207,21 @@ const fetchAvailableModels = async () => {
       baseURL = `${formData.ollamaBaseUrl}/v1`
     } else if (formData.aiProvider === 'lm-studio') {
       baseURL = `${formData.lmStudioBaseUrl}/v1`
+    } else if (formData.aiProvider === 'zai') {
+      baseURL = formData.zaiBaseUrl
+    } else if (formData.aiProvider === 'minimax') {
+      baseURL = formData.minimaxBaseUrl
     } else {
       return
     }
 
     const tempClient = new OpenAI({
-      apiKey: formData.aiProvider,
+      apiKey:
+        formData.aiProvider === 'zai'
+          ? formData.VITE_ZAI_API_KEY
+          : formData.aiProvider === 'minimax'
+            ? formData.VITE_MINIMAX_API_KEY
+            : formData.aiProvider,
       baseURL,
       dangerouslyAllowBrowser: true,
     })
@@ -268,6 +300,88 @@ const testOpenRouterKey = async () => {
     }
   } finally {
     isTesting.openrouter = false
+  }
+}
+
+const testZAIKey = async () => {
+  if (!formData.VITE_ZAI_API_KEY.trim()) {
+    testResult.zai.error = 'API Key cannot be empty.'
+    testResult.zai.success = false
+    return
+  }
+  if (!formData.zaiBaseUrl.trim()) {
+    testResult.zai.error = 'Base URL cannot be empty.'
+    testResult.zai.success = false
+    return
+  }
+
+  isTesting.zai = true
+  testResult.zai.error = ''
+  testResult.zai.success = false
+
+  try {
+    const tempClient = new OpenAI({
+      apiKey: formData.VITE_ZAI_API_KEY,
+      baseURL: formData.zaiBaseUrl,
+      dangerouslyAllowBrowser: true,
+      timeout: 10 * 1000,
+      maxRetries: 1,
+    })
+
+    await tempClient.models.list()
+    testResult.zai.success = true
+    await fetchAvailableModels()
+  } catch (e: any) {
+    testResult.zai.error =
+      'API key or Coding Plan endpoint is invalid or has no permissions.'
+    if (e.message?.includes('401')) {
+      testResult.zai.error = 'Invalid API key - please check your key.'
+    } else if (e.message?.includes('429')) {
+      testResult.zai.error = 'Rate limit exceeded - please try again later.'
+    }
+  } finally {
+    isTesting.zai = false
+  }
+}
+
+const testMiniMaxKey = async () => {
+  if (!formData.VITE_MINIMAX_API_KEY.trim()) {
+    testResult.minimax.error = 'API Key cannot be empty.'
+    testResult.minimax.success = false
+    return
+  }
+  if (!formData.minimaxBaseUrl.trim()) {
+    testResult.minimax.error = 'Base URL cannot be empty.'
+    testResult.minimax.success = false
+    return
+  }
+
+  isTesting.minimax = true
+  testResult.minimax.error = ''
+  testResult.minimax.success = false
+
+  try {
+    const tempClient = new OpenAI({
+      apiKey: formData.VITE_MINIMAX_API_KEY,
+      baseURL: formData.minimaxBaseUrl,
+      dangerouslyAllowBrowser: true,
+      timeout: 10 * 1000,
+      maxRetries: 1,
+    })
+
+    await tempClient.models.list()
+    testResult.minimax.success = true
+    await fetchAvailableModels()
+  } catch (e: any) {
+    testResult.minimax.error =
+      'API key or OpenAI-compatible endpoint is invalid or has no permissions.'
+    if (e.message?.includes('401')) {
+      testResult.minimax.error = 'Invalid API key - please check your key.'
+    } else if (e.message?.includes('429')) {
+      testResult.minimax.error = 'Rate limit exceeded - please try again later.'
+    }
+  } finally {
+    isTesting.minimax = false
   }
 }
 
@@ -352,6 +466,10 @@ const resetTestResults = () => {
   testResult.openai.error = ''
   testResult.openrouter.success = false
   testResult.openrouter.error = ''
+  testResult.zai.success = false
+  testResult.zai.error = ''
+  testResult.minimax.success = false
+  testResult.minimax.error = ''
   testResult.ollama.success = false
   testResult.ollama.error = ''
   testResult.lmStudio.success = false
@@ -363,6 +481,18 @@ const isCurrentProviderTested = () => {
     return testResult.openai.success
   } else if (formData.aiProvider === 'openrouter') {
     return testResult.openrouter.success
+  } else if (formData.aiProvider === 'zai') {
+    return (
+      testResult.zai.success &&
+      Boolean(formData.assistantModel) &&
+      Boolean(formData.summarizationModel)
+    )
+  } else if (formData.aiProvider === 'minimax') {
+    return (
+      testResult.minimax.success &&
+      Boolean(formData.assistantModel) &&
+      Boolean(formData.summarizationModel)
+    )
   } else if (formData.aiProvider === 'ollama') {
     return (
       testResult.ollama.success &&

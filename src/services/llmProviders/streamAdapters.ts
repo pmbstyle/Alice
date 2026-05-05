@@ -1,6 +1,6 @@
 export async function* convertLocalLLMStreamToResponsesFormat(
   stream: any,
-  provider: 'ollama' | 'lm-studio'
+  provider: 'ollama' | 'lm-studio' | 'zai' | 'minimax'
 ) {
   let responseId = `${provider}-${Date.now()}`
   let messageItemId = `message-${Date.now()}`

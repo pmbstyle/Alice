@@ -11,9 +11,17 @@ export interface AppSettings {
   VITE_OPENAI_PROJECT?: string
   VITE_OPENAI_ASSISTANT_ID?: string
   VITE_OPENROUTER_API_KEY?: string
+  VITE_ZAI_API_KEY?: string
+  VITE_MINIMAX_API_KEY?: string
   VITE_GROQ_API_KEY?: string
   sttProvider?: 'openai' | 'groq' | 'transformers'
-  aiProvider?: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
+  aiProvider?:
+    | 'openai'
+    | 'openrouter'
+    | 'ollama'
+    | 'lm-studio'
+    | 'zai'
+    | 'minimax'
 
   // Transformers STT settings
   transformersModel?: string
@@ -25,6 +33,8 @@ export interface AppSettings {
 
   ollamaBaseUrl?: string
   lmStudioBaseUrl?: string
+  zaiBaseUrl?: string
+  minimaxBaseUrl?: string
 
   assistantModel?: string
   assistantSystemPrompt?: string

@@ -4,6 +4,7 @@ import {
   PREDEFINED_OPENAI_TOOLS,
   type ApiRequestBodyFunctionTool,
 } from '../../utils/assistantTools'
+import { PROVIDER_CONFIGS } from './providerCatalog'
 
 export async function buildToolsForProvider(): Promise<any[]> {
   const settings = useSettingsStore().config
@@ -106,10 +107,7 @@ export async function buildToolsForProvider(): Promise<any[]> {
       })
     finalToolsForApi.length = 0
     finalToolsForApi.push(...allowedTools)
-  } else if (
-    settings.aiProvider === 'ollama' ||
-    settings.aiProvider === 'lm-studio'
-  ) {
+  } else if (!PROVIDER_CONFIGS[settings.aiProvider].nativeWebSearch) {
     const allowedTools = finalToolsForApi.filter(tool => {
       if (
         tool.type === 'image_generation' ||

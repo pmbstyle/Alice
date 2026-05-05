@@ -62,6 +62,12 @@
                 currentSettings.VITE_OPENAI_API_KEY) ||
                 (currentSettings.aiProvider === 'openrouter' &&
                   currentSettings.VITE_OPENROUTER_API_KEY) ||
+                (currentSettings.aiProvider === 'zai' &&
+                  currentSettings.VITE_ZAI_API_KEY &&
+                  currentSettings.zaiBaseUrl) ||
+                (currentSettings.aiProvider === 'minimax' &&
+                  currentSettings.VITE_MINIMAX_API_KEY &&
+                  currentSettings.minimaxBaseUrl) ||
                 (currentSettings.aiProvider === 'ollama' &&
                   currentSettings.ollamaBaseUrl) ||
                 (currentSettings.aiProvider === 'lm-studio' &&
@@ -293,15 +299,24 @@
               ((currentSettings.aiProvider === 'openai' &&
                 currentSettings.VITE_OPENAI_API_KEY) ||
                 (currentSettings.aiProvider === 'openrouter' &&
-                  currentSettings.VITE_OPENROUTER_API_KEY)) &&
+                  currentSettings.VITE_OPENROUTER_API_KEY) ||
+                (currentSettings.aiProvider === 'zai' &&
+                  currentSettings.VITE_ZAI_API_KEY &&
+                  currentSettings.zaiBaseUrl) ||
+                (currentSettings.aiProvider === 'minimax' &&
+                  currentSettings.VITE_MINIMAX_API_KEY &&
+                  currentSettings.minimaxBaseUrl) ||
+                (currentSettings.aiProvider === 'ollama' &&
+                  currentSettings.ollamaBaseUrl) ||
+                (currentSettings.aiProvider === 'lm-studio' &&
+                  currentSettings.lmStudioBaseUrl)) &&
               availableModels.length === 0
             "
             class="text-xs text-warning mt-1"
           >
-            {{
-              currentSettings.aiProvider === 'openai' ? 'OpenAI' : 'OpenRouter'
-            }}
-            API key needs to be validated (Save & Test) to load models.
+            {{ getProviderDisplayName(currentSettings.aiProvider) }}
+            API key/configuration needs to be validated (Save & Test) to load
+            models.
           </p>
           <p class="text-xs text-gray-400 mt-1">
             Model used for generating conversation summaries (e.g.,
@@ -360,9 +375,7 @@
                   class="checkbox checkbox-accent checkbox-sm"
                   :disabled="!isToolConfigured(tool.name)"
                 />
-                <span
-                  class="label-text font-bold text-white"
-                >
+                <span class="label-text font-bold text-white">
                   {{ tool.displayName }}
                   <span
                     v-if="!isToolConfigured(tool.name)"
@@ -374,7 +387,10 @@
               </label>
               <div class="text-sm text-gray-400">
                 {{ tool.description }}
-                <template v-if="!isToolConfigured(tool.name)">(API key for this tool not configured in Optional Tool APIs section)</template>
+                <template v-if="!isToolConfigured(tool.name)"
+                  >(API key for this tool not configured in Optional Tool APIs
+                  section)</template
+                >
               </div>
             </div>
           </div>
@@ -412,10 +428,7 @@
                 >
                   {{ tool.enabled ? 'enabled' : 'disabled' }}
                 </span>
-                <span
-                  v-if="!tool.isValid"
-                  class="text-warning font-semibold"
-                >
+                <span v-if="!tool.isValid" class="text-warning font-semibold">
                   needs fix
                 </span>
               </li>
@@ -505,6 +518,8 @@ const getProviderDisplayName = (provider: string): string => {
     openrouter: 'OpenRouter',
     ollama: 'Ollama',
     'lm-studio': 'LM Studio',
+    zai: 'Z.ai',
+    minimax: 'MiniMax',
   }
   return providerNames[provider] || provider
 }

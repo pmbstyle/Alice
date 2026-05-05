@@ -19,6 +19,8 @@
           >
             <option value="openai">OpenAI</option>
             <option value="openrouter">OpenRouter</option>
+            <option value="zai">Z.ai (Coding Plan)</option>
+            <option value="minimax">MiniMax</option>
             <option value="ollama">Ollama (Local)</option>
             <option value="lm-studio">LM Studio (Local)</option>
           </select>
@@ -133,6 +135,66 @@
           />
           <p class="text-xs text-gray-400 mt-1">
             URL where your Ollama server is running.
+          </p>
+        </div>
+        <div v-if="currentSettings.aiProvider === 'zai'">
+          <label for="zai-key" class="block mb-1 text-sm">Z.ai API Key *</label>
+          <input
+            id="zai-key"
+            type="password"
+            v-model="currentSettings.VITE_ZAI_API_KEY"
+            class="input focus:outline-none w-full"
+            autocomplete="new-password"
+            placeholder="..."
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            Required for GLM Coding Plan chat models.
+          </p>
+        </div>
+        <div v-if="currentSettings.aiProvider === 'zai'">
+          <label for="zai-url" class="block mb-1 text-sm"
+            >Z.ai Base URL *</label
+          >
+          <input
+            id="zai-url"
+            type="text"
+            v-model="currentSettings.zaiBaseUrl"
+            class="input focus:outline-none w-full"
+            placeholder="https://api.z.ai/api/coding/paas/v4"
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            Coding Plan endpoint for OpenAI-compatible tools.
+          </p>
+        </div>
+        <div v-if="currentSettings.aiProvider === 'minimax'">
+          <label for="minimax-key" class="block mb-1 text-sm"
+            >MiniMax API Key *</label
+          >
+          <input
+            id="minimax-key"
+            type="password"
+            v-model="currentSettings.VITE_MINIMAX_API_KEY"
+            class="input focus:outline-none w-full"
+            autocomplete="new-password"
+            placeholder="..."
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            Required for MiniMax OpenAI-compatible chat models.
+          </p>
+        </div>
+        <div v-if="currentSettings.aiProvider === 'minimax'">
+          <label for="minimax-url" class="block mb-1 text-sm"
+            >MiniMax Base URL *</label
+          >
+          <input
+            id="minimax-url"
+            type="text"
+            v-model="currentSettings.minimaxBaseUrl"
+            class="input focus:outline-none w-full"
+            placeholder="https://api.minimax.io/v1"
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            OpenAI-compatible endpoint for MiniMax token/coding plans.
           </p>
         </div>
         <div v-if="currentSettings.aiProvider === 'lm-studio'">

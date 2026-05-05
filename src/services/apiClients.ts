@@ -2,12 +2,18 @@ import OpenAI from 'openai'
 import Groq from 'groq-sdk'
 import { useSettingsStore } from '../stores/settingsStore'
 import { backendApi } from './backendApi'
+import {
+  MINIMAX_OPENAI_BASE_URL,
+  ZAI_CODING_BASE_URL,
+} from './llmProviders/providerCatalog'
 
 let openaiClient: OpenAI | null = null
 let openrouterClient: OpenAI | null = null
 let groqClient: Groq | null = null
 let ollamaClient: OpenAI | null = null
 let lmStudioClient: OpenAI | null = null
+let zaiClient: OpenAI | null = null
+let minimaxClient: OpenAI | null = null
 
 export function getOpenAIClient(): OpenAI {
   if (!openaiClient) {
@@ -57,6 +63,26 @@ export function getLMStudioClient(): OpenAI {
     throw new Error('LM Studio client could not be initialized')
   }
   return lmStudioClient
+}
+
+export function getZAIClient(): OpenAI {
+  if (!zaiClient) {
+    initializeZAIClient()
+  }
+  if (!zaiClient) {
+    throw new Error('Z.ai client could not be initialized')
+  }
+  return zaiClient
+}
+
+export function getMiniMaxClient(): OpenAI {
+  if (!minimaxClient) {
+    initializeMiniMaxClient()
+  }
+  if (!minimaxClient) {
+    throw new Error('MiniMax client could not be initialized')
+  }
+  return minimaxClient
 }
 
 function initializeOpenAIClient(): void {
@@ -140,6 +166,38 @@ function initializeLMStudioClient(): void {
   })
 }
 
+function initializeZAIClient(): void {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_ZAI_API_KEY) {
+    console.error('Z.ai API Key is not configured.')
+    throw new Error('Z.ai API Key is not configured.')
+  }
+
+  zaiClient = new OpenAI({
+    apiKey: settings.VITE_ZAI_API_KEY,
+    baseURL: settings.zaiBaseUrl || ZAI_CODING_BASE_URL,
+    dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
+  })
+}
+
+function initializeMiniMaxClient(): void {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_MINIMAX_API_KEY) {
+    console.error('MiniMax API Key is not configured.')
+    throw new Error('MiniMax API Key is not configured.')
+  }
+
+  minimaxClient = new OpenAI({
+    apiKey: settings.VITE_MINIMAX_API_KEY,
+    baseURL: settings.minimaxBaseUrl || MINIMAX_OPENAI_BASE_URL,
+    dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
+  })
+}
+
 export function reinitializeClients(): void {
   console.log('Reinitializing API clients with updated settings...')
 
@@ -181,6 +239,22 @@ export function reinitializeClients(): void {
   } catch (error) {
     console.error('Failed to reinitialize LM Studio client:', error)
     lmStudioClient = null
+  }
+
+  try {
+    initializeZAIClient()
+    console.log('Z.ai client reinitialized successfully')
+  } catch (error) {
+    console.error('Failed to reinitialize Z.ai client:', error)
+    zaiClient = null
+  }
+
+  try {
+    initializeMiniMaxClient()
+    console.log('MiniMax client reinitialized successfully')
+  } catch (error) {
+    console.error('Failed to reinitialize MiniMax client:', error)
+    minimaxClient = null
   }
 }
 

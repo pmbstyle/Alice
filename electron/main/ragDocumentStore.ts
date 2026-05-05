@@ -11,6 +11,8 @@ import { pathToFileURL } from 'node:url'
 import { backendManager } from './backendManager'
 
 const { HierarchicalNSW } = HnswlibNode
+type HierarchicalNSWIndex = InstanceType<typeof HierarchicalNSW>
+type SQLiteDatabase = any
 
 const LOCAL_VECTOR_DIMENSION = 384
 const MAX_ELEMENTS_HNSW = 200000
@@ -37,11 +39,17 @@ const RAG_DEBUG_PDF = process.env.ALICE_RAG_DEBUG_PDF === 'true'
 const RAG_DEBUG_PDF_SAMPLE_CHARS = 1200
 
 const ragDbPath = path.join(app.getPath('userData'), RAG_DB_FILE_NAME)
-const ragIndexPath = path.join(app.getPath('userData'), RAG_HNSW_INDEX_FILE_NAME)
-const ragIndexMetaPath = path.join(app.getPath('userData'), RAG_HNSW_META_FILE_NAME)
+const ragIndexPath = path.join(
+  app.getPath('userData'),
+  RAG_HNSW_INDEX_FILE_NAME
+)
+const ragIndexMetaPath = path.join(
+  app.getPath('userData'),
+  RAG_HNSW_META_FILE_NAME
+)
 
-let db: Database.Database | null = null
-let hnswIndex: HierarchicalNSW | null = null
+let db: SQLiteDatabase | null = null
+let hnswIndex: HierarchicalNSWIndex | null = null
 let isStoreInitialized = false
 let labelToChunkId: Map<number, string> = new Map()
 let hasRecoveredFromCorruption = false
@@ -218,7 +226,9 @@ function normalizePathForCompare(value: string): string {
 
 async function normalizeRagTargets(
   paths: string[]
-): Promise<Array<{ normalizedPath: string; dirPrefix: string; isDirectory: boolean }>> {
+): Promise<
+  Array<{ normalizedPath: string; dirPrefix: string; isDirectory: boolean }>
+> {
   const unique = Array.from(
     new Set((paths || []).map(item => String(item)).filter(Boolean))
   )
@@ -253,7 +263,11 @@ async function normalizeRagTargets(
 
 function shouldRemoveRagDoc(
   docPath: string,
-  targets: Array<{ normalizedPath: string; dirPrefix: string; isDirectory: boolean }>
+  targets: Array<{
+    normalizedPath: string
+    dirPrefix: string
+    isDirectory: boolean
+  }>
 ): boolean {
   const normalizedDoc = normalizePathForCompare(docPath)
   return targets.some(target => {
@@ -328,11 +342,7 @@ function cleanExtractedText(text: string): string {
     }
 
     next = tokens[i + 1]
-    if (
-      next &&
-      /^[A-Z][a-z]{1,2}$/.test(token) &&
-      /^[a-z]{3,}$/.test(next)
-    ) {
+    if (next && /^[A-Z][a-z]{1,2}$/.test(token) && /^[a-z]{3,}$/.test(next)) {
       token = `${token}${next}`
       i += 1
       next = tokens[i + 1]
@@ -362,7 +372,6 @@ async function parsePdfInWorker(filePath: string): Promise<ParsedSection[]> {
 
   return new Promise((resolve, reject) => {
     const worker = new Worker(workerUrl, {
-      type: 'module',
       workerData: {
         appPath: app.getAppPath(),
       },
@@ -414,7 +423,13 @@ async function parsePdfInWorker(filePath: string): Promise<ParsedSection[]> {
 function getPdfWorkerUrl(): URL {
   const appPath = app.getAppPath()
   const candidates = [
-    path.join(appPath, 'dist-electron', 'main', 'workers', 'pdfParserWorker.js'),
+    path.join(
+      appPath,
+      'dist-electron',
+      'main',
+      'workers',
+      'pdfParserWorker.js'
+    ),
     path.join(appPath, 'workers', 'pdfParserWorker.js'),
   ]
 
@@ -458,7 +473,7 @@ function splitByMarkdownHeadings(text: string): ParsedSection[] {
   return sections
 }
 
-function ensureFtsReady(currentDb: Database.Database) {
+function ensureFtsReady(currentDb: SQLiteDatabase) {
   currentDb.exec(`
     CREATE VIRTUAL TABLE IF NOT EXISTS rag_chunks_fts
     USING fts5(id, text, content='rag_chunks', content_rowid='rowid');
@@ -547,7 +562,7 @@ async function hashBuffer(buffer: Buffer): Promise<string> {
   return createHash('sha256').update(buffer).digest('hex')
 }
 
-function ensureDb(): Database.Database {
+function ensureDb(): SQLiteDatabase {
   if (!db) {
     initDb()
   }
@@ -563,10 +578,15 @@ type RagIndexMeta = {
   maxCreatedAt: string | null
 }
 
-function getIndexFingerprintFromDb(): { count: number; maxCreatedAt: string | null } {
+function getIndexFingerprintFromDb(): {
+  count: number
+  maxCreatedAt: string | null
+} {
   const currentDb = ensureDb()
   const row = currentDb
-    .prepare('SELECT COUNT(*) as count, MAX(created_at) as maxCreatedAt FROM rag_chunks')
+    .prepare(
+      'SELECT COUNT(*) as count, MAX(created_at) as maxCreatedAt FROM rag_chunks'
+    )
     .get() as { count: number; maxCreatedAt: string | null }
   return {
     count: row.count || 0,
@@ -574,7 +594,10 @@ function getIndexFingerprintFromDb(): { count: number; maxCreatedAt: string | nu
   }
 }
 
-function isIndexMetaMatch(meta: RagIndexMeta, fingerprint: { count: number; maxCreatedAt: string | null }): boolean {
+function isIndexMetaMatch(
+  meta: RagIndexMeta,
+  fingerprint: { count: number; maxCreatedAt: string | null }
+): boolean {
   return (
     meta.version === 1 &&
     meta.count === fingerprint.count &&
@@ -593,7 +616,10 @@ async function readIndexMeta(): Promise<RagIndexMeta | null> {
   }
 }
 
-async function writeIndexMeta(meta: { count: number; maxCreatedAt: string | null }): Promise<void> {
+async function writeIndexMeta(meta: {
+  count: number
+  maxCreatedAt: string | null
+}): Promise<void> {
   try {
     const payload: RagIndexMeta = {
       version: 1,
@@ -780,8 +806,12 @@ async function upsertDocument(
 ): Promise<void> {
   const currentDb = ensureDb()
   const existing = currentDb
-    .prepare('SELECT id, file_hash, mtime, size FROM rag_documents WHERE path = ?')
-    .get(filePath) as { id: string; file_hash: string; mtime: number; size: number } | undefined
+    .prepare(
+      'SELECT id, file_hash, mtime, size FROM rag_documents WHERE path = ?'
+    )
+    .get(filePath) as
+    | { id: string; file_hash: string; mtime: number; size: number }
+    | undefined
 
   const docId = existing?.id || randomUUID()
   const now = new Date().toISOString()
@@ -826,14 +856,20 @@ async function upsertDocument(
     try {
       currentDb.transaction(() => {
         if (existing) {
-          currentDb.prepare(
-            'UPDATE rag_documents SET file_hash = ?, mtime = ?, size = ?, title = ?, updated_at = ? WHERE id = ?'
-          ).run(hash, mtime, size, parsed.title, now, docId)
-          currentDb.prepare('DELETE FROM rag_chunks WHERE doc_id = ?').run(docId)
+          currentDb
+            .prepare(
+              'UPDATE rag_documents SET file_hash = ?, mtime = ?, size = ?, title = ?, updated_at = ? WHERE id = ?'
+            )
+            .run(hash, mtime, size, parsed.title, now, docId)
+          currentDb
+            .prepare('DELETE FROM rag_chunks WHERE doc_id = ?')
+            .run(docId)
         } else {
-          currentDb.prepare(
-            'INSERT INTO rag_documents (id, path, file_hash, mtime, size, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-          ).run(docId, filePath, hash, mtime, size, parsed.title, now, now)
+          currentDb
+            .prepare(
+              'INSERT INTO rag_documents (id, path, file_hash, mtime, size, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+            )
+            .run(docId, filePath, hash, mtime, size, parsed.title, now, now)
         }
       })()
     } catch (error) {
@@ -877,14 +913,18 @@ async function upsertDocument(
   try {
     currentDb.transaction(() => {
       if (existing) {
-        currentDb.prepare(
-          'UPDATE rag_documents SET file_hash = ?, mtime = ?, size = ?, title = ?, updated_at = ? WHERE id = ?'
-        ).run(hash, mtime, size, parsed.title, now, docId)
+        currentDb
+          .prepare(
+            'UPDATE rag_documents SET file_hash = ?, mtime = ?, size = ?, title = ?, updated_at = ? WHERE id = ?'
+          )
+          .run(hash, mtime, size, parsed.title, now, docId)
         currentDb.prepare('DELETE FROM rag_chunks WHERE doc_id = ?').run(docId)
       } else {
-        currentDb.prepare(
-          'INSERT INTO rag_documents (id, path, file_hash, mtime, size, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
-        ).run(docId, filePath, hash, mtime, size, parsed.title, now, now)
+        currentDb
+          .prepare(
+            'INSERT INTO rag_documents (id, path, file_hash, mtime, size, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          )
+          .run(docId, filePath, hash, mtime, size, parsed.title, now, now)
       }
       for (const row of chunkRows) {
         insert.run(
@@ -947,7 +987,11 @@ export async function removeRagPaths(
 }
 
 async function pruneMissingDocuments(
-  targets: Array<{ normalizedPath: string; dirPrefix: string; isDirectory: boolean }>
+  targets: Array<{
+    normalizedPath: string
+    dirPrefix: string
+    isDirectory: boolean
+  }>
 ): Promise<number> {
   if (targets.length === 0) return 0
   const currentDb = ensureDb()
@@ -1121,8 +1165,12 @@ export async function indexPaths(
       const buffer = await fs.readFile(filePath)
       const fileHash = await hashBuffer(buffer)
       const existing = ensureDb()
-        .prepare('SELECT file_hash, mtime, size FROM rag_documents WHERE path = ?')
-        .get(filePath) as { file_hash: string; mtime: number; size: number } | undefined
+        .prepare(
+          'SELECT file_hash, mtime, size FROM rag_documents WHERE path = ?'
+        )
+        .get(filePath) as
+        | { file_hash: string; mtime: number; size: number }
+        | undefined
 
       if (
         existing &&

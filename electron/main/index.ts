@@ -45,7 +45,6 @@ import DesktopManager from './desktopManager'
 import { backendManager } from './backendManager'
 import { setupDependencies } from '../../scripts/setup-dependencies.js'
 
-
 // Global state for hot reload persistence
 declare global {
   var aliceAppState:
@@ -62,7 +61,7 @@ const USER_DATA_PATH = app.getPath('userData')
 const GENERATED_IMAGES_FULL_PATH = path.join(USER_DATA_PATH, 'generated_images')
 
 let isHandlingQuit = false
-let wss: WebSocketServer | null = null
+let wss: any | null = null
 // Use global variables to persist across hot reloads
 if (!global.aliceAppState) {
   global.aliceAppState = {
@@ -134,13 +133,13 @@ process.on('unhandledRejection', (reason, promise) => {
 })
 
 function initializeManagers(): void {
-  if (global.aliceAppState.managersInitialized) {
+  if (global.aliceAppState!.managersInitialized) {
     console.log(
       `[Main Index ${initId}] Managers already initialized, skipping...`
     )
     return
   }
-  global.aliceAppState.managersInitialized = true
+  global.aliceAppState!.managersInitialized = true
 
   console.log(`[Main Index ${initId}] Initializing managers...`)
   DesktopManager.getInstance()
@@ -206,7 +205,7 @@ function startWebSocketServer() {
     }
   }
 
-  const setupWebSocketHandlers = (server: WebSocketServer, port: number) => {
+  const setupWebSocketHandlers = (server: any, port: number) => {
     console.log(
       `[WebSocket] WebSocket server listening at ws://localhost:${port}`
     )
@@ -216,8 +215,8 @@ function startWebSocketServer() {
       { resolve: (value: any) => void; reject: (error: any) => void }
     >()
 
-    server.on('connection', ws => {
-      ws.on('message', async message => {
+    server.on('connection', (ws: any) => {
+      ws.on('message', async (message: any) => {
         try {
           const data = JSON.parse(message.toString())
 
@@ -356,13 +355,13 @@ app.on('ready', () => {
 app.whenReady().then(async () => {
   console.log(
     `[Main Index ${initId}] whenReady called, appInitialized:`,
-    global.aliceAppState.appInitialized
+    global.aliceAppState!.appInitialized
   )
-  if (global.aliceAppState.appInitialized) {
+  if (global.aliceAppState!.appInitialized) {
     console.log(`[Main Index ${initId}] App already initialized, skipping...`)
     return
   }
-  global.aliceAppState.appInitialized = true
+  global.aliceAppState!.appInitialized = true
 
   console.log(`[Main Index ${initId}] Starting app initialization...`)
 
@@ -379,10 +378,7 @@ app.whenReady().then(async () => {
 
   initializeManagers()
 
-  registerCustomProtocol(
-    GENERATED_IMAGES_FULL_PATH,
-    getCustomAvatarsRootPath()
-  )
+  registerCustomProtocol(GENERATED_IMAGES_FULL_PATH, getCustomAvatarsRootPath())
 
   const initialSettings = await loadSettings()
   if (initialSettings) {

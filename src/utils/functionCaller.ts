@@ -724,7 +724,7 @@ async function searxng_web_search(
 }
 
 const functionRegistry: {
-  [key: string]: (args: any) => Promise<FunctionResult>
+  [key: string]: (args: any, settings?: any) => Promise<FunctionResult>
 } = {
   save_memory: save_memory,
   delete_memory: delete_memory,

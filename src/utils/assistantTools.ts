@@ -1,4 +1,3 @@
-import type { OpenAI } from 'openai'
 import rawFunctionSchemasFromFile from '../../docs/functions.json'
 
 export interface ApiRequestBodyFunctionTool {
@@ -6,7 +5,7 @@ export interface ApiRequestBodyFunctionTool {
   name: string
   strict: boolean
   description?: string
-  parameters: OpenAI.FunctionTool.Parameters
+  parameters: Record<string, any>
 }
 
 export const PREDEFINED_OPENAI_TOOLS: ApiRequestBodyFunctionTool[] = (
@@ -24,5 +23,6 @@ export const PREDEFINED_OPENAI_TOOLS: ApiRequestBodyFunctionTool[] = (
     name: schema.name,
     description: schema.description,
     parameters: schema.parameters,
+    strict: schema.strict ?? false,
   }
 })

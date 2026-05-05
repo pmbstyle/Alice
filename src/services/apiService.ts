@@ -1,5 +1,5 @@
 import OpenAI from 'openai'
-import { toFile, type FileLike } from 'openai/uploads'
+import { toFile } from 'openai/uploads'
 import { useSettingsStore } from '../stores/settingsStore'
 import {
   getOpenAIClient,
@@ -391,7 +391,7 @@ export const transcribeWithGroq = async (
   audioBuffer: ArrayBuffer
 ): Promise<string> => {
   const groq = getGroqClient()
-  const file: FileLike = await toFile(audioBuffer, 'audio.wav', {
+  const file = await toFile(audioBuffer, 'audio.wav', {
     type: 'audio/wav',
   })
   const transcription = await groq.audio.transcriptions.create({
@@ -466,7 +466,7 @@ export const transcribeWithOpenAI = async (
   audioBuffer: ArrayBuffer
 ): Promise<string> => {
   const openai = getOpenAIClient()
-  const file: FileLike = await toFile(audioBuffer, 'audio.wav', {
+  const file = await toFile(audioBuffer, 'audio.wav', {
     type: 'audio/wav',
   })
   const transcription = await openai.audio.transcriptions.create({
@@ -714,7 +714,8 @@ export const createSummarizationResponse = async (
       store: false,
     } as any)
 
-    const textPart = response.output?.[0]?.content?.[0]
+    const outputItem = response.output?.[0] as any
+    const textPart = outputItem?.content?.[0]
     if (textPart?.type === 'output_text') {
       return textPart.text.trim()
     }
@@ -771,7 +772,8 @@ export const createContextAnalysisResponse = async (
       store: false,
     } as any)
 
-    const textPart = response.output?.[0]?.content?.[0]
+    const outputItem = response.output?.[0] as any
+    const textPart = outputItem?.content?.[0]
     if (textPart?.type === 'output_text') {
       return textPart.text.trim().replace(/"/g, '')
     }

@@ -15,7 +15,7 @@ import os from 'node:os'
 const testRoot = mkdtempSync(path.join(os.tmpdir(), 'alice-custom-avatars-'))
 const userDataDir = path.join(testRoot, 'user-data')
 mkdirSync(userDataDir, { recursive: true })
-let cwdSpy: ReturnType<typeof vi.spyOn> | null = null
+let cwdSpy: any = null
 
 vi.mock('electron', () => ({
   app: {

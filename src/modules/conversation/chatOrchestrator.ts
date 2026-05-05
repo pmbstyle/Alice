@@ -12,7 +12,7 @@ export interface ChatDependencies {
   getAssistantSystemPrompt(): string
   getEphemeralEmotionalContext(): string | null
   clearEphemeralEmotionalContext(): void
-  retrieveThoughtsForPrompt(prompt: string): Promise<string[]>
+  retrieveThoughtsForPrompt(prompt: string): Promise<any[]>
   retrieveDocumentsForPrompt(
     prompt: string,
     topK: number
@@ -23,15 +23,15 @@ export interface ChatDependencies {
     data?: { summary_text?: string }
   }>
   getChatHistory(): ChatMessage[]
-  buildApiInput(isNewChain: boolean): Promise<
-    OpenAI.Responses.Request.InputItemLike[]
-  >
+  buildApiInput(
+    isNewChain: boolean
+  ): Promise<OpenAI.Responses.Request.InputItemLike[]>
   addAssistantPlaceholder(): string
   processStream(
     stream: AsyncIterable<OpenAI.Responses.StreamEvent>,
     placeholderTempId: string,
     isContinuationAfterTool: boolean
-  ): Promise<void>
+  ): Promise<any>
   createOpenAIResponse(
     input: OpenAI.Responses.Request.InputItemLike[],
     responseId: string | null,
@@ -56,8 +56,7 @@ export function createChatOrchestrator(
 
   const formatRagSource = (result: RagSearchResult): string => {
     const fileName = result.path.split(/[\\/]/).pop() || result.title
-    const pageSuffix =
-      result.page && result.page > 0 ? `#p${result.page}` : ''
+    const pageSuffix = result.page && result.page > 0 ? `#p${result.page}` : ''
     return `${fileName}${pageSuffix}`
   }
 
@@ -71,7 +70,7 @@ export function createChatOrchestrator(
     results: RagSearchResult[],
     maxChars: number
   ): string => {
-    const prefix = 'Relevant excerpts from user\'s documents (cite when used):'
+    const prefix = "Relevant excerpts from user's documents (cite when used):"
     let remaining = maxChars - (prefix.length + 1)
     if (remaining <= 0) return ''
 
@@ -165,7 +164,8 @@ export function createChatOrchestrator(
 
     const anchorKeywords = keywords.filter(word => word.length >= 5)
     const scored = results.map(result => {
-      const haystack = `${result.title} ${result.path} ${result.text}`.toLowerCase()
+      const haystack =
+        `${result.title} ${result.path} ${result.text}`.toLowerCase()
       const normalizedHaystack = normalizeText(haystack)
       const matches = keywords.reduce((count, word) => {
         return haystack.includes(word) ? count + 1 : count
@@ -334,53 +334,44 @@ export function createChatOrchestrator(
     const retrievalSeed = buildRetrievalSeed(latestUserText, previousUserText)
 
     if (retrievalSeed) {
-        const thoughts = await dependencies.retrieveThoughtsForPrompt(
-          retrievalSeed
-        )
-        if (thoughts.length > 0) {
-          const thoughtLines = thoughts
-            .map(formatThoughtLine)
-            .filter(Boolean)
-          const thoughtsBlock = buildThoughtsBlock(thoughtLines)
-          if (thoughtsBlock) {
-            contextMessages.push({
-              role: 'user',
-              content: [{ type: 'input_text', text: thoughtsBlock }],
-            })
-          }
+      const thoughts =
+        await dependencies.retrieveThoughtsForPrompt(retrievalSeed)
+      if (thoughts.length > 0) {
+        const thoughtLines = thoughts.map(formatThoughtLine).filter(Boolean)
+        const thoughtsBlock = buildThoughtsBlock(thoughtLines)
+        if (thoughtsBlock) {
+          contextMessages.push({
+            role: 'user',
+            content: [{ type: 'input_text', text: thoughtsBlock }],
+          })
         }
+      }
 
-        const ragConfig = dependencies.getRagConfig()
-        if (ragConfig.enabled) {
-          const adjustedConfig = adjustRagConfig(
-            retrievalSeed,
-            ragConfig
+      const ragConfig = dependencies.getRagConfig()
+      if (ragConfig.enabled) {
+        const adjustedConfig = adjustRagConfig(retrievalSeed, ragConfig)
+        const ragResultsRaw = await dependencies.retrieveDocumentsForPrompt(
+          retrievalSeed,
+          adjustedConfig.topK
+        )
+        const ragResults = rerankRagResults(ragResultsRaw, retrievalSeed)
+        if (ragResults.length > 0) {
+          contextMessages.push({
+            role: 'user',
+            content: [{ type: 'input_text', text: buildRagRulesBlock() }],
+          })
+          const ragBlock = buildRagBlock(
+            ragResults,
+            adjustedConfig.maxContextChars
           )
-          const ragResultsRaw = await dependencies.retrieveDocumentsForPrompt(
-            retrievalSeed,
-            adjustedConfig.topK
-          )
-          const ragResults = rerankRagResults(
-            ragResultsRaw,
-            retrievalSeed
-          )
-          if (ragResults.length > 0) {
+          if (ragBlock) {
             contextMessages.push({
               role: 'user',
-              content: [{ type: 'input_text', text: buildRagRulesBlock() }],
+              content: [{ type: 'input_text', text: ragBlock }],
             })
-            const ragBlock = buildRagBlock(
-              ragResults,
-              adjustedConfig.maxContextChars
-            )
-            if (ragBlock) {
-              contextMessages.push({
-                role: 'user',
-                content: [{ type: 'input_text', text: ragBlock }],
-              })
-            }
           }
         }
+      }
     }
 
     return contextMessages
@@ -397,18 +388,16 @@ export function createChatOrchestrator(
 
     const contextMessages = await buildContextMessages()
 
-    const convertedContent =
-      latestUserMessage.content.reduce<OpenAI.Responses.Request.ContentPartLike[]>(
-        (acc, item) => {
-          if (item.type === 'app_text' && item.text) {
-            acc.push({ type: 'input_text', text: item.text })
-          } else if (item.type === 'app_image_uri' && item.uri) {
-            acc.push({ type: 'input_image', image_url: item.uri })
-          }
-          return acc
-        },
-        []
-      )
+    const convertedContent = latestUserMessage.content.reduce<
+      OpenAI.Responses.Request.ContentPartLike[]
+    >((acc, item) => {
+      if (item.type === 'app_text' && item.text) {
+        acc.push({ type: 'input_text', text: item.text })
+      } else if (item.type === 'app_image_uri' && item.uri) {
+        acc.push({ type: 'input_image', image_url: item.uri })
+      }
+      return acc
+    }, [])
 
     if (!convertedContent.length) return contextMessages
 
@@ -432,7 +421,9 @@ export function createChatOrchestrator(
     const isNewChain = dependencies.getCurrentResponseId() === null
     dependencies.logInfo(
       `[Chat] ${
-        isNewChain ? 'Starting new conversation chain' : 'Continuing existing chain'
+        isNewChain
+          ? 'Starting new conversation chain'
+          : 'Continuing existing chain'
       }, responseId:`,
       dependencies.getCurrentResponseId()
     )

@@ -3,7 +3,10 @@ import fs from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
-import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs'
+import {
+  getDocument,
+  GlobalWorkerOptions,
+} from 'pdfjs-dist/legacy/build/pdf.mjs'
 
 if (!parentPort) {
   throw new Error('[RAG] PDF worker started without a parent port.')
@@ -21,10 +24,7 @@ const resolveWorkerSrc = (): string => {
       'build',
       'pdf.worker.mjs'
     ),
-    path.join(
-      path.dirname(fileURLToPath(import.meta.url)),
-      'pdf.worker.mjs'
-    ),
+    path.join(path.dirname(fileURLToPath(import.meta.url)), 'pdf.worker.mjs'),
   ]
 
   for (const candidate of candidates) {
@@ -72,7 +72,9 @@ const buildTextFromItems = (items: PdfTextItem[]): string => {
     lineBuckets.set(yKey, bucket)
   })
 
-  const sortedLines = Array.from(lineBuckets.entries()).sort((a, b) => b[0] - a[0])
+  const sortedLines = Array.from(lineBuckets.entries()).sort(
+    (a, b) => b[0] - a[0]
+  )
 
   const lines: string[] = []
   sortedLines.forEach(([, lineItems]) => {
@@ -120,7 +122,7 @@ parentPort.on('message', async message => {
       buffer.byteOffset,
       buffer.byteLength
     )
-    const pdf = await getDocument({ data, disableWorker: true }).promise
+    const pdf = await getDocument({ data, disableWorker: true } as any).promise
     const sections: Array<{ text: string; page: number }> = []
 
     for (let page = 1; page <= pdf.numPages; page += 1) {

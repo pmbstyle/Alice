@@ -4,7 +4,9 @@ import { getOpenRouterClient } from '../apiClients'
 import { convertOpenRouterStreamToResponsesFormat } from './streamAdapters'
 import { buildToolsForProvider } from './tools'
 
-export const listOpenRouterModels = async (): Promise<OpenAI.Models.Model[]> => {
+export const listOpenRouterModels = async (): Promise<
+  OpenAI.Models.Model[]
+> => {
   const client = getOpenRouterClient()
   const modelsPage = await client.models.list()
 
@@ -43,7 +45,9 @@ export const createOpenRouterResponse = async (
       if (item.role === 'user') {
         if (Array.isArray(item.content)) {
           const textParts = item.content
-            .filter((part: any) => part.type === 'input_text' && part.text?.trim())
+            .filter(
+              (part: any) => part.type === 'input_text' && part.text?.trim()
+            )
             .map((part: any) => part.text)
             .join(' ')
 
@@ -100,7 +104,7 @@ export const createOpenRouterResponse = async (
           typeof item.content === 'string'
             ? item.content
             : Array.isArray(item.content)
-              ? item.content.map(p => p.text || '').join(' ')
+              ? item.content.map((p: any) => p.text || '').join(' ')
               : 'You are a helpful assistant.'
 
         return {
@@ -149,7 +153,9 @@ export const createOpenRouterResponse = async (
       )
       let merged = existing
       if (!hasCustom) {
-        merged = merged ? `${customInstructions}\n\n${merged}` : customInstructions
+        merged = merged
+          ? `${customInstructions}\n\n${merged}`
+          : customInstructions
       }
       if (!hasNote) {
         merged = `${merged}\n\nIMPORTANT: You have built-in web search capabilities. When you need to search the web or get current information, you can directly search without using any tools. Do NOT use open_path or other tools for web searches.`
@@ -192,9 +198,12 @@ export const createOpenRouterResponse = async (
   }
 
   if (stream) {
-    const openrouterStream = await client.chat.completions.create(params as any, {
-      signal,
-    })
+    const openrouterStream = await client.chat.completions.create(
+      params as any,
+      {
+        signal,
+      }
+    )
     return convertOpenRouterStreamToResponsesFormat(openrouterStream)
   }
 

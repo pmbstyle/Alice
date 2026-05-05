@@ -74,7 +74,9 @@ function normalizeEmbeddings(payload: {
   return normalized
 }
 
-function getProviderForEmbedding(embedding: number[]): 'openai' | 'local' | null {
+function getProviderForEmbedding(
+  embedding: number[]
+): 'openai' | 'local' | null {
   if (embedding.length === OPENAI_VECTOR_DIMENSION) return 'openai'
   if (embedding.length === LOCAL_VECTOR_DIMENSION) return 'local'
   return null
@@ -209,6 +211,7 @@ export async function getRecentMemoriesLocal(
         return memoriesToReturn
       }
 
+      const activeQueryEmbedding = queryEmbedding
       const scoredMemories = memoriesWithEmbeddings.map(mem => ({
         memory: {
           id: mem.id,
@@ -216,7 +219,10 @@ export async function getRecentMemoriesLocal(
           memoryType: mem.memoryType,
           createdAt: mem.createdAt,
         },
-        score: cosineSimilarity(queryEmbedding, mem.embedding as number[]),
+        score: cosineSimilarity(
+          activeQueryEmbedding,
+          mem.embedding as number[]
+        ),
       }))
 
       scoredMemories.sort((a, b) => b.score - a.score)

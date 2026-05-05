@@ -53,9 +53,10 @@ export function useAudioPlayback() {
       return
     }
 
+    let audioUrl: string | null = null
     try {
       const blob = await audioResponse.blob()
-      const audioUrl = URL.createObjectURL(blob)
+      audioUrl = URL.createObjectURL(blob)
 
       if (audioPlayer.value.src) {
         URL.revokeObjectURL(audioPlayer.value.src)
@@ -65,9 +66,10 @@ export function useAudioPlayback() {
       audioPlayer.value.onended = null
       audioPlayer.value.onerror = null
 
+      const currentAudioUrl = audioUrl
       audioPlayer.value.onended = () => {
         console.log('[Playback] Audio chunk finished playing.')
-        URL.revokeObjectURL(audioUrl)
+        URL.revokeObjectURL(currentAudioUrl)
         isProcessingQueue.value = false
         requestAnimationFrame(playNextAudio)
       }
@@ -78,7 +80,7 @@ export function useAudioPlayback() {
           e,
           audioPlayer.value?.error
         )
-        URL.revokeObjectURL(audioUrl)
+        URL.revokeObjectURL(currentAudioUrl)
         isProcessingQueue.value = false
         requestAnimationFrame(playNextAudio)
       }
@@ -88,7 +90,7 @@ export function useAudioPlayback() {
     } catch (error: any) {
       console.error('[Playback] Error setting up or playing audio:', error)
       isProcessingQueue.value = false
-      if (typeof audioUrl === 'string' && audioUrl.startsWith('blob:')) {
+      if (audioUrl && audioUrl.startsWith('blob:')) {
         URL.revokeObjectURL(audioUrl)
       }
       requestAnimationFrame(playNextAudio)
@@ -108,7 +110,7 @@ export function useAudioPlayback() {
           '[Playback Watcher] State is SPEAKING, but already processing or queue empty.'
         )
       }
-    } else if (oldState === 'SPEAKING' && newState !== 'SPEAKING') {
+    } else if (oldState === 'SPEAKING') {
       console.log('[Playback Watcher] State left SPEAKING, stopping playback.')
       stopPlaybackAndClearQueue()
     }
@@ -138,9 +140,7 @@ export function useAudioPlayback() {
       if (audioState.value === 'SPEAKING') {
         console.log('TTS disabled while speaking - stopping playback.')
         stopPlaybackAndClearQueue()
-        if (audioState.value === 'SPEAKING') {
-          setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
-        }
+        setAudioState(isRecordingRequested.value ? 'LISTENING' : 'IDLE')
       } else if (audioQueue.value.length > 0) {
         console.log('TTS disabled - clearing pending audio queue.')
         audioQueue.value = []

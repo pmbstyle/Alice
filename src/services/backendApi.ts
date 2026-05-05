@@ -95,7 +95,8 @@ export class BackendApi {
         }
 
         if (error.response) {
-          const message = error.response.data?.error || 'Backend server error'
+          const responseData = error.response.data as ApiResponse | undefined
+          const message = responseData?.error || 'Backend server error'
           throw new BackendApiError(message, error.response.status)
         }
 
@@ -110,9 +111,9 @@ export class BackendApi {
   async initialize(): Promise<void> {
     try {
       // Check if we're in Electron environment
-      if (typeof window !== 'undefined' && window.electronAPI) {
+      if (typeof window !== 'undefined' && window.ipcRenderer) {
         // Get API URL from Electron main process
-        const result = await window.electronAPI.invoke('backend:get-api-url')
+        const result = await window.ipcRenderer.invoke('backend:get-api-url')
         if (result?.success && result.data?.apiUrl) {
           this.baseUrl = result.data.apiUrl
           this.client.defaults.baseURL = this.baseUrl

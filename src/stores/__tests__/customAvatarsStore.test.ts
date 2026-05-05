@@ -4,12 +4,6 @@ import { useCustomAvatarsStore } from '../customAvatarsStore'
 import { useSettingsStore } from '../settingsStore'
 import type { CustomAvatarsSnapshot } from '../../../types/customAvatars'
 
-declare global {
-  interface Window {
-    customAvatarsAPI?: any
-  }
-}
-
 const baseSnapshot = (): CustomAvatarsSnapshot => ({
   avatars: [
     {
@@ -71,7 +65,9 @@ describe('useCustomAvatarsStore', () => {
     settingsStore.settings.assistantAvatar = 'custom:Galaxy'
 
     expect(store.activeAvatar.id).toBe('custom:Galaxy')
-    expect(store.activeAvatar.stateVideos.standby).toContain('Galaxy/standby.mp4')
+    expect(store.activeAvatar.stateVideos.standby).toContain(
+      'Galaxy/standby.mp4'
+    )
   })
 
   it('refresh updates snapshot and exposes errors', async () => {

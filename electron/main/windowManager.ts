@@ -97,7 +97,7 @@ export async function createMainWindow(): Promise<BrowserWindow> {
 
 export async function createOverlayWindow(): Promise<BrowserWindow> {
   const { width, height } = screen.getPrimaryDisplay().workAreaSize
-  
+
   overlayWindow = new BrowserWindow({
     width,
     height,
@@ -124,7 +124,7 @@ export async function createOverlayWindow(): Promise<BrowserWindow> {
   } else {
     await overlayWindow.loadFile(getIndexHtmlPath(), { hash: arg })
   }
-  
+
   overlayWindow.hide()
 
   overlayWindow.on('closed', () => {
@@ -138,12 +138,15 @@ export async function showOverlay(): Promise<boolean> {
   if (!overlayWindow) {
     await createOverlayWindow()
   }
-  
-  overlayWindow.setOpacity(0.35)
-  overlayWindow.show()
-  overlayWindow.focus()
-  overlayWindow.webContents.send('overlay-shown')
-  
+
+  const currentOverlayWindow = overlayWindow
+  if (!currentOverlayWindow) return false
+
+  currentOverlayWindow.setOpacity(0.35)
+  currentOverlayWindow.show()
+  currentOverlayWindow.focus()
+  currentOverlayWindow.webContents.send('overlay-shown')
+
   return true
 }
 
@@ -212,7 +215,7 @@ export async function createSettingsWindow(): Promise<BrowserWindow> {
     frame: false,
     resizable: true,
     alwaysOnTop: false,
-    parent: win,
+    parent: win || undefined,
     modal: false,
     backgroundColor: '#1f2937',
     webPreferences: {

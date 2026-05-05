@@ -68,8 +68,8 @@ const formData = reactive({
   aiProvider: 'openai' as 'openai' | 'openrouter' | 'ollama' | 'lm-studio',
   assistantModel: 'gpt-4o-mini' as string,
   summarizationModel: 'gpt-4o-mini' as string,
-  sttProvider: 'openai' as 'openai' | 'groq' | 'local',
-  ttsProvider: 'openai' as 'openai' | 'local',
+  sttProvider: 'openai' as 'openai' | 'groq' | 'google' | 'local',
+  ttsProvider: 'openai' as 'openai' | 'google' | 'local',
   embeddingProvider: 'openai' as 'openai' | 'local',
   VITE_GROQ_API_KEY: '',
   VITE_GOOGLE_API_KEY: '',
@@ -126,7 +126,10 @@ const canContinue = computed(() => {
       }
 
       // Check specific STT provider requirements
-      if (formData.sttProvider === 'groq' && !formData.VITE_GROQ_API_KEY.trim()) {
+      if (
+        formData.sttProvider === 'groq' &&
+        !formData.VITE_GROQ_API_KEY.trim()
+      ) {
         return false
       }
       if (
@@ -221,7 +224,7 @@ const testOpenAIKey = async () => {
       dangerouslyAllowBrowser: true,
     })
 
-    await tempClient.models.list({ limit: 1 })
+    await tempClient.models.list()
     testResult.openai.success = true
   } catch (e: any) {
     testResult.openai.error = 'API Key is invalid or has no permissions.'
@@ -253,7 +256,7 @@ const testOpenRouterKey = async () => {
       dangerouslyAllowBrowser: true,
     })
 
-    await tempClient.models.list({ limit: 1 })
+    await tempClient.models.list()
     testResult.openrouter.success = true
   } catch (e: any) {
     testResult.openrouter.error = 'API Key is invalid or has no permissions.'
@@ -288,7 +291,7 @@ const testOllamaConnection = async () => {
       maxRetries: 1,
     })
 
-    await tempClient.models.list({ limit: 1 })
+    await tempClient.models.list()
     testResult.ollama.success = true
     await fetchAvailableModels()
   } catch (e: any) {
@@ -326,7 +329,7 @@ const testLMStudioConnection = async () => {
       maxRetries: 1,
     })
 
-    await tempClient.models.list({ limit: 1 })
+    await tempClient.models.list()
     testResult.lmStudio.success = true
     await fetchAvailableModels()
   } catch (e: any) {
@@ -363,14 +366,14 @@ const isCurrentProviderTested = () => {
   } else if (formData.aiProvider === 'ollama') {
     return (
       testResult.ollama.success &&
-      formData.assistantModel &&
-      formData.summarizationModel
+      Boolean(formData.assistantModel) &&
+      Boolean(formData.summarizationModel)
     )
   } else if (formData.aiProvider === 'lm-studio') {
     return (
       testResult.lmStudio.success &&
-      formData.assistantModel &&
-      formData.summarizationModel
+      Boolean(formData.assistantModel) &&
+      Boolean(formData.summarizationModel)
     )
   }
   return false

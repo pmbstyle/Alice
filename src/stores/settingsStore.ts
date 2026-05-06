@@ -4,6 +4,13 @@ import { useConversationStore } from './conversationStore'
 import { useGeneralStore } from './generalStore'
 import { reinitializeClients } from '../services/apiClients'
 import { DEFAULT_PERSONA_PROMPT } from '../prompts/defaultPersonaPrompt'
+import {
+  MINIMAX_OPENAI_BASE_URL,
+  PROVIDER_CONFIGS,
+  ZAI_CODING_BASE_URL,
+  getProviderDisplayName,
+  type AIProviderKey,
+} from '../services/llmProviders/providerCatalog'
 
 export const DEFAULT_ASSISTANT_PERSONA_PROMPT = DEFAULT_PERSONA_PROMPT
 
@@ -22,10 +29,12 @@ Do not add any conversational fluff, commentary, or an introductory/concluding s
 export interface AliceSettings {
   VITE_OPENAI_API_KEY: string
   VITE_OPENROUTER_API_KEY: string
+  VITE_ZAI_API_KEY: string
+  VITE_MINIMAX_API_KEY: string
   VITE_GROQ_API_KEY: string
   VITE_GOOGLE_API_KEY: string
   sttProvider: 'openai' | 'groq' | 'google' | 'local'
-  aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
+  aiProvider: AIProviderKey
 
   // Local Go Backend STT settings
   localSttModel: string
@@ -35,6 +44,8 @@ export interface AliceSettings {
 
   ollamaBaseUrl: string
   lmStudioBaseUrl: string
+  zaiBaseUrl: string
+  minimaxBaseUrl: string
 
   assistantModel: string
   assistantSystemPrompt: string
@@ -83,16 +94,20 @@ export interface AliceSettings {
 function hasMinimumConfigForOnboarding(config: AliceSettings): boolean {
   return Boolean(
     config.assistantModel?.trim() ||
-      config.VITE_OPENAI_API_KEY?.trim() ||
-      config.VITE_OPENROUTER_API_KEY?.trim() ||
-      config.ollamaBaseUrl?.trim() ||
-      config.lmStudioBaseUrl?.trim()
+    config.VITE_OPENAI_API_KEY?.trim() ||
+    config.VITE_OPENROUTER_API_KEY?.trim() ||
+    config.VITE_ZAI_API_KEY?.trim() ||
+    config.VITE_MINIMAX_API_KEY?.trim() ||
+    config.ollamaBaseUrl?.trim() ||
+    config.lmStudioBaseUrl?.trim()
   )
 }
 
 const defaultSettings: AliceSettings = {
   VITE_OPENAI_API_KEY: '',
   VITE_OPENROUTER_API_KEY: '',
+  VITE_ZAI_API_KEY: '',
+  VITE_MINIMAX_API_KEY: '',
   VITE_GROQ_API_KEY: '',
   VITE_GOOGLE_API_KEY: '',
   sttProvider: 'openai',
@@ -105,6 +120,8 @@ const defaultSettings: AliceSettings = {
 
   ollamaBaseUrl: 'http://localhost:11434',
   lmStudioBaseUrl: 'http://localhost:1234',
+  zaiBaseUrl: ZAI_CODING_BASE_URL,
+  minimaxBaseUrl: MINIMAX_OPENAI_BASE_URL,
 
   assistantModel: 'gpt-4.1-mini',
   assistantSystemPrompt: DEFAULT_PERSONA_PROMPT,
@@ -159,6 +176,8 @@ const defaultSettings: AliceSettings = {
 const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_OPENAI_API_KEY: 'OpenAI API Key',
   VITE_OPENROUTER_API_KEY: 'OpenRouter API Key',
+  VITE_ZAI_API_KEY: 'Z.ai API Key',
+  VITE_MINIMAX_API_KEY: 'MiniMax API Key',
   VITE_GROQ_API_KEY: 'Groq API Key (STT)',
   VITE_GOOGLE_API_KEY: 'Google API Key',
   sttProvider: 'Speech-to-Text Provider',
@@ -172,6 +191,8 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
 
   ollamaBaseUrl: 'Ollama Base URL',
   lmStudioBaseUrl: 'LM Studio Base URL',
+  zaiBaseUrl: 'Z.ai Base URL',
+  minimaxBaseUrl: 'MiniMax Base URL',
 
   assistantModel: 'Assistant Model',
   assistantSystemPrompt: 'Assistant Persona Prompt',
@@ -218,6 +239,8 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
 const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
   'VITE_OPENAI_API_KEY',
   'VITE_OPENROUTER_API_KEY',
+  'VITE_ZAI_API_KEY',
+  'VITE_MINIMAX_API_KEY',
 ]
 
 function requiresOpenAIKey(config: AliceSettings): boolean {
@@ -289,6 +312,8 @@ export const useSettingsStore = defineStore('settings', () => {
       'openrouter',
       'ollama',
       'lm-studio',
+      'zai',
+      'minimax',
     ] as const
     if (!validAIProviders.includes(validated.aiProvider as any)) {
       validated.aiProvider = 'openai'
@@ -351,6 +376,10 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('VITE_OPENAI_API_KEY')
     } else if (settings.value.aiProvider === 'openrouter') {
       essentialKeys.push('VITE_OPENROUTER_API_KEY')
+    } else if (settings.value.aiProvider === 'zai') {
+      essentialKeys.push('VITE_ZAI_API_KEY', 'zaiBaseUrl')
+    } else if (settings.value.aiProvider === 'minimax') {
+      essentialKeys.push('VITE_MINIMAX_API_KEY', 'minimaxBaseUrl')
     } else if (settings.value.aiProvider === 'ollama') {
       essentialKeys.push('ollamaBaseUrl')
     } else if (settings.value.aiProvider === 'lm-studio') {
@@ -398,6 +427,20 @@ export const useSettingsStore = defineStore('settings', () => {
       return !!settings.value.VITE_OPENROUTER_API_KEY?.trim()
     }
 
+    if (settings.value.aiProvider === 'zai') {
+      return (
+        !!settings.value.VITE_ZAI_API_KEY?.trim() &&
+        !!settings.value.zaiBaseUrl?.trim()
+      )
+    }
+
+    if (settings.value.aiProvider === 'minimax') {
+      return (
+        !!settings.value.VITE_MINIMAX_API_KEY?.trim() &&
+        !!settings.value.minimaxBaseUrl?.trim()
+      )
+    }
+
     if (settings.value.aiProvider === 'ollama') {
       return !!settings.value.ollamaBaseUrl?.trim()
     }
@@ -409,55 +452,55 @@ export const useSettingsStore = defineStore('settings', () => {
     return true
   })
 
-    const config = computed<Readonly<AliceSettings>>(() => {
-      if (isProduction.value) {
-        return settings.value
-      }
+  const config = computed<Readonly<AliceSettings>>(() => {
+    if (isProduction.value) {
+      return settings.value
+    }
 
-      const envOverrides = Object.fromEntries(
-        Object.entries(import.meta.env)
-          .filter(
-            ([key]) =>
-              key.startsWith('VITE_') ||
-              key.startsWith('assistant') ||
-              key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
-              key === 'SUMMARIZATION_MESSAGE_COUNT' ||
-              key === 'SUMMARIZATION_MODEL' ||
-              key === 'SUMMARIZATION_SYSTEM_PROMPT' ||
-              key === 'sttProvider' ||
-              key === 'aiProvider' ||
-              key === 'onboardingCompleted'
-          )
-          .map(([key, value]) => {
-            if (
-              key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
-              key === 'SUMMARIZATION_MESSAGE_COUNT' ||
-              key === 'assistantTemperature' ||
-              key === 'assistantTopP' ||
-              key === 'ragTopK' ||
-              key === 'ragMaxContextChars'
-            ) {
-              return [key, parseFloat(String(value))]
-            }
-            if (key === 'assistantTools' && typeof value === 'string') {
-              return [
-                key,
-                value
-                  .split(',')
-                  .map(t => t.trim())
-                  .filter(Boolean),
-              ]
-            }
-            return [key, String(value)]
-          })
-      )
+    const envOverrides = Object.fromEntries(
+      Object.entries(import.meta.env)
+        .filter(
+          ([key]) =>
+            key.startsWith('VITE_') ||
+            key.startsWith('assistant') ||
+            key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
+            key === 'SUMMARIZATION_MESSAGE_COUNT' ||
+            key === 'SUMMARIZATION_MODEL' ||
+            key === 'SUMMARIZATION_SYSTEM_PROMPT' ||
+            key === 'sttProvider' ||
+            key === 'aiProvider' ||
+            key === 'onboardingCompleted'
+        )
+        .map(([key, value]) => {
+          if (
+            key === 'MAX_HISTORY_MESSAGES_FOR_API' ||
+            key === 'SUMMARIZATION_MESSAGE_COUNT' ||
+            key === 'assistantTemperature' ||
+            key === 'assistantTopP' ||
+            key === 'ragTopK' ||
+            key === 'ragMaxContextChars'
+          ) {
+            return [key, parseFloat(String(value))]
+          }
+          if (key === 'assistantTools' && typeof value === 'string') {
+            return [
+              key,
+              value
+                .split(',')
+                .map(t => t.trim())
+                .filter(Boolean),
+            ]
+          }
+          return [key, String(value)]
+        })
+    )
 
-      return {
-        ...defaultSettings,
-        ...envOverrides,
-        ...settings.value,
-      }
-    })
+    return {
+      ...defaultSettings,
+      ...envOverrides,
+      ...settings.value,
+    }
+  })
 
   async function loadSettings() {
     if (initialLoadAttempted.value) {
@@ -635,11 +678,15 @@ export const useSettingsStore = defineStore('settings', () => {
       settings.value[key] = value as 'openai' | 'groq' | 'google' | 'local'
     }
     if (key === 'aiProvider') {
-      settings.value[key] = value as
-        | 'openai'
-        | 'openrouter'
-        | 'ollama'
-        | 'lm-studio'
+      settings.value[key] = value as AIProviderKey
+      if (settings.value.aiProvider === 'zai') {
+        settings.value.assistantModel = PROVIDER_CONFIGS.zai.defaultModel
+        settings.value.SUMMARIZATION_MODEL = PROVIDER_CONFIGS.zai.defaultModel
+      } else if (settings.value.aiProvider === 'minimax') {
+        settings.value.assistantModel = PROVIDER_CONFIGS.minimax.defaultModel
+        settings.value.SUMMARIZATION_MODEL =
+          PROVIDER_CONFIGS.minimax.defaultModel
+      }
     }
     if (key === 'assistantReasoningEffort') {
       settings.value[key] = value as 'minimal' | 'low' | 'medium' | 'high'
@@ -677,8 +724,12 @@ export const useSettingsStore = defineStore('settings', () => {
     if (
       key === 'VITE_OPENAI_API_KEY' ||
       key === 'VITE_OPENROUTER_API_KEY' ||
+      key === 'VITE_ZAI_API_KEY' ||
+      key === 'VITE_MINIMAX_API_KEY' ||
       key === 'ollamaBaseUrl' ||
       key === 'lmStudioBaseUrl' ||
+      key === 'zaiBaseUrl' ||
+      key === 'minimaxBaseUrl' ||
       key === 'aiProvider'
     ) {
       coreOpenAISettingsValid.value = false
@@ -715,6 +766,8 @@ export const useSettingsStore = defineStore('settings', () => {
       const plainSettings: AliceSettings = {
         VITE_OPENAI_API_KEY: settings.value.VITE_OPENAI_API_KEY,
         VITE_OPENROUTER_API_KEY: settings.value.VITE_OPENROUTER_API_KEY,
+        VITE_ZAI_API_KEY: settings.value.VITE_ZAI_API_KEY,
+        VITE_MINIMAX_API_KEY: settings.value.VITE_MINIMAX_API_KEY,
         VITE_GROQ_API_KEY: settings.value.VITE_GROQ_API_KEY,
         VITE_GOOGLE_API_KEY: settings.value.VITE_GOOGLE_API_KEY,
         sttProvider: settings.value.sttProvider,
@@ -727,6 +780,8 @@ export const useSettingsStore = defineStore('settings', () => {
 
         ollamaBaseUrl: settings.value.ollamaBaseUrl,
         lmStudioBaseUrl: settings.value.lmStudioBaseUrl,
+        zaiBaseUrl: settings.value.zaiBaseUrl,
+        minimaxBaseUrl: settings.value.minimaxBaseUrl,
         assistantModel: settings.value.assistantModel,
         assistantSystemPrompt: settings.value.assistantSystemPrompt,
         assistantTemperature: settings.value.assistantTemperature,
@@ -817,6 +872,32 @@ export const useSettingsStore = defineStore('settings', () => {
         isSaving.value = false
         return
       }
+    } else if (currentConfigForTest.aiProvider === 'zai') {
+      if (!currentConfigForTest.VITE_ZAI_API_KEY?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.VITE_ZAI_API_KEY}' is missing.`
+        generalStore.statusMessage = 'Z.ai API Key is required.'
+        isSaving.value = false
+        return
+      }
+      if (!currentConfigForTest.zaiBaseUrl?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.zaiBaseUrl}' is missing.`
+        generalStore.statusMessage = 'Z.ai Base URL is required.'
+        isSaving.value = false
+        return
+      }
+    } else if (currentConfigForTest.aiProvider === 'minimax') {
+      if (!currentConfigForTest.VITE_MINIMAX_API_KEY?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.VITE_MINIMAX_API_KEY}' is missing.`
+        generalStore.statusMessage = 'MiniMax API Key is required.'
+        isSaving.value = false
+        return
+      }
+      if (!currentConfigForTest.minimaxBaseUrl?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.minimaxBaseUrl}' is missing.`
+        generalStore.statusMessage = 'MiniMax Base URL is required.'
+        isSaving.value = false
+        return
+      }
     } else if (currentConfigForTest.aiProvider === 'ollama') {
       if (!currentConfigForTest.ollamaBaseUrl?.trim()) {
         error.value = `Essential setting '${settingKeyToLabelMap.ollamaBaseUrl}' is missing.`
@@ -869,15 +950,9 @@ export const useSettingsStore = defineStore('settings', () => {
       openAIServiceTestSuccess = true
       coreOpenAISettingsValid.value = true
     } catch (e: any) {
-      const providerNameMap = {
-        openai: 'OpenAI',
-        openrouter: 'OpenRouter',
-        ollama: 'Ollama',
-        'lm-studio': 'LM Studio',
-      }
-      const providerName =
-        providerNameMap[currentConfigForTest.aiProvider] ||
+      const providerName = getProviderDisplayName(
         currentConfigForTest.aiProvider
+      )
       error.value = `${providerName} API connection test failed: ${e.message}. Check your ${providerName} configuration.`
       coreOpenAISettingsValid.value = false
       openAIServiceTestSuccess = false
@@ -885,15 +960,9 @@ export const useSettingsStore = defineStore('settings', () => {
 
     if (openAIServiceTestSuccess) {
       if (!currentConfigForTest.assistantModel?.trim()) {
-        const providerNameMap = {
-          openai: 'OpenAI',
-          openrouter: 'OpenRouter',
-          ollama: 'Ollama',
-          'lm-studio': 'LM Studio',
-        }
-        const providerName =
-          providerNameMap[currentConfigForTest.aiProvider] ||
+        const providerName = getProviderDisplayName(
           currentConfigForTest.aiProvider
+        )
         error.value = `${providerName} connection is valid. Please select an '${settingKeyToLabelMap.assistantModel}'.`
         generalStore.statusMessage = 'Assistant model not selected.'
         successMessage.value = `${providerName} connection is valid. Models loaded. Please complete model selections.`
@@ -901,15 +970,9 @@ export const useSettingsStore = defineStore('settings', () => {
         return
       }
       if (!currentConfigForTest.SUMMARIZATION_MODEL?.trim()) {
-        const providerNameMap = {
-          openai: 'OpenAI',
-          openrouter: 'OpenRouter',
-          ollama: 'Ollama',
-          'lm-studio': 'LM Studio',
-        }
-        const providerName =
-          providerNameMap[currentConfigForTest.aiProvider] ||
+        const providerName = getProviderDisplayName(
           currentConfigForTest.aiProvider
+        )
         error.value = `${providerName} connection is valid. Please select a '${settingKeyToLabelMap.SUMMARIZATION_MODEL}'.`
         generalStore.statusMessage = 'Summarization model not selected.'
         successMessage.value = `${providerName} connection is valid. Models loaded. Please complete model selections.`
@@ -951,22 +1014,29 @@ export const useSettingsStore = defineStore('settings', () => {
   async function completeOnboarding(onboardingData: {
     VITE_OPENAI_API_KEY: string
     VITE_OPENROUTER_API_KEY: string
+    VITE_ZAI_API_KEY?: string
+    VITE_MINIMAX_API_KEY?: string
     sttProvider: 'openai' | 'groq' | 'google' | 'local'
     ttsProvider?: 'openai' | 'google' | 'local'
     embeddingProvider?: 'openai' | 'local'
-    aiProvider: 'openai' | 'openrouter' | 'ollama' | 'lm-studio'
+    aiProvider: AIProviderKey
     assistantModel?: string
     summarizationModel?: string
     VITE_GROQ_API_KEY: string
     VITE_GOOGLE_API_KEY: string
     ollamaBaseUrl?: string
     lmStudioBaseUrl?: string
+    zaiBaseUrl?: string
+    minimaxBaseUrl?: string
     useLocalModels?: boolean
     localSttLanguage?: string
   }) {
     settings.value.VITE_OPENAI_API_KEY = onboardingData.VITE_OPENAI_API_KEY
     settings.value.VITE_OPENROUTER_API_KEY =
       onboardingData.VITE_OPENROUTER_API_KEY
+    settings.value.VITE_ZAI_API_KEY = onboardingData.VITE_ZAI_API_KEY || ''
+    settings.value.VITE_MINIMAX_API_KEY =
+      onboardingData.VITE_MINIMAX_API_KEY || ''
     settings.value.sttProvider = onboardingData.sttProvider
     settings.value.aiProvider = onboardingData.aiProvider
     settings.value.VITE_GROQ_API_KEY = onboardingData.VITE_GROQ_API_KEY
@@ -1000,6 +1070,12 @@ export const useSettingsStore = defineStore('settings', () => {
     }
     if (onboardingData.lmStudioBaseUrl) {
       settings.value.lmStudioBaseUrl = onboardingData.lmStudioBaseUrl
+    }
+    if (onboardingData.zaiBaseUrl) {
+      settings.value.zaiBaseUrl = onboardingData.zaiBaseUrl
+    }
+    if (onboardingData.minimaxBaseUrl) {
+      settings.value.minimaxBaseUrl = onboardingData.minimaxBaseUrl
     }
 
     settings.value.onboardingCompleted = true

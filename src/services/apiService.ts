@@ -7,6 +7,8 @@ import {
   getGroqClient,
   getOllamaClient,
   getLMStudioClient,
+  getZAIClient,
+  getMiniMaxClient,
 } from './apiClients'
 import {
   createOpenAIResponse as createOpenAIResponseWithOpenAI,
@@ -21,6 +23,12 @@ import {
   createLMStudioResponse,
   listLMStudioModels,
 } from './llmProviders/lmStudio'
+import { createZAIResponse, listZAIModels } from './llmProviders/zai'
+import {
+  createMiniMaxResponse,
+  listMiniMaxModels,
+} from './llmProviders/minimax'
+import { isChatCompletionsProvider } from './llmProviders/providerCatalog'
 import type { AppChatMessageContentPart } from '../types/chat'
 import type { RagSearchResult } from '../types/rag'
 
@@ -89,6 +97,10 @@ function getAIClient(): OpenAI {
       return getOllamaClient()
     case 'lm-studio':
       return getLMStudioClient()
+    case 'zai':
+      return getZAIClient()
+    case 'minimax':
+      return getMiniMaxClient()
     default:
       return getOpenAIClient()
   }
@@ -104,6 +116,12 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
   }
   if (settings.aiProvider === 'lm-studio') {
     return listLMStudioModels()
+  }
+  if (settings.aiProvider === 'zai') {
+    return listZAIModels()
+  }
+  if (settings.aiProvider === 'minimax') {
+    return listMiniMaxModels()
   }
   return listOpenAIModels()
 }
@@ -137,6 +155,24 @@ export const createOpenAIResponse = async (
   }
   if (settings.aiProvider === 'lm-studio') {
     return createLMStudioResponse(
+      input,
+      previousResponseId,
+      stream,
+      customInstructions,
+      signal
+    )
+  }
+  if (settings.aiProvider === 'zai') {
+    return createZAIResponse(
+      input,
+      previousResponseId,
+      stream,
+      customInstructions,
+      signal
+    )
+  }
+  if (settings.aiProvider === 'minimax') {
+    return createMiniMaxResponse(
       input,
       previousResponseId,
       stream,
@@ -678,11 +714,7 @@ export const createSummarizationResponse = async (
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
 
-  if (
-    settings.aiProvider === 'openrouter' ||
-    settings.aiProvider === 'ollama' ||
-    settings.aiProvider === 'lm-studio'
-  ) {
+  if (isChatCompletionsProvider(settings.aiProvider)) {
     const response = await client.chat.completions.create({
       model: summarizationModel,
       messages: [
@@ -734,11 +766,7 @@ export const createContextAnalysisResponse = async (
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
 
-  if (
-    settings.aiProvider === 'openrouter' ||
-    settings.aiProvider === 'ollama' ||
-    settings.aiProvider === 'lm-studio'
-  ) {
+  if (isChatCompletionsProvider(settings.aiProvider)) {
     const response = await client.chat.completions.create({
       model: analysisModel,
       messages: [

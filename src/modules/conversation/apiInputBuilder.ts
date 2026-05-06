@@ -1,5 +1,6 @@
 import type OpenAI from 'openai'
 import type { AppChatMessageContentPart } from '../../types/chat'
+import { isChatCompletionsProvider } from '../../services/llmProviders/providerCatalog'
 
 export type ConversationHistoryRole =
   | 'user'
@@ -35,9 +36,9 @@ export function createApiInputBuilder(
   dependencies: ApiInputBuilderDependencies
 ): ApiInputBuilder {
   return {
-    async build({ isNewChain }): Promise<
-      OpenAI.Responses.Request.InputItemLike[]
-    > {
+    async build({
+      isNewChain,
+    }): Promise<OpenAI.Responses.Request.InputItemLike[]> {
       // `isNewChain` currently does not affect construction but kept for parity.
       void isNewChain
 
@@ -78,10 +79,7 @@ export function createApiInputBuilder(
             ],
           }
         } else {
-          const currentApiRole = msg.role as
-            | 'user'
-            | 'assistant'
-            | 'developer'
+          const currentApiRole = msg.role as 'user' | 'assistant' | 'developer'
           apiItemPartial = { role: currentApiRole, content: [] }
           if (msg.name) apiItemPartial.name = msg.name
 
@@ -182,7 +180,7 @@ export function createApiInputBuilder(
           if (
             currentApiRole === 'assistant' &&
             msg.tool_calls &&
-            aiProvider === 'openrouter'
+            isChatCompletionsProvider(aiProvider)
           ) {
             apiItemPartial.tool_calls = msg.tool_calls
           }
@@ -195,4 +193,3 @@ export function createApiInputBuilder(
     },
   }
 }
-

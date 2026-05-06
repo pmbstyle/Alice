@@ -7,8 +7,12 @@ export interface BackendServiceDependencies {
     assistantSystemPrompt: string
     VITE_OPENAI_API_KEY?: string
     VITE_OPENROUTER_API_KEY?: string
+    VITE_ZAI_API_KEY?: string
+    VITE_MINIMAX_API_KEY?: string
     ollamaBaseUrl?: string
     lmStudioBaseUrl?: string
+    zaiBaseUrl?: string
+    minimaxBaseUrl?: string
   }
   setStatusMessage(message: string): void
   fetchOpenAIModels(): Promise<any[]>
@@ -72,6 +76,22 @@ export function createBackendService(
       deps.logInfo('Cannot fetch models: OpenRouter API Key is missing.')
       return
     }
+    if (provider === 'zai' && !config.VITE_ZAI_API_KEY) {
+      deps.logInfo('Cannot fetch models: Z.ai API Key is missing.')
+      return
+    }
+    if (provider === 'zai' && !config.zaiBaseUrl) {
+      deps.logInfo('Cannot fetch models: Z.ai Base URL is missing.')
+      return
+    }
+    if (provider === 'minimax' && !config.VITE_MINIMAX_API_KEY) {
+      deps.logInfo('Cannot fetch models: MiniMax API Key is missing.')
+      return
+    }
+    if (provider === 'minimax' && !config.minimaxBaseUrl) {
+      deps.logInfo('Cannot fetch models: MiniMax Base URL is missing.')
+      return
+    }
     if (provider === 'ollama' && !config.ollamaBaseUrl) {
       deps.logInfo('Cannot fetch models: Ollama Base URL is missing.')
       return
@@ -90,6 +110,8 @@ export function createBackendService(
         openrouter: 'OpenRouter',
         ollama: 'Ollama',
         'lm-studio': 'LM Studio',
+        zai: 'Z.ai',
+        minimax: 'MiniMax',
       }
       const providerName = providerNameMap[provider] || provider
       deps.setStatusMessage(`Error: Could not fetch ${providerName} models.`)
@@ -102,4 +124,3 @@ export function createBackendService(
     fetchModels,
   }
 }
-

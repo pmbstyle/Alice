@@ -226,7 +226,9 @@
           v-if="
             (formData.aiProvider === 'ollama' ||
               formData.aiProvider === 'lm-studio' ||
-              formData.aiProvider === 'openrouter') &&
+              formData.aiProvider === 'openrouter' ||
+              formData.aiProvider === 'zai' ||
+              formData.aiProvider === 'minimax') &&
             !formData.VITE_OPENAI_API_KEY?.trim()
           "
           class="alert alert-warning text-sm"
@@ -275,7 +277,9 @@
           v-if="
             formData.aiProvider === 'ollama' ||
             formData.aiProvider === 'lm-studio' ||
-            formData.aiProvider === 'openrouter'
+            formData.aiProvider === 'openrouter' ||
+            formData.aiProvider === 'zai' ||
+            formData.aiProvider === 'minimax'
           "
           class="form-control"
         >

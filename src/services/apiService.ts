@@ -28,7 +28,14 @@ import {
   createMiniMaxResponse,
   listMiniMaxModels,
 } from './llmProviders/minimax'
-import { isChatCompletionsProvider } from './llmProviders/providerCatalog'
+import {
+  createMiniMaxChatCompletionViaMain,
+  stripReasoningFromMiniMaxContent,
+} from './llmProviders/openAICompatible'
+import {
+  getSafeProviderModel,
+  isChatCompletionsProvider,
+} from './llmProviders/providerCatalog'
 import type { AppChatMessageContentPart } from '../types/chat'
 import type { RagSearchResult } from '../types/rag'
 
@@ -715,16 +722,21 @@ export const createSummarizationResponse = async (
     .join('\n\n')
 
   if (isChatCompletionsProvider(settings.aiProvider)) {
-    const response = await client.chat.completions.create({
-      model: summarizationModel,
+    const params = {
+      model: getSafeProviderModel(settings.aiProvider, summarizationModel),
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: combinedText },
       ],
       stream: false,
-    } as any)
+    } as any
+    const response =
+      settings.aiProvider === 'minimax'
+        ? await createMiniMaxChatCompletionViaMain(params)
+        : await client.chat.completions.create(params)
 
-    return response.choices[0]?.message?.content?.trim() || null
+    const content = response.choices[0]?.message?.content?.trim()
+    return content ? stripReasoningFromMiniMaxContent(content) : null
   } else {
     const response = await client.responses.create({
       model: summarizationModel,
@@ -767,18 +779,23 @@ export const createContextAnalysisResponse = async (
     .join('\n\n')
 
   if (isChatCompletionsProvider(settings.aiProvider)) {
-    const response = await client.chat.completions.create({
-      model: analysisModel,
+    const params = {
+      model: getSafeProviderModel(settings.aiProvider, analysisModel),
       messages: [
         { role: 'system', content: analysisSystemPrompt },
         { role: 'user', content: combinedText },
       ],
       stream: false,
-    } as any)
+    } as any
+    const response =
+      settings.aiProvider === 'minimax'
+        ? await createMiniMaxChatCompletionViaMain(params)
+        : await client.chat.completions.create(params)
 
-    return (
-      response.choices[0]?.message?.content?.trim().replace(/"/g, '') || null
-    )
+    const content = response.choices[0]?.message?.content?.trim()
+    return content
+      ? stripReasoningFromMiniMaxContent(content).replace(/"/g, '')
+      : null
   } else {
     const response = await client.responses.create({
       model: analysisModel,

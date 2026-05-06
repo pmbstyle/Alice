@@ -198,6 +198,124 @@ export async function* convertLocalLLMStreamToResponsesFormat(
   }
 }
 
+export async function* convertChatCompletionToResponsesFormat(
+  completion: any,
+  provider: 'zai' | 'minimax'
+) {
+  const responseId = completion?.id || `${provider}-${Date.now()}`
+  const messageItemId = `message-${Date.now()}`
+  const choice = completion?.choices?.[0]
+  const message = choice?.message || {}
+  const content = typeof message.content === 'string' ? message.content : ''
+
+  yield {
+    type: 'response.created',
+    response: {
+      id: responseId,
+      object: 'realtime.response',
+      status: 'in_progress',
+      output: [],
+    },
+  }
+
+  yield {
+    type: 'response.output_item.added',
+    response_id: responseId,
+    item_id: messageItemId,
+    item: {
+      id: messageItemId,
+      type: 'message',
+      role: 'assistant',
+      content: [],
+    },
+  }
+
+  if (content) {
+    yield {
+      type: 'response.output_text.delta',
+      response_id: responseId,
+      item_id: messageItemId,
+      output_index: 0,
+      content_index: 0,
+      delta: content,
+    }
+  }
+
+  for (const [index, toolCall] of (message.tool_calls || []).entries()) {
+    const toolCallId = `tool-${index}`
+    const rawArguments = toolCall.function?.arguments || ''
+    let parsedArguments: any = {}
+
+    if (rawArguments.trim()) {
+      try {
+        parsedArguments = JSON.parse(rawArguments)
+      } catch (error) {
+        console.error(
+          `[${provider}] Failed to parse tool arguments:`,
+          rawArguments,
+          error
+        )
+      }
+    }
+
+    yield {
+      type: 'response.output_item.added',
+      response_id: responseId,
+      item_id: toolCallId,
+      item: {
+        id: toolCallId,
+        type: 'function_call',
+        name: toolCall.function?.name || '',
+        arguments: '',
+      },
+    }
+
+    if (rawArguments) {
+      yield {
+        type: 'response.function_call_arguments.delta',
+        response_id: responseId,
+        item_id: toolCallId,
+        delta: rawArguments,
+      }
+    }
+
+    yield {
+      type: 'response.output_item.done',
+      response_id: responseId,
+      item_id: toolCallId,
+      item: {
+        id: toolCallId,
+        call_id: toolCall.id || toolCallId,
+        type: 'function_call',
+        name: toolCall.function?.name || '',
+        arguments: parsedArguments,
+      },
+    }
+  }
+
+  yield {
+    type: 'response.output_item.done',
+    response_id: responseId,
+    item_id: messageItemId,
+    item: {
+      id: messageItemId,
+      type: 'message',
+      role: 'assistant',
+      content: [],
+    },
+  }
+
+  yield {
+    type: 'response.done',
+    response: {
+      id: responseId,
+      object: 'realtime.response',
+      status: 'completed',
+      output: [],
+    },
+  }
+}
+
 export async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
   let responseId = `openrouter-${Date.now()}`
   let messageItemId = `message-${Date.now()}`

@@ -61,9 +61,11 @@ import FinalSetupStep from './steps/FinalSetupStep.vue'
 import OpenAI from 'openai'
 import {
   MINIMAX_OPENAI_BASE_URL,
+  ZAI_CODING_MODELS,
   ZAI_CODING_BASE_URL,
   type AIProviderKey,
 } from '../../services/llmProviders/providerCatalog'
+import { listMiniMaxModelsForConfig } from '../../services/llmProviders/minimax'
 
 const step = ref(1)
 const settingsStore = useSettingsStore()
@@ -90,6 +92,10 @@ const formData = reactive({
   availableModels: [] as string[],
   localSttLanguage: 'auto',
 })
+
+function isAuthError(error: any): boolean {
+  return error?.status === 401 || error?.status === 403
+}
 
 const isTesting = reactive({
   openai: false,
@@ -215,13 +221,25 @@ const fetchAvailableModels = async () => {
       return
     }
 
+    if (formData.aiProvider === 'minimax') {
+      const models = await listMiniMaxModelsForConfig(
+        formData.VITE_MINIMAX_API_KEY,
+        baseURL
+      )
+      formData.availableModels = models.map(model => model.id)
+
+      if (formData.availableModels.length > 0) {
+        formData.assistantModel = formData.availableModels[0]
+        formData.summarizationModel = formData.availableModels[0]
+      }
+      return
+    }
+
     const tempClient = new OpenAI({
       apiKey:
         formData.aiProvider === 'zai'
           ? formData.VITE_ZAI_API_KEY
-          : formData.aiProvider === 'minimax'
-            ? formData.VITE_MINIMAX_API_KEY
-            : formData.aiProvider,
+          : formData.aiProvider,
       baseURL,
       dangerouslyAllowBrowser: true,
     })
@@ -234,8 +252,15 @@ const fetchAvailableModels = async () => {
       formData.summarizationModel = formData.availableModels[0]
     }
   } catch (error) {
+    if (formData.aiProvider === 'zai' && !isAuthError(error)) {
+      formData.availableModels = ZAI_CODING_MODELS.map(model => model.id)
+      formData.assistantModel = formData.availableModels[0] || 'glm-5.1'
+      formData.summarizationModel = formData.availableModels[0] || 'glm-5.1'
+      return
+    }
     console.error('Failed to fetch models:', error)
     formData.availableModels = []
+    throw error
   }
 }
 
@@ -320,17 +345,8 @@ const testZAIKey = async () => {
   testResult.zai.success = false
 
   try {
-    const tempClient = new OpenAI({
-      apiKey: formData.VITE_ZAI_API_KEY,
-      baseURL: formData.zaiBaseUrl,
-      dangerouslyAllowBrowser: true,
-      timeout: 10 * 1000,
-      maxRetries: 1,
-    })
-
-    await tempClient.models.list()
-    testResult.zai.success = true
     await fetchAvailableModels()
+    testResult.zai.success = true
   } catch (e: any) {
     testResult.zai.error =
       'API key or Coding Plan endpoint is invalid or has no permissions.'
@@ -361,17 +377,8 @@ const testMiniMaxKey = async () => {
   testResult.minimax.success = false
 
   try {
-    const tempClient = new OpenAI({
-      apiKey: formData.VITE_MINIMAX_API_KEY,
-      baseURL: formData.minimaxBaseUrl,
-      dangerouslyAllowBrowser: true,
-      timeout: 10 * 1000,
-      maxRetries: 1,
-    })
-
-    await tempClient.models.list()
-    testResult.minimax.success = true
     await fetchAvailableModels()
+    testResult.minimax.success = true
   } catch (e: any) {
     testResult.minimax.error =
       'API key or OpenAI-compatible endpoint is invalid or has no permissions.'

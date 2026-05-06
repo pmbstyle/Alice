@@ -155,6 +155,7 @@ describe('createTurnManager', () => {
 
     ctx.state.setAudioPlayer({ paused: true })
     ctx.state.setAudioQueueLength(0)
+    ctx.state.setAudioState('IDLE')
     vi.advanceTimersByTime(250)
 
     expect(ctx.deps.getAudioState()).toBe('IDLE')
@@ -198,5 +199,28 @@ describe('createTurnManager', () => {
     expect(ctx.triggerSummarization).not.toHaveBeenCalled()
     manager.dispose()
   })
-})
 
+  it('does not force IDLE while audio playback is being prepared', () => {
+    const ctx = buildDependencies()
+    ctx.state.setAudioPlayer({ paused: true })
+    ctx.state.setAudioQueueLength(0)
+    ctx.state.setAudioState('SPEAKING')
+    const manager = createTurnManager(ctx.deps)
+
+    manager.finalizeAfterStream({
+      streamEndedNormally: true,
+      isContinuationAfterTool: false,
+    })
+
+    vi.advanceTimersByTime(250)
+
+    expect(ctx.deps.getAudioState()).toBe('SPEAKING')
+    expect(ctx.triggerSummarization).not.toHaveBeenCalled()
+
+    ctx.state.setAudioState('IDLE')
+    vi.advanceTimersByTime(250)
+
+    expect(ctx.triggerSummarization).toHaveBeenCalled()
+    manager.dispose()
+  })
+})

@@ -216,6 +216,10 @@ import { PREDEFINED_OPENAI_TOOLS } from '../utils/assistantTools'
 import { DEFAULT_ASSISTANT_PERSONA_PROMPT } from '../stores/settingsStore'
 import { useHotkeyRecording } from '../composables/useHotkeyRecording'
 import { useGoogleAuth } from '../composables/useGoogleAuth'
+import {
+  getStaticModelsForProvider,
+  type ProviderModelDefinition,
+} from '../services/llmProviders/providerCatalog'
 import CoreSettingsTab from './settings/CoreSettingsTab.vue'
 import AssistantSettingsTab from './settings/AssistantSettingsTab.vue'
 import HotkeysTab from './settings/HotkeysTab.vue'
@@ -272,6 +276,18 @@ const isBrowserContextToolActive = computed(() => {
 })
 
 const availableModelsForSelect = computed(() => {
+  const staticModels = getStaticModelsForProvider(
+    currentSettings.value.aiProvider
+  )
+  if (staticModels.length > 0) {
+    const staticModelIds = new Set(staticModels.map(model => model.id))
+    return [
+      ...staticModels.map((model: ProviderModelDefinition) => ({
+        id: model.id,
+      })),
+      ...availableModels.value.filter(model => !staticModelIds.has(model.id)),
+    ]
+  }
   return availableModels.value
 })
 

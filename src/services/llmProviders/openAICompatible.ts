@@ -1,8 +1,14 @@
 import type OpenAI from 'openai'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { convertLocalLLMStreamToResponsesFormat } from './streamAdapters'
+import {
+  convertChatCompletionToResponsesFormat,
+  convertLocalLLMStreamToResponsesFormat,
+} from './streamAdapters'
 import { buildToolsForProvider } from './tools'
-import { PROVIDER_CONFIGS } from './providerCatalog'
+import {
+  MINIMAX_OPENAI_BASE_URL,
+  getSafeProviderModel,
+} from './providerCatalog'
 
 type OpenAIClientGetter = () => OpenAI
 type OpenAICompatibleProviderKey = 'zai' | 'minimax'
@@ -115,25 +121,68 @@ function addCustomInstructions(
   messages: OpenAI.Chat.ChatCompletionMessageParam[],
   customInstructions?: string
 ): void {
+  for (let index = messages.length - 1; index >= 0; index--) {
+    if (messages[index].role === 'system') {
+      messages.splice(index, 1)
+    }
+  }
+
   if (!customInstructions) {
     return
   }
 
-  const systemIndex = messages.findIndex(message => message.role === 'system')
-  if (systemIndex === -1) {
-    messages.unshift({
-      role: 'system',
-      content: customInstructions,
-    })
-    return
+  messages.unshift({
+    role: 'system',
+    content: customInstructions,
+  })
+}
+
+function prepareMiniMaxMessages(
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  customInstructions?: string
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  const instructionBlock = customInstructions?.trim() || ''
+  const nonSystemMessages = messages.filter(
+    message => message.role !== 'system'
+  )
+
+  if (!instructionBlock) {
+    return nonSystemMessages
   }
 
-  const existing = String(messages[systemIndex]?.content || '').trim()
-  if (!existing.includes(customInstructions.trim())) {
-    ;(messages[systemIndex] as any).content = existing
-      ? `${customInstructions}\n\n${existing}`
-      : customInstructions
+  const firstUserMessage = nonSystemMessages.find(
+    message => message.role === 'user'
+  ) as any
+
+  if (firstUserMessage) {
+    const originalContent =
+      typeof firstUserMessage.content === 'string'
+        ? firstUserMessage.content
+        : JSON.stringify(firstUserMessage.content || '')
+    firstUserMessage.content = `${instructionBlock}\n\n${originalContent}`
+    return nonSystemMessages
   }
+
+  return [
+    {
+      role: 'user',
+      content: instructionBlock,
+    },
+    ...nonSystemMessages,
+  ]
+}
+
+function prepareChatMessagesForProvider(
+  provider: OpenAICompatibleProviderKey,
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+  customInstructions?: string
+): OpenAI.Chat.ChatCompletionMessageParam[] {
+  if (provider === 'minimax') {
+    return prepareMiniMaxMessages(messages, customInstructions)
+  }
+
+  addCustomInstructions(messages, customInstructions)
+  return messages
 }
 
 function convertToolsForChatCompletions(finalToolsForApi: any[]) {
@@ -163,6 +212,71 @@ export async function listOpenAICompatibleModels(
   return modelsPage.data.sort((a, b) => a.id.localeCompare(b.id))
 }
 
+export function stripReasoningFromMiniMaxContent(content: string): string {
+  return content
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(
+      /^\s*(?:reasoning|thinking)[\s_-]*content\s*:\s*[\s\S]*?\n{2,}/i,
+      ''
+    )
+    .trim()
+}
+
+function normalizeBaseUrl(baseURL: string): string {
+  return baseURL.replace(/\/+$/, '')
+}
+
+export async function createMiniMaxChatCompletionViaMain(
+  params: OpenAI.Chat.ChatCompletionCreateParams
+): Promise<any> {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_MINIMAX_API_KEY?.trim()) {
+    throw new Error('MiniMax API Key is not configured.')
+  }
+  if (typeof window === 'undefined' || !window.httpAPI) {
+    throw new Error('Electron HTTP bridge is unavailable.')
+  }
+
+  const body = {
+    ...params,
+    stream: false,
+    reasoning_split: true,
+  }
+
+  const response = await window.httpAPI.request({
+    url: `${normalizeBaseUrl(settings.minimaxBaseUrl || MINIMAX_OPENAI_BASE_URL)}/chat/completions`,
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${settings.VITE_MINIMAX_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    data: body,
+    timeout: 120 * 1000,
+  })
+
+  if (!response.success) {
+    throw new Error(response.error || 'MiniMax chat completion request failed.')
+  }
+
+  if (response.status && response.status >= 400) {
+    const message =
+      response.data?.error?.message ||
+      response.data?.message ||
+      `MiniMax chat completion failed with status ${response.status}.`
+    const error = new Error(message) as Error & { status?: number; data?: any }
+    error.status = response.status
+    error.data = response.data
+    throw error
+  }
+
+  const data = response.data
+  const message = data?.choices?.[0]?.message
+  if (message && typeof message.content === 'string') {
+    message.content = stripReasoningFromMiniMaxContent(message.content)
+  }
+  return data
+}
+
 export async function createOpenAICompatibleResponse(
   provider: OpenAICompatibleProviderKey,
   getClient: OpenAIClientGetter,
@@ -171,20 +285,20 @@ export async function createOpenAICompatibleResponse(
   customInstructions?: string,
   signal?: AbortSignal
 ): Promise<any> {
-  const client = getClient()
   const settings = useSettingsStore().config
   const finalToolsForApi = await buildToolsForProvider()
-  const messages = convertResponsesInputToChatMessages(input)
-
-  addCustomInstructions(messages, customInstructions)
+  const messages = prepareChatMessagesForProvider(
+    provider,
+    convertResponsesInputToChatMessages(input),
+    customInstructions
+  )
 
   console.log(
     `[${provider}] Final messages:`,
     JSON.stringify(messages, null, 2)
   )
 
-  const model =
-    settings.assistantModel || PROVIDER_CONFIGS[provider].defaultModel
+  const model = getSafeProviderModel(provider, settings.assistantModel)
   const params: OpenAI.Chat.ChatCompletionCreateParams = {
     model,
     messages,
@@ -197,6 +311,18 @@ export async function createOpenAICompatibleResponse(
     tools: convertToolsForChatCompletions(finalToolsForApi),
     stream,
   }
+
+  if (provider === 'minimax') {
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    }
+    const completion = await createMiniMaxChatCompletionViaMain(params)
+    return stream
+      ? convertChatCompletionToResponsesFormat(completion, provider)
+      : completion
+  }
+
+  const client = getClient()
 
   if (stream) {
     const chatStream = await client.chat.completions.create(params as any, {

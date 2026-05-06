@@ -14,6 +14,28 @@ export interface ProviderConfig {
   nativeWebSearch: boolean
 }
 
+export interface ProviderModelDefinition {
+  id: string
+  displayName: string
+}
+
+export const ZAI_CODING_MODELS: ProviderModelDefinition[] = [
+  { id: 'glm-5.1', displayName: 'GLM-5.1' },
+  { id: 'glm-5-turbo', displayName: 'GLM-5-Turbo' },
+  { id: 'glm-4.7', displayName: 'GLM-4.7' },
+  { id: 'glm-4.5-air', displayName: 'GLM-4.5-Air' },
+]
+
+export const MINIMAX_TEXT_MODELS: ProviderModelDefinition[] = [
+  { id: 'MiniMax-M2.7', displayName: 'MiniMax M2.7' },
+  { id: 'MiniMax-M2.7-highspeed', displayName: 'MiniMax M2.7 High-Speed' },
+  { id: 'MiniMax-M2.5', displayName: 'MiniMax M2.5' },
+  { id: 'MiniMax-M2.5-highspeed', displayName: 'MiniMax M2.5 High-Speed' },
+  { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1' },
+  { id: 'MiniMax-M2.1-highspeed', displayName: 'MiniMax M2.1 High-Speed' },
+  { id: 'MiniMax-M2', displayName: 'MiniMax M2' },
+]
+
 export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
   openai: {
     displayName: 'OpenAI',
@@ -60,6 +82,40 @@ export const CHAT_COMPLETIONS_PROVIDERS: ChatCompletionsProviderKey[] = [
 
 export function getProviderDisplayName(provider: string): string {
   return PROVIDER_CONFIGS[provider as AIProviderKey]?.displayName || provider
+}
+
+export function getStaticModelsForProvider(
+  provider: string
+): ProviderModelDefinition[] {
+  if (provider === 'zai') {
+    return ZAI_CODING_MODELS
+  }
+  if (provider === 'minimax') {
+    return MINIMAX_TEXT_MODELS
+  }
+  return []
+}
+
+export function isKnownProviderModel(provider: string, model: string): boolean {
+  const staticModels = getStaticModelsForProvider(provider)
+  if (staticModels.length === 0) {
+    return true
+  }
+  return staticModels.some(staticModel => staticModel.id === model)
+}
+
+export function getSafeProviderModel(
+  provider: string,
+  configuredModel?: string
+): string {
+  const fallback =
+    PROVIDER_CONFIGS[provider as AIProviderKey]?.defaultModel ||
+    PROVIDER_CONFIGS.openai.defaultModel
+  const trimmedModel = configuredModel?.trim()
+  if (!trimmedModel) {
+    return fallback
+  }
+  return isKnownProviderModel(provider, trimmedModel) ? trimmedModel : fallback
 }
 
 export function isChatCompletionsProvider(

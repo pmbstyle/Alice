@@ -9,6 +9,7 @@ import {
   PROVIDER_CONFIGS,
   ZAI_CODING_BASE_URL,
   getProviderDisplayName,
+  getSafeProviderModel,
   type AIProviderKey,
 } from '../services/llmProviders/providerCatalog'
 
@@ -317,6 +318,24 @@ export const useSettingsStore = defineStore('settings', () => {
     ] as const
     if (!validAIProviders.includes(validated.aiProvider as any)) {
       validated.aiProvider = 'openai'
+    }
+
+    const safeAssistantModel = getSafeProviderModel(
+      validated.aiProvider,
+      validated.assistantModel
+    )
+    if (safeAssistantModel !== validated.assistantModel) {
+      validated.assistantModel = safeAssistantModel
+      migrated = true
+    }
+
+    const safeSummarizationModel = getSafeProviderModel(
+      validated.aiProvider,
+      validated.SUMMARIZATION_MODEL
+    )
+    if (safeSummarizationModel !== validated.SUMMARIZATION_MODEL) {
+      validated.SUMMARIZATION_MODEL = safeSummarizationModel
+      migrated = true
     }
 
     if (

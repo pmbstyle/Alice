@@ -64,6 +64,11 @@ export function createTurnManager(
     if (!streamEndedNormally) return
 
     const finalizeInterval = setInterval(() => {
+      const audioState = dependencies.getAudioState()
+      if (audioState === 'SPEAKING') {
+        return
+      }
+
       const audioPlayer = dependencies.getAudioPlayer()
       if (audioPlayer && !audioPlayer.paused) {
         return
@@ -73,8 +78,7 @@ export function createTurnManager(
         return
       }
 
-      const audioState = dependencies.getAudioState()
-      if (audioState === 'SPEAKING' || audioState === 'WAITING_FOR_RESPONSE') {
+      if (audioState === 'WAITING_FOR_RESPONSE') {
         dependencies.setAudioState(
           dependencies.isRecordingRequested() ? 'LISTENING' : 'IDLE'
         )
@@ -98,4 +102,3 @@ export function createTurnManager(
     dispose,
   }
 }
-

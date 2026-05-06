@@ -6,6 +6,8 @@ import {
 } from '../../utils/assistantTools'
 import { PROVIDER_CONFIGS } from './providerCatalog'
 
+const OPENAI_IMAGE_GENERATION_MODEL = 'gpt-image-2'
+
 export async function buildToolsForProvider(): Promise<any[]> {
   const settings = useSettingsStore().config
   const finalToolsForApi: any[] = []
@@ -71,12 +73,20 @@ export async function buildToolsForProvider(): Promise<any[]> {
 
     if (!isOModel) {
       if (!isGpt5WithMinimalReasoning) {
-        finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
+        finalToolsForApi.push({
+          type: 'image_generation',
+          model: OPENAI_IMAGE_GENERATION_MODEL,
+          partial_images: 2,
+        })
         finalToolsForApi.push({ type: 'web_search_preview' })
       }
     } else {
       if (modelName.includes('o3-pro') && modelName === 'o3') {
-        finalToolsForApi.push({ type: 'image_generation', partial_images: 2 })
+        finalToolsForApi.push({
+          type: 'image_generation',
+          model: OPENAI_IMAGE_GENERATION_MODEL,
+          partial_images: 2,
+        })
         finalToolsForApi.push({ type: 'web_search_preview' })
       }
     }

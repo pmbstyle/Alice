@@ -22,6 +22,58 @@ function installWindowMocks() {
   }
 }
 
+function installStreamIpcMock(assertStartArgs?: (args: any) => void) {
+  const listeners = new Map<string, (event: any, payload: any) => void>()
+  const invoke = vi
+    .fn()
+    .mockImplementation(async (channel: string, args: any) => {
+      if (channel === 'http:stream-start') {
+        assertStartArgs?.(args)
+        queueMicrotask(() => {
+          const eventChannel = `http:stream:event:${args.requestId}`
+          const listener = listeners.get(eventChannel)
+          listener?.(
+            {},
+            {
+              type: 'chunk',
+              data: {
+                id: 'chatcmpl-stream-test',
+                choices: [
+                  {
+                    delta: {
+                      content: 'hello streamed',
+                    },
+                    finish_reason: 'stop',
+                  },
+                ],
+              },
+            }
+          )
+          listener?.({}, { type: 'done' })
+        })
+        return { success: true }
+      }
+      if (channel === 'http:stream-cancel') {
+        return { success: true }
+      }
+      return { success: false, error: `Unexpected channel: ${channel}` }
+    })
+
+  ;(globalThis as any).window.ipcRenderer = {
+    invoke,
+    on: vi.fn((channel: string, listener: any) => {
+      listeners.set(channel, listener)
+      return undefined
+    }),
+    off: vi.fn((channel: string) => {
+      listeners.delete(channel)
+      return undefined
+    }),
+  }
+
+  return { invoke }
+}
+
 describe('createOpenAICompatibleResponse', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -169,7 +221,7 @@ describe('createOpenAICompatibleResponse', () => {
           output: '[]',
         } as any,
       ],
-      true,
+      false,
       'Core persona instructions'
     )
 
@@ -193,5 +245,54 @@ describe('createOpenAICompatibleResponse', () => {
         '<think>The user asks whether I played it.</think>\n\nНет, я сама в неё не играла.'
       )
     ).toBe('Нет, я сама в неё не играла.')
+  })
+
+  it('streams MiniMax chat completions through the main-process bridge', async () => {
+    const settingsStore = useSettingsStore()
+    settingsStore.updateSetting('aiProvider', 'minimax')
+    settingsStore.updateSetting('VITE_MINIMAX_API_KEY', 'sk-test')
+
+    let startedStreamArgs: any = null
+    installStreamIpcMock(args => {
+      startedStreamArgs = args
+    })
+
+    const stream = await createOpenAICompatibleResponse(
+      'minimax',
+      vi.fn() as any,
+      [
+        {
+          role: 'user',
+          content: [{ type: 'input_text', text: 'hello' }],
+        } as any,
+      ],
+      true
+    )
+
+    const events: any[] = []
+    for await (const event of stream) {
+      events.push(event)
+    }
+
+    expect(startedStreamArgs).toMatchObject({
+      method: 'POST',
+      url: 'https://api.minimax.io/v1/chat/completions',
+      headers: {
+        Authorization: 'Bearer sk-test',
+        'Content-Type': 'application/json',
+      },
+      data: expect.objectContaining({
+        model: 'MiniMax-M2.7',
+        reasoning_split: true,
+        stream: true,
+      }),
+    })
+    expect(
+      events.some(
+        event =>
+          event.type === 'response.output_text.delta' &&
+          event.delta === 'hello streamed'
+      )
+    ).toBe(true)
   })
 })

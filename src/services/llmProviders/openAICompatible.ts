@@ -1,9 +1,7 @@
 import type OpenAI from 'openai'
 import { useSettingsStore } from '../../stores/settingsStore'
-import {
-  convertChatCompletionToResponsesFormat,
-  convertLocalLLMStreamToResponsesFormat,
-} from './streamAdapters'
+import { streamViaMainProcess } from './mainProcessStream'
+import { convertLocalLLMStreamToResponsesFormat } from './streamAdapters'
 import { buildToolsForProvider } from './tools'
 import {
   MINIMAX_OPENAI_BASE_URL,
@@ -228,23 +226,21 @@ function normalizeBaseUrl(baseURL: string): string {
 }
 
 export async function createMiniMaxChatCompletionViaMain(
-  params: OpenAI.Chat.ChatCompletionCreateParams
+  params: OpenAI.Chat.ChatCompletionCreateParams,
+  signal?: AbortSignal
 ): Promise<any> {
   const settings = useSettingsStore().config
   if (!settings.VITE_MINIMAX_API_KEY?.trim()) {
     throw new Error('MiniMax API Key is not configured.')
   }
-  if (typeof window === 'undefined' || !window.httpAPI) {
-    throw new Error('Electron HTTP bridge is unavailable.')
-  }
 
   const body = {
     ...params,
-    stream: false,
+    stream: !!params.stream,
     reasoning_split: true,
   }
 
-  const response = await window.httpAPI.request({
+  const request = {
     url: `${normalizeBaseUrl(settings.minimaxBaseUrl || MINIMAX_OPENAI_BASE_URL)}/chat/completions`,
     method: 'POST',
     headers: {
@@ -253,7 +249,17 @@ export async function createMiniMaxChatCompletionViaMain(
     },
     data: body,
     timeout: 120 * 1000,
-  })
+  }
+
+  if (body.stream) {
+    return streamViaMainProcess(request, signal)
+  }
+
+  if (typeof window === 'undefined' || !window.httpAPI) {
+    throw new Error('Electron HTTP bridge is unavailable.')
+  }
+
+  const response = await window.httpAPI.request(request)
 
   if (!response.success) {
     throw new Error(response.error || 'MiniMax chat completion request failed.')
@@ -288,7 +294,7 @@ export async function createChatCompletionForProvider(
     if (signal?.aborted) {
       throw new DOMException('The operation was aborted.', 'AbortError')
     }
-    return createMiniMaxChatCompletionViaMain(params)
+    return createMiniMaxChatCompletionViaMain(params, signal)
   }
 
   return getClient().chat.completions.create(params as any, { signal })
@@ -337,7 +343,7 @@ export async function createOpenAICompatibleResponse(
       signal
     )
     return stream
-      ? convertChatCompletionToResponsesFormat(completion, provider)
+      ? convertLocalLLMStreamToResponsesFormat(completion, provider)
       : completion
   }
 

@@ -218,6 +218,7 @@ export async function createSettingsWindow(): Promise<BrowserWindow> {
     parent: win || undefined,
     modal: false,
     backgroundColor: '#1f2937',
+    show: false,
     webPreferences: {
       preload: getPreloadPath(),
       offscreen: false,
@@ -231,6 +232,9 @@ export async function createSettingsWindow(): Promise<BrowserWindow> {
   } else {
     await settingsWindow.loadFile(getIndexHtmlPath(), { hash: arg })
   }
+
+  settingsWindow.show()
+  settingsWindow.focus()
 
   settingsWindow.on('closed', () => {
     settingsWindow = null

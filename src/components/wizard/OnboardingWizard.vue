@@ -61,11 +61,13 @@ import FinalSetupStep from './steps/FinalSetupStep.vue'
 import OpenAI from 'openai'
 import {
   MINIMAX_OPENAI_BASE_URL,
-  ZAI_CODING_MODELS,
   ZAI_CODING_BASE_URL,
   type AIProviderKey,
 } from '../../services/llmProviders/providerCatalog'
 import { listMiniMaxModelsForConfig } from '../../services/llmProviders/minimax'
+import { listOpenAIModelsForConfig } from '../../services/llmProviders/openai'
+import { listOpenRouterModelsForConfig } from '../../services/llmProviders/openrouter'
+import { listZAIModelsForConfig } from '../../services/llmProviders/zai'
 
 const step = ref(1)
 const settingsStore = useSettingsStore()
@@ -92,10 +94,6 @@ const formData = reactive({
   availableModels: [] as string[],
   localSttLanguage: 'auto',
 })
-
-function isAuthError(error: any): boolean {
-  return error?.status === 401 || error?.status === 403
-}
 
 const isTesting = reactive({
   openai: false,
@@ -235,11 +233,22 @@ const fetchAvailableModels = async () => {
       return
     }
 
+    if (formData.aiProvider === 'zai') {
+      const models = await listZAIModelsForConfig(
+        formData.VITE_ZAI_API_KEY,
+        baseURL
+      )
+      formData.availableModels = models.map(model => model.id)
+
+      if (formData.availableModels.length > 0) {
+        formData.assistantModel = formData.availableModels[0]
+        formData.summarizationModel = formData.availableModels[0]
+      }
+      return
+    }
+
     const tempClient = new OpenAI({
-      apiKey:
-        formData.aiProvider === 'zai'
-          ? formData.VITE_ZAI_API_KEY
-          : formData.aiProvider,
+      apiKey: formData.aiProvider,
       baseURL,
       dangerouslyAllowBrowser: true,
     })
@@ -252,12 +261,6 @@ const fetchAvailableModels = async () => {
       formData.summarizationModel = formData.availableModels[0]
     }
   } catch (error) {
-    if (formData.aiProvider === 'zai' && !isAuthError(error)) {
-      formData.availableModels = ZAI_CODING_MODELS.map(model => model.id)
-      formData.assistantModel = formData.availableModels[0] || 'glm-5.1'
-      formData.summarizationModel = formData.availableModels[0] || 'glm-5.1'
-      return
-    }
     console.error('Failed to fetch models:', error)
     formData.availableModels = []
     throw error
@@ -276,12 +279,7 @@ const testOpenAIKey = async () => {
   testResult.openai.success = false
 
   try {
-    const tempClient = new OpenAI({
-      apiKey: formData.VITE_OPENAI_API_KEY,
-      dangerouslyAllowBrowser: true,
-    })
-
-    await tempClient.models.list()
+    await listOpenAIModelsForConfig(formData.VITE_OPENAI_API_KEY)
     testResult.openai.success = true
   } catch (e: any) {
     testResult.openai.error = 'API Key is invalid or has no permissions.'
@@ -307,13 +305,7 @@ const testOpenRouterKey = async () => {
   testResult.openrouter.success = false
 
   try {
-    const tempClient = new OpenAI({
-      apiKey: formData.VITE_OPENROUTER_API_KEY,
-      baseURL: 'https://openrouter.ai/api/v1',
-      dangerouslyAllowBrowser: true,
-    })
-
-    await tempClient.models.list()
+    await listOpenRouterModelsForConfig(formData.VITE_OPENROUTER_API_KEY)
     testResult.openrouter.success = true
   } catch (e: any) {
     testResult.openrouter.error = 'API Key is invalid or has no permissions.'

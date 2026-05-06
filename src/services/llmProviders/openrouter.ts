@@ -1,16 +1,26 @@
 import type OpenAI from 'openai'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { getOpenRouterClient } from '../apiClients'
+import { listModelsViaMainProcess } from './modelDiscovery'
 import { convertOpenRouterStreamToResponsesFormat } from './streamAdapters'
 import { buildToolsForProvider } from './tools'
 
-export const listOpenRouterModels = async (): Promise<
-  OpenAI.Models.Model[]
-> => {
-  const client = getOpenRouterClient()
-  const modelsPage = await client.models.list()
+export async function listOpenRouterModelsForConfig(
+  apiKey: string
+): Promise<OpenAI.Models.Model[]> {
+  const models = await listModelsViaMainProcess({
+    apiKey,
+    baseURL: 'https://openrouter.ai/api/v1',
+    providerName: 'OpenRouter',
+  })
 
-  return modelsPage.data
+  return filterOpenRouterModels(models)
+}
+
+function filterOpenRouterModels(
+  models: OpenAI.Models.Model[]
+): OpenAI.Models.Model[] {
+  return models
     .filter(model => {
       const id = model.id
       const isExcluded =
@@ -27,6 +37,13 @@ export const listOpenRouterModels = async (): Promise<
       return !isExcluded
     })
     .sort((a, b) => a.id.localeCompare(b.id))
+}
+
+export const listOpenRouterModels = async (): Promise<
+  OpenAI.Models.Model[]
+> => {
+  const settings = useSettingsStore().config
+  return listOpenRouterModelsForConfig(settings.VITE_OPENROUTER_API_KEY || '')
 }
 
 export const createOpenRouterResponse = async (

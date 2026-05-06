@@ -1,14 +1,26 @@
 import type OpenAI from 'openai'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { getOpenAIClient } from '../apiClients'
+import { listModelsViaMainProcess } from './modelDiscovery'
 import { buildToolsForProvider } from './tools'
 import { buildAssistantSystemPrompt } from '../../prompts/systemPrompt'
 
-export const listOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
-  const client = getOpenAIClient()
-  const modelsPage = await client.models.list()
+export async function listOpenAIModelsForConfig(
+  apiKey: string
+): Promise<OpenAI.Models.Model[]> {
+  const models = await listModelsViaMainProcess({
+    apiKey,
+    baseURL: 'https://api.openai.com/v1',
+    providerName: 'OpenAI',
+  })
 
-  return modelsPage.data
+  return filterOpenAIModels(models)
+}
+
+function filterOpenAIModels(
+  models: OpenAI.Models.Model[]
+): OpenAI.Models.Model[] {
+  return models
     .filter(model => {
       const id = model.id
 
@@ -34,6 +46,11 @@ export const listOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
       return isSupportedPrefix && !isExcluded
     })
     .sort((a, b) => a.id.localeCompare(b.id))
+}
+
+export const listOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
+  const settings = useSettingsStore().config
+  return listOpenAIModelsForConfig(settings.VITE_OPENAI_API_KEY || '')
 }
 
 export const createOpenAIResponse = async (

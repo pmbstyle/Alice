@@ -1,16 +1,12 @@
 import type OpenAI from 'openai'
 import { getMiniMaxClient } from '../apiClients'
 import { useSettingsStore } from '../../stores/settingsStore'
+import { createProviderModel, listModelsViaMainProcess } from './modelDiscovery'
 import { createOpenAICompatibleResponse } from './openAICompatible'
 import { MINIMAX_OPENAI_BASE_URL, MINIMAX_TEXT_MODELS } from './providerCatalog'
 
 function createMiniMaxModel(id: string): OpenAI.Models.Model {
-  return {
-    id,
-    object: 'model',
-    created: 0,
-    owned_by: 'minimax',
-  } as OpenAI.Models.Model
+  return createProviderModel(id, 'minimax')
 }
 
 function listStaticMiniMaxTextModels(): OpenAI.Models.Model[] {
@@ -19,15 +15,6 @@ function listStaticMiniMaxTextModels(): OpenAI.Models.Model[] {
 
 function isAuthError(error: any): boolean {
   return error?.status === 401 || error?.status === 403
-}
-
-function normalizeBaseUrl(baseURL: string): string {
-  return baseURL.replace(/\/+$/, '')
-}
-
-function normalizeMiniMaxModels(data: any): OpenAI.Models.Model[] {
-  const models = Array.isArray(data?.data) ? data.data : []
-  return models.filter((model: any) => typeof model?.id === 'string')
 }
 
 function filterMiniMaxTextModels(
@@ -41,33 +28,11 @@ async function fetchMiniMaxModelsViaMain(
   apiKey: string,
   baseURL: string
 ): Promise<OpenAI.Models.Model[]> {
-  if (typeof window === 'undefined' || !window.httpAPI) {
-    throw new Error('Electron HTTP bridge is unavailable.')
-  }
-
-  const response = await window.httpAPI.request({
-    url: `${normalizeBaseUrl(baseURL)}/models`,
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-    timeout: 10 * 1000,
+  return listModelsViaMainProcess({
+    apiKey,
+    baseURL,
+    providerName: 'MiniMax',
   })
-
-  if (!response.success) {
-    throw new Error(response.error || 'MiniMax models request failed.')
-  }
-
-  if (response.status && response.status >= 400) {
-    const error = new Error(
-      `MiniMax models request failed with status ${response.status}.`
-    ) as Error & { status?: number; data?: any }
-    error.status = response.status
-    error.data = response.data
-    throw error
-  }
-
-  return normalizeMiniMaxModels(response.data)
 }
 
 export async function listMiniMaxModelsForConfig(
@@ -89,7 +54,7 @@ export async function listMiniMaxModelsForConfig(
 export const listMiniMaxModels = async (): Promise<OpenAI.Models.Model[]> => {
   const settings = useSettingsStore().config
   return listMiniMaxModelsForConfig(
-    settings.VITE_MINIMAX_API_KEY,
+    settings.VITE_MINIMAX_API_KEY || '',
     settings.minimaxBaseUrl || MINIMAX_OPENAI_BASE_URL
   )
 }

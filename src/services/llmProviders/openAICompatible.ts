@@ -7,6 +7,7 @@ import {
 import { buildToolsForProvider } from './tools'
 import {
   MINIMAX_OPENAI_BASE_URL,
+  type ChatCompletionsProviderKey,
   getSafeProviderModel,
 } from './providerCatalog'
 
@@ -277,6 +278,22 @@ export async function createMiniMaxChatCompletionViaMain(
   return data
 }
 
+export async function createChatCompletionForProvider(
+  provider: ChatCompletionsProviderKey,
+  getClient: OpenAIClientGetter,
+  params: OpenAI.Chat.ChatCompletionCreateParams,
+  signal?: AbortSignal
+): Promise<any> {
+  if (provider === 'minimax') {
+    if (signal?.aborted) {
+      throw new DOMException('The operation was aborted.', 'AbortError')
+    }
+    return createMiniMaxChatCompletionViaMain(params)
+  }
+
+  return getClient().chat.completions.create(params as any, { signal })
+}
+
 export async function createOpenAICompatibleResponse(
   provider: OpenAICompatibleProviderKey,
   getClient: OpenAIClientGetter,
@@ -313,23 +330,26 @@ export async function createOpenAICompatibleResponse(
   }
 
   if (provider === 'minimax') {
-    if (signal?.aborted) {
-      throw new DOMException('The operation was aborted.', 'AbortError')
-    }
-    const completion = await createMiniMaxChatCompletionViaMain(params)
+    const completion = await createChatCompletionForProvider(
+      provider,
+      getClient,
+      params,
+      signal
+    )
     return stream
       ? convertChatCompletionToResponsesFormat(completion, provider)
       : completion
   }
 
-  const client = getClient()
-
   if (stream) {
-    const chatStream = await client.chat.completions.create(params as any, {
-      signal,
-    })
+    const chatStream = await createChatCompletionForProvider(
+      provider,
+      getClient,
+      params,
+      signal
+    )
     return convertLocalLLMStreamToResponsesFormat(chatStream, provider)
   }
 
-  return client.chat.completions.create(params as any, { signal })
+  return createChatCompletionForProvider(provider, getClient, params, signal)
 }

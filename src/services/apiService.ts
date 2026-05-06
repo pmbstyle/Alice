@@ -29,7 +29,7 @@ import {
   listMiniMaxModels,
 } from './llmProviders/minimax'
 import {
-  createMiniMaxChatCompletionViaMain,
+  createChatCompletionForProvider,
   stripReasoningFromMiniMaxContent,
 } from './llmProviders/openAICompatible'
 import {
@@ -730,10 +730,11 @@ export const createSummarizationResponse = async (
       ],
       stream: false,
     } as any
-    const response =
-      settings.aiProvider === 'minimax'
-        ? await createMiniMaxChatCompletionViaMain(params)
-        : await client.chat.completions.create(params)
+    const response = await createChatCompletionForProvider(
+      settings.aiProvider,
+      () => client,
+      params
+    )
 
     const content = response.choices[0]?.message?.content?.trim()
     return content ? stripReasoningFromMiniMaxContent(content) : null
@@ -787,10 +788,11 @@ export const createContextAnalysisResponse = async (
       ],
       stream: false,
     } as any
-    const response =
-      settings.aiProvider === 'minimax'
-        ? await createMiniMaxChatCompletionViaMain(params)
-        : await client.chat.completions.create(params)
+    const response = await createChatCompletionForProvider(
+      settings.aiProvider,
+      () => client,
+      params
+    )
 
     const content = response.choices[0]?.message?.content?.trim()
     return content

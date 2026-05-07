@@ -18,7 +18,7 @@ Alice is more than a chatbot; she’s built to feel present, responsive, emotion
 
 ### 💻 Local and Cloud use
 
-Alice is designed to work with Cloud(OpenAI/OpenRouter) and Local LLMs (Ollama/LM Studio).
+Alice is designed to work with Cloud(OpenAI/OpenRouter/Z.ai/Minimax) and Local LLMs (Ollama/LM Studio).
 Has built-in speech-to-text, text-to-speech, and embedding services.
 While the OpenAI cloud API is preferred and provides the best user experience, Alice can also operate **fully locally** (experimental).
 
@@ -39,7 +39,7 @@ While the OpenAI cloud API is preferred and provides the best user experience, A
 ### 🎨 Vision & Visual Output
 
 * Screenshot interpretation using Vision API
-* Image generation using `gpt-image-1`
+* Image generation using `gpt-image-2`
 * Animated video states (standby/speaking/thinking)
 
 ### 🪄 Computer Use Tools
@@ -84,7 +84,7 @@ With the local STT model, you can set a **wake-up word** (like "Hey, Siri").
 
 Fully customizable settings interface:
 
-* LLM provider selection between OpenAI, OpenRouter, Ollama, LM Studio
+* LLM provider selection between OpenAI, OpenRouter, Z.ai(coding plan), Minimax(token plan), Ollama, LM Studio
 * Cloud or local TTS, STT, Embeddings
 * Model choice & parameters (temperature, top\_p, history, etc)
 * Prompt and summarization tuning
@@ -116,9 +116,9 @@ Swap Alice's appearance with [your own](https://github.com/pmbstyle/Alice/blob/m
 <!-- STABLE_DOWNLOADS -->
 | Platform | Download |
 |----------|----------|
-| **Windows** | [Alice-AI-App-Windows-1.3.0-Setup.exe](https://github.com/pmbstyle/Alice/releases/download/v1.3.0/Alice-AI-App-Windows-1.3.0-Setup.exe) |
-| **macOS** | [Alice-AI-App-Mac-1.3.0-Installer.dmg](https://github.com/pmbstyle/Alice/releases/download/v1.3.0/Alice-AI-App-Mac-1.3.0-Installer.dmg) |
-| **Linux** | [Alice-AI-App-Linux-1.3.0.AppImage](https://github.com/pmbstyle/Alice/releases/download/v1.3.0/Alice-AI-App-Linux-1.3.0.AppImage) |
+| **Windows** | [Alice-AI-App-Windows-1.4.0-Setup.exe](https://github.com/pmbstyle/Alice/releases/download/v1.4.0/Alice-AI-App-Windows-1.4.0-Setup.exe) |
+| **macOS** | [Alice-AI-App-Mac-1.4.0-Installer.dmg](https://github.com/pmbstyle/Alice/releases/download/v1.4.0/Alice-AI-App-Mac-1.4.0-Installer.dmg) |
+| **Linux** | [Alice-AI-App-Linux-1.4.0.AppImage](https://github.com/pmbstyle/Alice/releases/download/v1.4.0/Alice-AI-App-Linux-1.4.0.AppImage) |
 | **ArchLinux**(community build) | [AUR Package](https://aur.archlinux.org/packages/alice-ai-app-bin) |
 <!-- STABLE_DOWNLOADS_END -->
 

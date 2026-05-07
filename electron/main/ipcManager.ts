@@ -6,6 +6,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  type WebContents,
 } from 'electron'
 import { mkdir, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -20,6 +21,30 @@ import {
 
 function isBrowserContextToolEnabled(settings: any): boolean {
   return settings?.assistantTools?.includes('browser_context') || false
+}
+
+const activeHttpStreams = new Map<string, AbortController>()
+
+function sendHttpStreamEvent(
+  sender: WebContents,
+  requestId: string,
+  payload: Record<string, any>
+): void {
+  if (sender.isDestroyed()) {
+    return
+  }
+  sender.send(`http:stream:event:${requestId}`, payload)
+}
+
+function readSseDataFrame(frame: string): string | null {
+  const data = frame
+    .split(/\r?\n/)
+    .filter(line => line.startsWith('data:'))
+    .map(line => line.slice('data:'.length).trimStart())
+    .join('\n')
+    .trim()
+
+  return data || null
 }
 import {
   saveMemoryLocal,
@@ -1085,50 +1110,232 @@ export function registerIPCHandlers(): void {
   })
 
   // HTTP request handler to bypass CORS
-  ipcMain.handle('http:request', async (event, args: {
-    url: string
-    method?: string
-    headers?: Record<string, string>
-    params?: Record<string, any>
-    data?: any
-    timeout?: number
-  }) => {
-    try {
-      const { url, method = 'GET', headers = {}, params, data, timeout = 15000 } = args
-      
-      console.log(`[IPC http:request] Making ${method} request to:`, url)
-      
-      const response = await axios({
-        url,
-        method,
-        headers,
-        params,
-        data,
-        timeout,
-        validateStatus: () => true // Don't throw on HTTP error status codes
-      })
-
-      return {
-        success: true,
-        data: response.data,
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers
+  ipcMain.handle(
+    'http:request',
+    async (
+      event,
+      args: {
+        url: string
+        method?: string
+        headers?: Record<string, string>
+        params?: Record<string, any>
+        data?: any
+        timeout?: number
       }
-    } catch (error: any) {
-      console.error('[IPC http:request] Error:', error)
-      return {
-        success: false,
-        error: error.message,
-        code: error.code,
-        response: error.response ? {
-          status: error.response.status,
-          statusText: error.response.statusText,
-          data: error.response.data
-        } : null
+    ) => {
+      try {
+        const {
+          url,
+          method = 'GET',
+          headers = {},
+          params,
+          data,
+          timeout = 15000,
+        } = args
+
+        console.log(`[IPC http:request] Making ${method} request to:`, url)
+
+        const response = await axios({
+          url,
+          method,
+          headers,
+          params,
+          data,
+          timeout,
+          validateStatus: () => true, // Don't throw on HTTP error status codes
+        })
+
+        return {
+          success: true,
+          data: response.data,
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        }
+      } catch (error: any) {
+        console.error('[IPC http:request] Error:', error)
+        return {
+          success: false,
+          error: error.message,
+          code: error.code,
+          response: error.response
+            ? {
+                status: error.response.status,
+                statusText: error.response.statusText,
+                data: error.response.data,
+              }
+            : null,
+        }
       }
     }
-  })
+  )
+
+  ipcMain.handle(
+    'http:stream-start',
+    async (
+      event,
+      args: {
+        requestId: string
+        url: string
+        method?: string
+        headers?: Record<string, string>
+        params?: Record<string, any>
+        data?: any
+        timeout?: number
+      }
+    ) => {
+      const {
+        requestId,
+        url,
+        method = 'GET',
+        headers = {},
+        params,
+        data,
+        timeout = 120000,
+      } = args || {}
+
+      if (!requestId || !url) {
+        return {
+          success: false,
+          error: 'Stream request id and URL are required.',
+        }
+      }
+
+      const abortController = new AbortController()
+      activeHttpStreams.set(requestId, abortController)
+      const sender = event.sender
+
+      void (async () => {
+        let streamDone = false
+
+        const finishStream = () => {
+          if (streamDone) {
+            return
+          }
+          streamDone = true
+          activeHttpStreams.delete(requestId)
+          sendHttpStreamEvent(sender, requestId, { type: 'done' })
+        }
+
+        const failStream = (
+          error: any,
+          status?: number,
+          responseData?: any
+        ) => {
+          activeHttpStreams.delete(requestId)
+          sendHttpStreamEvent(sender, requestId, {
+            type: 'error',
+            error:
+              error?.message ||
+              responseData?.error?.message ||
+              responseData?.message ||
+              'HTTP stream request failed.',
+            status,
+            data: responseData,
+          })
+        }
+
+        try {
+          console.log(`[IPC http:stream] Making ${method} request to:`, url)
+
+          const response = await axios({
+            url,
+            method,
+            headers,
+            params,
+            data,
+            timeout,
+            responseType: 'stream',
+            signal: abortController.signal,
+            validateStatus: () => true,
+          })
+
+          if (response.status >= 400) {
+            let errorBody = ''
+            for await (const chunk of response.data as any) {
+              errorBody += Buffer.from(chunk).toString('utf8')
+              if (errorBody.length > 65536) {
+                break
+              }
+            }
+
+            let parsedBody: any = errorBody
+            try {
+              parsedBody = JSON.parse(errorBody)
+            } catch {
+              // Keep the raw upstream body when it is not JSON.
+            }
+
+            failStream(
+              new Error(`HTTP stream failed with status ${response.status}.`),
+              response.status,
+              parsedBody
+            )
+            return
+          }
+
+          let buffer = ''
+          for await (const chunk of response.data as any) {
+            buffer += Buffer.from(chunk).toString('utf8')
+
+            let separatorIndex = buffer.search(/\r?\n\r?\n/)
+            while (separatorIndex !== -1) {
+              const frame = buffer.slice(0, separatorIndex)
+              const separator = buffer.match(/\r?\n\r?\n/)
+              buffer = buffer.slice(
+                separatorIndex + (separator?.[0]?.length || 2)
+              )
+
+              const dataFrame = readSseDataFrame(frame)
+              if (dataFrame === '[DONE]') {
+                finishStream()
+                return
+              }
+              if (dataFrame) {
+                sendHttpStreamEvent(sender, requestId, {
+                  type: 'chunk',
+                  data: JSON.parse(dataFrame),
+                })
+              }
+
+              separatorIndex = buffer.search(/\r?\n\r?\n/)
+            }
+          }
+
+          const trailingFrame = readSseDataFrame(buffer)
+          if (trailingFrame && trailingFrame !== '[DONE]') {
+            sendHttpStreamEvent(sender, requestId, {
+              type: 'chunk',
+              data: JSON.parse(trailingFrame),
+            })
+          }
+
+          finishStream()
+        } catch (error: any) {
+          if (abortController.signal.aborted) {
+            finishStream()
+            return
+          }
+          console.error('[IPC http:stream] Error:', error)
+          failStream(error, error?.response?.status, error?.response?.data)
+        }
+      })()
+
+      return { success: true }
+    }
+  )
+
+  ipcMain.handle(
+    'http:stream-cancel',
+    async (event, args: { requestId: string }) => {
+      const abortController = activeHttpStreams.get(args?.requestId)
+      if (abortController) {
+        abortController.abort()
+        activeHttpStreams.delete(args.requestId)
+      }
+      return { success: true }
+    }
+  )
 }
 
 let googleIPCHandlersRegistered = false

@@ -1,3 +1,7 @@
+function isAbortError(error: any): boolean {
+  return error?.name === 'AbortError'
+}
+
 export async function* convertLocalLLMStreamToResponsesFormat(
   stream: any,
   provider: 'ollama' | 'lm-studio' | 'zai' | 'minimax'
@@ -186,6 +190,10 @@ export async function* convertLocalLLMStreamToResponsesFormat(
       }
     }
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error
+    }
+
     console.error(`Error in ${provider} stream conversion:`, error)
 
     yield {
@@ -509,6 +517,10 @@ export async function* convertOpenRouterStreamToResponsesFormat(stream: any) {
       }
     }
   } catch (error) {
+    if (isAbortError(error)) {
+      throw error
+    }
+
     console.error('Error in OpenRouter stream conversion:', error)
 
     yield {

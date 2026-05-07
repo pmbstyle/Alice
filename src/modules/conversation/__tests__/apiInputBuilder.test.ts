@@ -90,6 +90,51 @@ describe('createApiInputBuilder', () => {
     })
   })
 
+  it('keeps UI system status messages out of inference payloads', async () => {
+    const history: ConversationHistoryMessage[] = [
+      {
+        role: 'tool',
+        tool_call_id: 'call_123',
+        content: '[]',
+      },
+      {
+        role: 'system',
+        content: [{ type: 'app_text', text: '🧠 Let me think back...' }],
+      },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'call_123',
+            type: 'function',
+            function: {
+              name: 'recall_memories',
+              arguments: '{"query":"cats"}',
+            },
+          },
+        ],
+      },
+      {
+        role: 'user',
+        content: 'Do you remember my cats?',
+      },
+    ]
+
+    const builder = createApiInputBuilder(
+      buildDependencies({ history, getAiProvider: () => 'minimax' })
+    )
+    const result = await builder.build({ isNewChain: false })
+
+    expect(result.some((item: any) => item.role === 'system')).toBe(false)
+    expect(JSON.stringify(result)).not.toContain('Let me think back')
+    expect(result.map((item: any) => item.role || item.type)).toEqual([
+      'user',
+      'assistant',
+      'function_call_output',
+    ])
+  })
+
   it('converts last user image into input_image part', async () => {
     const history: ConversationHistoryMessage[] = [
       {

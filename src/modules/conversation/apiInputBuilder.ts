@@ -56,6 +56,10 @@ export function createApiInputBuilder(
       for (const msg of recentHistory) {
         let apiItemPartial: any
 
+        if (msg.role === 'system') {
+          continue
+        }
+
         if (msg.role === 'tool') {
           apiItemPartial = {
             type: 'function_call_output',
@@ -64,19 +68,6 @@ export function createApiInputBuilder(
               typeof msg.content === 'string'
                 ? msg.content
                 : JSON.stringify(msg.content),
-          }
-        } else if (msg.role === 'system') {
-          apiItemPartial = {
-            role: 'system',
-            content: [
-              {
-                type: 'input_text',
-                text:
-                  typeof msg.content === 'string'
-                    ? msg.content
-                    : JSON.stringify(msg.content),
-              },
-            ],
           }
         } else {
           const currentApiRole = msg.role as 'user' | 'assistant' | 'developer'

@@ -27,11 +27,8 @@ describe('providerCatalog', () => {
       getStaticModelsForProvider('minimax').map(model => model.id)
     ).toEqual([
       'MiniMax-M2.7',
-      'MiniMax-M2.7-highspeed',
       'MiniMax-M2.5',
-      'MiniMax-M2.5-highspeed',
       'MiniMax-M2.1',
-      'MiniMax-M2.1-highspeed',
       'MiniMax-M2',
     ])
     expect(MINIMAX_TEXT_MODELS[0]?.displayName).toBe('MiniMax M2.7')
@@ -40,7 +37,7 @@ describe('providerCatalog', () => {
   it('falls back to the MiniMax default for non-MiniMax model ids', () => {
     expect(getSafeProviderModel('minimax', 'gpt-4o-mini')).toBe('MiniMax-M2.7')
     expect(getSafeProviderModel('minimax', 'MiniMax-M2.7-highspeed')).toBe(
-      'MiniMax-M2.7-highspeed'
+      'MiniMax-M2.7'
     )
   })
 })

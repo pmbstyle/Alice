@@ -28,11 +28,8 @@ export const ZAI_CODING_MODELS: ProviderModelDefinition[] = [
 
 export const MINIMAX_TEXT_MODELS: ProviderModelDefinition[] = [
   { id: 'MiniMax-M2.7', displayName: 'MiniMax M2.7' },
-  { id: 'MiniMax-M2.7-highspeed', displayName: 'MiniMax M2.7 High-Speed' },
   { id: 'MiniMax-M2.5', displayName: 'MiniMax M2.5' },
-  { id: 'MiniMax-M2.5-highspeed', displayName: 'MiniMax M2.5 High-Speed' },
   { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1' },
-  { id: 'MiniMax-M2.1-highspeed', displayName: 'MiniMax M2.1 High-Speed' },
   { id: 'MiniMax-M2', displayName: 'MiniMax M2' },
 ]
 

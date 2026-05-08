@@ -116,9 +116,9 @@ Swap Alice's appearance with [your own](https://github.com/pmbstyle/Alice/blob/m
 <!-- STABLE_DOWNLOADS -->
 | Platform | Download |
 |----------|----------|
-| **Windows** | [Alice-AI-App-Windows-1.4.0-Setup.exe](https://github.com/pmbstyle/Alice/releases/download/v1.4.0/Alice-AI-App-Windows-1.4.0-Setup.exe) |
-| **macOS** | [Alice-AI-App-Mac-1.4.0-Installer.dmg](https://github.com/pmbstyle/Alice/releases/download/v1.4.0/Alice-AI-App-Mac-1.4.0-Installer.dmg) |
-| **Linux** | [Alice-AI-App-Linux-1.4.0.AppImage](https://github.com/pmbstyle/Alice/releases/download/v1.4.0/Alice-AI-App-Linux-1.4.0.AppImage) |
+| **Windows** | [Alice-AI-App-Windows-1.4.1-Setup.exe](https://github.com/pmbstyle/Alice/releases/download/v1.4.1/Alice-AI-App-Windows-1.4.1-Setup.exe) |
+| **macOS** | [Alice-AI-App-Mac-1.4.1-Installer.dmg](https://github.com/pmbstyle/Alice/releases/download/v1.4.1/Alice-AI-App-Mac-1.4.1-Installer.dmg) |
+| **Linux** | [Alice-AI-App-Linux-1.4.1.AppImage](https://github.com/pmbstyle/Alice/releases/download/v1.4.1/Alice-AI-App-Linux-1.4.1.AppImage) |
 | **ArchLinux**(community build) | [AUR Package](https://aur.archlinux.org/packages/alice-ai-app-bin) |
 <!-- STABLE_DOWNLOADS_END -->
 

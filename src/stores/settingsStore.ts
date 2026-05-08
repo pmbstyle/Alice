@@ -93,15 +93,27 @@ export interface AliceSettings {
 }
 
 function hasMinimumConfigForOnboarding(config: AliceSettings): boolean {
-  return Boolean(
-    config.assistantModel?.trim() ||
-    config.VITE_OPENAI_API_KEY?.trim() ||
-    config.VITE_OPENROUTER_API_KEY?.trim() ||
-    config.VITE_ZAI_API_KEY?.trim() ||
-    config.VITE_MINIMAX_API_KEY?.trim() ||
-    config.ollamaBaseUrl?.trim() ||
-    config.lmStudioBaseUrl?.trim()
-  )
+  if (config.VITE_OPENAI_API_KEY?.trim()) {
+    return true
+  }
+  if (config.VITE_OPENROUTER_API_KEY?.trim()) {
+    return true
+  }
+  if (config.VITE_ZAI_API_KEY?.trim()) {
+    return true
+  }
+  if (config.VITE_MINIMAX_API_KEY?.trim()) {
+    return true
+  }
+
+  if (config.aiProvider === 'ollama') {
+    return Boolean(config.ollamaBaseUrl?.trim())
+  }
+  if (config.aiProvider === 'lm-studio') {
+    return Boolean(config.lmStudioBaseUrl?.trim())
+  }
+
+  return false
 }
 
 const defaultSettings: AliceSettings = {

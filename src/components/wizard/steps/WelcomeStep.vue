@@ -1,12 +1,13 @@
 <template>
-  <div class="text-center">
-    <div class="mb-8">
-      <!-- Alice logo or icon could go here -->
+  <div class="h-full flex items-center justify-center py-4">
+    <div class="w-full max-w-xl text-center">
       <div
-        class="w-20 h-20 mx-auto mb-6 bg-primary/20 rounded-full flex items-center justify-center"
+        class="relative w-24 h-24 mx-auto mb-6 flex items-center justify-center"
       >
+        <div class="absolute inset-0 rounded-full bg-primary/10"></div>
+        <div class="absolute inset-3 rounded-full bg-primary/20"></div>
         <svg
-          class="w-10 h-10 text-primary"
+          class="relative w-12 h-12 text-primary"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -20,58 +21,73 @@
         </svg>
       </div>
 
-      <p class="text-base-content/60">
-        Let's get you set up in just a few steps. This will only take a couple
-        of minutes.
+      <h2 class="text-2xl font-semibold mb-3">Set up Alice essentials</h2>
+      <p class="text-base-content/65 max-w-md mx-auto">
+        Choose the model provider, voice path, and memory mode now. You can
+        fine-tune the details later in Settings.
       </p>
-    </div>
 
-    <div class="space-y-4 text-left bg-base-300/50 p-4 rounded-lg">
-      <h3 class="font-semibold text-base-content/90">What we'll configure:</h3>
-      <ul class="space-y-2 text-sm text-base-content/70">
-        <li class="flex items-center">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-8 text-left">
+        <div class="bg-base-300/45 border border-gray-800 rounded-lg p-4">
           <svg
-            class="w-4 h-4 mr-3 text-primary"
-            fill="currentColor"
-            viewBox="0 0 20 20"
+            class="w-5 h-5 mb-3 text-primary"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
             <path
-              fill-rule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clip-rule="evenodd"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M13 10V3L4 14h7v7l9-11h-7z"
             />
           </svg>
-          AI Provider (OpenAI, OpenRouter, or Local)
-        </li>
-        <li class="flex items-center">
+          <div class="font-medium text-base-content/90">Provider</div>
+          <div class="text-sm text-base-content/60 mt-1">
+            OpenAI, OpenRouter, or local runtime.
+          </div>
+        </div>
+
+        <div class="bg-base-300/45 border border-gray-800 rounded-lg p-4">
           <svg
-            class="w-4 h-4 mr-3 text-primary"
-            fill="currentColor"
-            viewBox="0 0 20 20"
+            class="w-5 h-5 mb-3 text-primary"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
             <path
-              fill-rule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clip-rule="evenodd"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 14.142M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
             />
           </svg>
-          Voice Models (Speech-to-Text & Text-to-Speech)
-        </li>
-        <li class="flex items-center">
+          <div class="font-medium text-base-content/90">Voice</div>
+          <div class="text-sm text-base-content/60 mt-1">
+            Speech-to-text and text-to-speech.
+          </div>
+        </div>
+
+        <div class="bg-base-300/45 border border-gray-800 rounded-lg p-4">
           <svg
-            class="w-4 h-4 mr-3 text-primary"
-            fill="currentColor"
-            viewBox="0 0 20 20"
+            class="w-5 h-5 mb-3 text-primary"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
           >
             <path
-              fill-rule="evenodd"
-              d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-              clip-rule="evenodd"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"
             />
           </svg>
-          Memory & Embedding Models
-        </li>
-      </ul>
+          <div class="font-medium text-base-content/90">Memory</div>
+          <div class="text-sm text-base-content/60 mt-1">
+            Embeddings for local recall.
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>

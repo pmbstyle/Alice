@@ -1,5 +1,5 @@
 <template>
-  <div class="p-4 border-t border-base-300 bg-base-100 rounded-b-lg">
+  <div class="p-4 border-t border-gray-700 bg-gray-800 rounded-b-lg">
     <!-- Progress indicator -->
     <div class="mb-4">
       <div class="flex justify-between text-sm text-base-content/60 mb-2">

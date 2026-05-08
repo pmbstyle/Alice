@@ -1,23 +1,22 @@
 <template>
   <div>
-    <div class="mb-6">
-      <h2 class="text-2xl font-semibold mb-3">
-        Choose Voice & Embedding Models
-      </h2>
+    <div class="mb-3">
+      <h2 class="text-2xl font-semibold mb-2">Choose Voice & Memory Mode</h2>
       <p class="text-base-content/70">
-        Choose between cloud services or built-in local models for privacy and
-        offline use.
+        Pick a first-run default for speech, audio, and memory embeddings. You
+        can tune individual providers, voices, and local model choices later in
+        Settings.
       </p>
     </div>
 
     <!-- Local vs Cloud Toggle -->
-    <div class="bg-base-300/50 p-4 rounded-lg mb-6">
+    <div class="bg-base-300/50 p-3 rounded-lg mb-3">
       <div class="form-control">
         <label class="label w-full cursor-pointer">
           <div class="flex-1 pr-4">
             <span class="label-text font-medium text-lg">Use Local Models</span>
             <div class="text-sm text-base-content/60 mt-1">
-              Run voice features locally for privacy and offline use.
+              Use the bundled local backend for voice and memory features.
             </div>
           </div>
           <input
@@ -34,8 +33,8 @@
 
     <div v-if="formData.useLocalModels">
       <!-- Local Models Information -->
-      <div class="space-y-4">
-        <div class="alert alert-success text-sm">
+      <div class="space-y-3">
+        <div class="alert alert-success text-sm py-3">
           <svg
             xmlns="http://www.w3.org/2000/svg"
             fill="none"
@@ -50,22 +49,21 @@
             />
           </svg>
           <div>
-            <p class="font-medium">Great choice! Local models provide:</p>
-            <ul class="list-disc list-inside mt-2 space-y-1">
-              <li>Complete privacy - nothing leaves your device</li>
-              <li>Offline functionality</li>
-              <li>No API costs</li>
-              <li>Fast local processing</li>
+            <p class="font-medium">Local mode sets these defaults:</p>
+            <ul class="list-disc list-inside mt-1 space-y-0.5">
+              <li>Speech-to-text runs through the local backend</li>
+              <li>Text-to-speech uses local Piper voices</li>
+              <li>Embeddings are stored with the local MiniLM model</li>
+              <li>Voice downloads happen on first use</li>
+              <li>Voice and model details stay editable in Settings</li>
             </ul>
           </div>
         </div>
 
-        <div class="bg-base-200 p-4 rounded-lg space-y-3">
-          <h3 class="font-medium text-base-content/90">
-            Local Models Configuration:
-          </h3>
+        <div class="bg-base-200 p-3 rounded-lg space-y-2">
+          <h3 class="font-medium text-base-content/90">Local defaults:</h3>
 
-          <div class="grid grid-cols-1 gap-3 text-sm">
+          <div class="grid grid-cols-1 gap-2 text-sm">
             <div
               class="flex justify-between items-center p-2 bg-base-100 rounded"
             >
@@ -144,77 +142,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Voice Languages Showcase -->
-        <div class="bg-base-200 p-4 rounded-lg space-y-3">
-          <h3 class="font-medium text-base-content/90 flex items-center gap-2">
-            <span>🌍</span> Available Voice Languages
-          </h3>
-          <div
-            class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 text-xs"
-          >
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇺🇸</span> English (US)
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇬🇧</span> English (UK)
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇪🇸</span> Spanish
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇫🇷</span> French
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇩🇪</span> German
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇮🇹</span> Italian
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇧🇷</span> Portuguese
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇷🇺</span> Russian
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇨🇳</span> Chinese
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇯🇵</span> Japanese
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇳🇱</span> Dutch
-            </div>
-            <div class="flex items-center gap-1 p-2 bg-base-100 rounded">
-              <span>🇳🇴</span> Nordic
-            </div>
-          </div>
-          <p class="text-xs text-base-content/60 mt-2">
-            <strong>+8 more languages</strong> including Hindi, Arabic, Polish,
-            Ukrainian, Finnish and more!
-          </p>
-        </div>
-
-        <div class="alert alert-info text-sm">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            fill="none"
-            viewBox="0 0 24 24"
-            class="stroke-current shrink-0 w-5 h-5"
-          >
-            <path
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              stroke-width="2"
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            ></path>
-          </svg>
-          <span
-            >Voice models will be downloaded automatically when first used. You
-            can preview and select different voices in Settings.</span
-          >
-        </div>
       </div>
     </div>
 
@@ -247,8 +174,8 @@
             ></path>
           </svg>
           <span
-            >Since you chose cloud voice services, you'll need an OpenAI API key
-            for TTS, STT, and embeddings.</span
+            >Cloud mode uses OpenAI for text-to-speech and embeddings, so an
+            OpenAI API key is required unless you switch to local mode.</span
           >
         </div>
 
@@ -267,8 +194,8 @@
             ></path>
           </svg>
           <span
-            >Using cloud services for voice features. These typically provide
-            faster processing and higher quality.</span
+            >Cloud mode keeps voice and embedding setup simple for first run.
+            You can change TTS, embeddings, and local options in Settings.</span
           >
         </div>
 
@@ -287,7 +214,7 @@
             <span class="label-text">OpenAI API Key (for Voice Features)</span>
           </label>
           <div class="text-sm text-base-content/70 mb-2">
-            Required for voice features and embeddings. Get one from the
+            Required for cloud text-to-speech and embeddings. Get one from the
             <a
               href="https://platform.openai.com/api-keys"
               target="_blank"
@@ -393,11 +320,11 @@
             </div>
             <div class="flex justify-between">
               <span class="text-base-content/60">Text-to-Speech:</span>
-              <span>OpenAI</span>
+              <span>{{ providerLabel(formData.ttsProvider) }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-base-content/60">Embeddings:</span>
-              <span>OpenAI</span>
+              <span>{{ providerLabel(formData.embeddingProvider) }}</span>
             </div>
           </div>
         </div>
@@ -414,4 +341,14 @@ defineProps<{
 defineEmits<{
   'toggle-local': [useLocal: boolean]
 }>()
+
+const providerLabel = (provider: string) => {
+  const labels: Record<string, string> = {
+    google: 'Google',
+    local: 'Local',
+    openai: 'OpenAI',
+  }
+
+  return labels[provider] || provider
+}
 </script>

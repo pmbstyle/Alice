@@ -1,13 +1,19 @@
 <template>
-  <div class="fixed inset-0 text-base-content flex items-center justify-center">
+  <div
+    data-theme="dark"
+    class="fixed inset-0 bg-transparent text-base-content flex items-center justify-center"
+  >
     <div
-      class="w-full max-w-2xl h-full bg-base-200 border border-base-300 rounded-lg shadow-2xl flex flex-col"
+      class="w-full max-w-2xl h-full bg-gray-900 border border-gray-700 rounded-lg shadow-2xl flex flex-col"
     >
       <!-- Header -->
       <WizardHeader :title="currentStepTitle" @close="closeWizard" />
 
       <!-- Scrollable Content -->
-      <div ref="scrollContainer" class="flex-1 overflow-y-auto p-6">
+      <div
+        ref="scrollContainer"
+        class="flex-1 overflow-y-auto overflow-x-hidden p-6"
+      >
         <WelcomeStep v-if="step === 1" @next="step = 2" />
         <AIProviderStep
           v-else-if="step === 2"
@@ -50,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, nextTick } from 'vue'
+import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
 import { useSettingsStore } from '../../stores/settingsStore'
 import WizardHeader from './WizardHeader.vue'
 import WizardFooter from './WizardFooter.vue'
@@ -61,6 +67,7 @@ import FinalSetupStep from './steps/FinalSetupStep.vue'
 import OpenAI from 'openai'
 import {
   MINIMAX_OPENAI_BASE_URL,
+  PROVIDER_CONFIGS,
   ZAI_CODING_BASE_URL,
   type AIProviderKey,
 } from '../../services/llmProviders/providerCatalog'
@@ -72,6 +79,32 @@ import { listZAIModelsForConfig } from '../../services/llmProviders/zai'
 const step = ref(1)
 const settingsStore = useSettingsStore()
 const scrollContainer = ref<HTMLElement>()
+const OPENAI_SUMMARIZATION_MODEL = 'gpt-4.1-nano'
+const DEFAULT_MAIN_WINDOW_SIZE = {
+  width: 500,
+  height: 500,
+}
+const WIZARD_WINDOW_SIZE = {
+  width: 720,
+  height: 800,
+}
+
+const getDefaultModels = (provider: AIProviderKey) => {
+  const assistantModel =
+    PROVIDER_CONFIGS[provider]?.defaultModel ||
+    PROVIDER_CONFIGS.openai.defaultModel
+  const summarizationModel =
+    provider === 'openai' || provider === 'openrouter'
+      ? OPENAI_SUMMARIZATION_MODEL
+      : assistantModel
+
+  return {
+    assistantModel,
+    summarizationModel,
+  }
+}
+
+const openaiDefaults = getDefaultModels('openai')
 
 const formData = reactive({
   VITE_OPENAI_API_KEY: '',
@@ -79,8 +112,8 @@ const formData = reactive({
   VITE_ZAI_API_KEY: '',
   VITE_MINIMAX_API_KEY: '',
   aiProvider: 'openai' as AIProviderKey,
-  assistantModel: 'gpt-4o-mini' as string,
-  summarizationModel: 'gpt-4o-mini' as string,
+  assistantModel: openaiDefaults.assistantModel as string,
+  summarizationModel: openaiDefaults.summarizationModel as string,
   sttProvider: 'openai' as 'openai' | 'groq' | 'google' | 'local',
   ttsProvider: 'openai' as 'openai' | 'google' | 'local',
   embeddingProvider: 'openai' as 'openai' | 'local',
@@ -119,7 +152,7 @@ const currentStepTitle = computed(() => {
   const titles = {
     1: 'Welcome to Alice',
     2: 'AI Provider Setup',
-    3: 'Voice & Embedding Models',
+    3: 'Voice & Memory Mode',
     4: 'Final Configuration',
   }
   return titles[step.value as keyof typeof titles] || 'Setup'
@@ -175,6 +208,10 @@ watch(step, async () => {
   }
 })
 
+onMounted(() => {
+  window.electron?.resize?.(WIZARD_WINDOW_SIZE)
+})
+
 const toggleLocalModels = (useLocal: boolean) => {
   formData.useLocalModels = useLocal
   if (useLocal) {
@@ -191,16 +228,9 @@ const toggleLocalModels = (useLocal: boolean) => {
 watch(
   () => formData.aiProvider,
   newProvider => {
-    if (newProvider === 'openai' || newProvider === 'openrouter') {
-      formData.assistantModel = 'gpt-4o-mini'
-      formData.summarizationModel = 'gpt-4o-mini'
-    } else if (newProvider === 'zai') {
-      formData.assistantModel = 'glm-5.1'
-      formData.summarizationModel = 'glm-5.1'
-    } else if (newProvider === 'minimax') {
-      formData.assistantModel = 'MiniMax-M2.7'
-      formData.summarizationModel = 'MiniMax-M2.7'
-    }
+    const defaults = getDefaultModels(newProvider)
+    formData.assistantModel = defaults.assistantModel
+    formData.summarizationModel = defaults.summarizationModel
   }
 )
 
@@ -527,7 +557,9 @@ const finishOnboarding = async () => {
     const success = await settingsStore.completeOnboarding(formData)
     if (!success) {
       alert('Failed to save settings. Please try again.')
+      return
     }
+    window.electron?.resize?.(DEFAULT_MAIN_WINDOW_SIZE)
   } catch (error) {
     console.error('Onboarding completion error:', error)
     alert('An error occurred during setup. Please try again.')
@@ -537,6 +569,15 @@ const finishOnboarding = async () => {
 }
 
 const closeWizard = () => {
-  ;(window as any).electron.closeApp()
+  try {
+    if (typeof window.electron?.closeApp === 'function') {
+      window.electron.closeApp()
+      return
+    }
+
+    window.ipcRenderer?.send?.('close-app')
+  } catch (error) {
+    console.error('Failed to close onboarding wizard:', error)
+  }
 }
 </script>

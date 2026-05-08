@@ -1,10 +1,10 @@
 <template>
   <div
-    class="flex items-center justify-between p-4 border-b border-base-300 bg-base-100 rounded-t-lg"
+    class="flex items-center justify-between p-4 border-b border-gray-700 bg-gray-800 rounded-t-lg"
   >
     <!-- Drag handle -->
     <button
-      class="dragable select-none p-1 hover:bg-base-200 rounded transition-colors"
+      class="dragable select-none p-1 hover:bg-gray-700 rounded transition-colors"
     >
       <svg
         fill="currentColor"
@@ -26,7 +26,7 @@
     <!-- Close button -->
     <button
       @click="$emit('close')"
-      class="p-2 hover:bg-base-200 rounded-full transition-colors"
+      class="p-2 hover:bg-gray-700 rounded-full transition-colors"
       title="Close Setup"
     >
       <svg

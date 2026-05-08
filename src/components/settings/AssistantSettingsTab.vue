@@ -381,15 +381,14 @@
                     v-if="!isToolConfigured(tool.name)"
                     class="text-xs text-warning normal-case"
                   >
-                    (Needs config below)
+                    (Configure in Apps)
                   </span>
                 </span>
               </label>
               <div class="text-sm text-gray-400">
                 {{ tool.description }}
                 <template v-if="!isToolConfigured(tool.name)"
-                  >(API key for this tool not configured in Optional Tool APIs
-                  section)</template
+                  >(Configure the required API key in the Apps tab)</template
                 >
               </div>
             </div>

@@ -155,7 +155,8 @@
               formData.aiProvider === 'lm-studio' ||
               formData.aiProvider === 'openrouter' ||
               formData.aiProvider === 'zai' ||
-              formData.aiProvider === 'minimax') &&
+              formData.aiProvider === 'minimax' ||
+              formData.aiProvider === 'deepseek') &&
             !formData.VITE_OPENAI_API_KEY?.trim()
           "
           class="alert alert-warning text-sm"
@@ -206,7 +207,8 @@
             formData.aiProvider === 'lm-studio' ||
             formData.aiProvider === 'openrouter' ||
             formData.aiProvider === 'zai' ||
-            formData.aiProvider === 'minimax'
+            formData.aiProvider === 'minimax' ||
+            formData.aiProvider === 'deepseek'
           "
           class="form-control"
         >

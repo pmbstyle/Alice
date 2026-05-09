@@ -5,6 +5,7 @@ export type AIProviderKey =
   | 'lm-studio'
   | 'zai'
   | 'minimax'
+  | 'deepseek'
 
 export type ChatCompletionsProviderKey = Exclude<AIProviderKey, 'openai'>
 
@@ -31,6 +32,11 @@ export const MINIMAX_TEXT_MODELS: ProviderModelDefinition[] = [
   { id: 'MiniMax-M2.5', displayName: 'MiniMax M2.5' },
   { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1' },
   { id: 'MiniMax-M2', displayName: 'MiniMax M2' },
+]
+
+export const DEEPSEEK_TEXT_MODELS: ProviderModelDefinition[] = [
+  { id: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash' },
+  { id: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro' },
 ]
 
 export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
@@ -64,10 +70,16 @@ export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
     defaultModel: 'MiniMax-M2.7',
     nativeWebSearch: false,
   },
+  deepseek: {
+    displayName: 'DeepSeek',
+    defaultModel: 'deepseek-v4-flash',
+    nativeWebSearch: false,
+  },
 }
 
 export const ZAI_CODING_BASE_URL = 'https://api.z.ai/api/coding/paas/v4'
 export const MINIMAX_OPENAI_BASE_URL = 'https://api.minimax.io/v1'
+export const DEEPSEEK_OPENAI_BASE_URL = 'https://api.deepseek.com'
 
 export const CHAT_COMPLETIONS_PROVIDERS: ChatCompletionsProviderKey[] = [
   'openrouter',
@@ -75,6 +87,7 @@ export const CHAT_COMPLETIONS_PROVIDERS: ChatCompletionsProviderKey[] = [
   'lm-studio',
   'zai',
   'minimax',
+  'deepseek',
 ]
 
 export function getProviderDisplayName(provider: string): string {
@@ -89,6 +102,9 @@ export function getStaticModelsForProvider(
   }
   if (provider === 'minimax') {
     return MINIMAX_TEXT_MODELS
+  }
+  if (provider === 'deepseek') {
+    return DEEPSEEK_TEXT_MODELS
   }
   return []
 }

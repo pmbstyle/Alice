@@ -4,7 +4,7 @@ function isAbortError(error: any): boolean {
 
 export async function* convertLocalLLMStreamToResponsesFormat(
   stream: any,
-  provider: 'ollama' | 'lm-studio' | 'zai' | 'minimax'
+  provider: 'ollama' | 'lm-studio' | 'zai' | 'minimax' | 'deepseek'
 ) {
   let responseId = `${provider}-${Date.now()}`
   let messageItemId = `message-${Date.now()}`
@@ -208,7 +208,7 @@ export async function* convertLocalLLMStreamToResponsesFormat(
 
 export async function* convertChatCompletionToResponsesFormat(
   completion: any,
-  provider: 'zai' | 'minimax'
+  provider: 'zai' | 'minimax' | 'deepseek'
 ) {
   const responseId = completion?.id || `${provider}-${Date.now()}`
   const messageItemId = `message-${Date.now()}`

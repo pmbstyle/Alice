@@ -158,6 +158,7 @@ const providerLabel = (provider: string) => {
     'lm-studio': 'LM Studio',
     local: 'Local',
     minimax: 'MiniMax',
+    deepseek: 'DeepSeek',
     ollama: 'Ollama',
     openai: 'OpenAI',
     openrouter: 'OpenRouter',

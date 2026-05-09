@@ -14,7 +14,7 @@ Run in your terminal `xattr -cr "/Applications/Alice AI App.app"`
 
 # AI Provider Setup
 
-Alice supports OpenAI, OpenRouter and local LLM inference.
+Alice supports OpenAI, OpenRouter, DeepSeek, MiniMax, Z.ai, and local LLM inference.
 
 ## OpenAI (Default)
 
@@ -29,6 +29,14 @@ Alice supports OpenAI, OpenRouter and local LLM inference.
 - Access to 400+ models from various providers including Claude, Llama, Gemini, and more
 - Set up either OpenAI speech to text or use built-in local voice generation
 - Models automatically include web search capabilities
+- No image generation support (use OpenAI provider for image-gen)
+
+## DeepSeek (Alternative)
+
+- Go to [DeepSeek API Platform](https://platform.deepseek.com/api_keys) to get your DeepSeek API key
+- Select "AI Provider" in Core Settings as DeepSeek
+- Use the default base URL `https://api.deepseek.com`
+- DeepSeek powers chat inference only; cloud TTS/STT/embeddings still require OpenAI or local voice and memory mode
 - No image generation support (use OpenAI provider for image-gen)
 
 ## Local Ollama / LM studio

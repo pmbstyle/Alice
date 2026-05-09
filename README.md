@@ -84,7 +84,7 @@ With the local STT model, you can set a **wake-up word** (like "Hey, Siri").
 
 Fully customizable settings interface:
 
-* LLM provider selection between OpenAI, OpenRouter, Z.ai(coding plan), Minimax(token plan), Ollama, LM Studio
+* LLM provider selection between OpenAI, OpenRouter, DeepSeek, Z.ai(coding plan), Minimax(token plan), Ollama, LM Studio
 * Cloud or local TTS, STT, Embeddings
 * Model choice & parameters (temperature, top\_p, history, etc)
 * Prompt and summarization tuning
@@ -131,7 +131,7 @@ Follow the [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs
 * **Frontend:** [Vue.js](https://vuejs.org/), [TailwindCSS](https://tailwindcss.com/)
 * **Desktop Shell:** [Electron](https://www.electronjs.org/)
 * **State Management:** [Pinia](https://pinia.vuejs.org/)
-* **AI APIs:** [OpenAI](https://platform.openai.com/), [OpenRouter](https://openrouter.ai/), [Groq](https://console.groq.com/)
+* **AI APIs:** [OpenAI](https://platform.openai.com/), [OpenRouter](https://openrouter.ai/), [DeepSeek](https://platform.deepseek.com/), [Groq](https://console.groq.com/)
 * **Backend:** [Go](https://go.dev/)
 * **Vector search engine**: [hnswlib-node](https://github.com/nmslib/hnswlib)
 * **Local storage**: [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)

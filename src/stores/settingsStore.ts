@@ -5,6 +5,7 @@ import { useGeneralStore } from './generalStore'
 import { reinitializeClients } from '../services/apiClients'
 import { DEFAULT_PERSONA_PROMPT } from '../prompts/defaultPersonaPrompt'
 import {
+  DEEPSEEK_OPENAI_BASE_URL,
   MINIMAX_OPENAI_BASE_URL,
   PROVIDER_CONFIGS,
   ZAI_CODING_BASE_URL,
@@ -32,6 +33,7 @@ export interface AliceSettings {
   VITE_OPENROUTER_API_KEY: string
   VITE_ZAI_API_KEY: string
   VITE_MINIMAX_API_KEY: string
+  VITE_DEEPSEEK_API_KEY: string
   VITE_GROQ_API_KEY: string
   VITE_GOOGLE_API_KEY: string
   sttProvider: 'openai' | 'groq' | 'google' | 'local'
@@ -47,6 +49,7 @@ export interface AliceSettings {
   lmStudioBaseUrl: string
   zaiBaseUrl: string
   minimaxBaseUrl: string
+  deepseekBaseUrl: string
 
   assistantModel: string
   assistantSystemPrompt: string
@@ -105,6 +108,9 @@ function hasMinimumConfigForOnboarding(config: AliceSettings): boolean {
   if (config.VITE_MINIMAX_API_KEY?.trim()) {
     return true
   }
+  if (config.VITE_DEEPSEEK_API_KEY?.trim()) {
+    return true
+  }
 
   if (config.aiProvider === 'ollama') {
     return Boolean(config.ollamaBaseUrl?.trim())
@@ -121,6 +127,7 @@ const defaultSettings: AliceSettings = {
   VITE_OPENROUTER_API_KEY: '',
   VITE_ZAI_API_KEY: '',
   VITE_MINIMAX_API_KEY: '',
+  VITE_DEEPSEEK_API_KEY: '',
   VITE_GROQ_API_KEY: '',
   VITE_GOOGLE_API_KEY: '',
   sttProvider: 'openai',
@@ -135,6 +142,7 @@ const defaultSettings: AliceSettings = {
   lmStudioBaseUrl: 'http://localhost:1234',
   zaiBaseUrl: ZAI_CODING_BASE_URL,
   minimaxBaseUrl: MINIMAX_OPENAI_BASE_URL,
+  deepseekBaseUrl: DEEPSEEK_OPENAI_BASE_URL,
 
   assistantModel: 'gpt-4.1-mini',
   assistantSystemPrompt: DEFAULT_PERSONA_PROMPT,
@@ -191,6 +199,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_OPENROUTER_API_KEY: 'OpenRouter API Key',
   VITE_ZAI_API_KEY: 'Z.ai API Key',
   VITE_MINIMAX_API_KEY: 'MiniMax API Key',
+  VITE_DEEPSEEK_API_KEY: 'DeepSeek API Key',
   VITE_GROQ_API_KEY: 'Groq API Key (STT)',
   VITE_GOOGLE_API_KEY: 'Google API Key',
   sttProvider: 'Speech-to-Text Provider',
@@ -206,6 +215,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   lmStudioBaseUrl: 'LM Studio Base URL',
   zaiBaseUrl: 'Z.ai Base URL',
   minimaxBaseUrl: 'MiniMax Base URL',
+  deepseekBaseUrl: 'DeepSeek Base URL',
 
   assistantModel: 'Assistant Model',
   assistantSystemPrompt: 'Assistant Persona Prompt',
@@ -254,6 +264,7 @@ const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
   'VITE_OPENROUTER_API_KEY',
   'VITE_ZAI_API_KEY',
   'VITE_MINIMAX_API_KEY',
+  'VITE_DEEPSEEK_API_KEY',
 ]
 
 function requiresOpenAIKey(config: AliceSettings): boolean {
@@ -327,6 +338,7 @@ export const useSettingsStore = defineStore('settings', () => {
       'lm-studio',
       'zai',
       'minimax',
+      'deepseek',
     ] as const
     if (!validAIProviders.includes(validated.aiProvider as any)) {
       validated.aiProvider = 'openai'
@@ -411,6 +423,8 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('VITE_ZAI_API_KEY', 'zaiBaseUrl')
     } else if (settings.value.aiProvider === 'minimax') {
       essentialKeys.push('VITE_MINIMAX_API_KEY', 'minimaxBaseUrl')
+    } else if (settings.value.aiProvider === 'deepseek') {
+      essentialKeys.push('VITE_DEEPSEEK_API_KEY', 'deepseekBaseUrl')
     } else if (settings.value.aiProvider === 'ollama') {
       essentialKeys.push('ollamaBaseUrl')
     } else if (settings.value.aiProvider === 'lm-studio') {
@@ -469,6 +483,13 @@ export const useSettingsStore = defineStore('settings', () => {
       return (
         !!settings.value.VITE_MINIMAX_API_KEY?.trim() &&
         !!settings.value.minimaxBaseUrl?.trim()
+      )
+    }
+
+    if (settings.value.aiProvider === 'deepseek') {
+      return (
+        !!settings.value.VITE_DEEPSEEK_API_KEY?.trim() &&
+        !!settings.value.deepseekBaseUrl?.trim()
       )
     }
 
@@ -717,6 +738,10 @@ export const useSettingsStore = defineStore('settings', () => {
         settings.value.assistantModel = PROVIDER_CONFIGS.minimax.defaultModel
         settings.value.SUMMARIZATION_MODEL =
           PROVIDER_CONFIGS.minimax.defaultModel
+      } else if (settings.value.aiProvider === 'deepseek') {
+        settings.value.assistantModel = PROVIDER_CONFIGS.deepseek.defaultModel
+        settings.value.SUMMARIZATION_MODEL =
+          PROVIDER_CONFIGS.deepseek.defaultModel
       }
     }
     if (key === 'assistantReasoningEffort') {
@@ -757,10 +782,12 @@ export const useSettingsStore = defineStore('settings', () => {
       key === 'VITE_OPENROUTER_API_KEY' ||
       key === 'VITE_ZAI_API_KEY' ||
       key === 'VITE_MINIMAX_API_KEY' ||
+      key === 'VITE_DEEPSEEK_API_KEY' ||
       key === 'ollamaBaseUrl' ||
       key === 'lmStudioBaseUrl' ||
       key === 'zaiBaseUrl' ||
       key === 'minimaxBaseUrl' ||
+      key === 'deepseekBaseUrl' ||
       key === 'aiProvider'
     ) {
       coreOpenAISettingsValid.value = false
@@ -799,6 +826,7 @@ export const useSettingsStore = defineStore('settings', () => {
         VITE_OPENROUTER_API_KEY: settings.value.VITE_OPENROUTER_API_KEY,
         VITE_ZAI_API_KEY: settings.value.VITE_ZAI_API_KEY,
         VITE_MINIMAX_API_KEY: settings.value.VITE_MINIMAX_API_KEY,
+        VITE_DEEPSEEK_API_KEY: settings.value.VITE_DEEPSEEK_API_KEY,
         VITE_GROQ_API_KEY: settings.value.VITE_GROQ_API_KEY,
         VITE_GOOGLE_API_KEY: settings.value.VITE_GOOGLE_API_KEY,
         sttProvider: settings.value.sttProvider,
@@ -813,6 +841,7 @@ export const useSettingsStore = defineStore('settings', () => {
         lmStudioBaseUrl: settings.value.lmStudioBaseUrl,
         zaiBaseUrl: settings.value.zaiBaseUrl,
         minimaxBaseUrl: settings.value.minimaxBaseUrl,
+        deepseekBaseUrl: settings.value.deepseekBaseUrl,
         assistantModel: settings.value.assistantModel,
         assistantSystemPrompt: settings.value.assistantSystemPrompt,
         assistantTemperature: settings.value.assistantTemperature,
@@ -926,6 +955,19 @@ export const useSettingsStore = defineStore('settings', () => {
       if (!currentConfigForTest.minimaxBaseUrl?.trim()) {
         error.value = `Essential setting '${settingKeyToLabelMap.minimaxBaseUrl}' is missing.`
         generalStore.statusMessage = 'MiniMax Base URL is required.'
+        isSaving.value = false
+        return
+      }
+    } else if (currentConfigForTest.aiProvider === 'deepseek') {
+      if (!currentConfigForTest.VITE_DEEPSEEK_API_KEY?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.VITE_DEEPSEEK_API_KEY}' is missing.`
+        generalStore.statusMessage = 'DeepSeek API Key is required.'
+        isSaving.value = false
+        return
+      }
+      if (!currentConfigForTest.deepseekBaseUrl?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.deepseekBaseUrl}' is missing.`
+        generalStore.statusMessage = 'DeepSeek Base URL is required.'
         isSaving.value = false
         return
       }
@@ -1047,6 +1089,7 @@ export const useSettingsStore = defineStore('settings', () => {
     VITE_OPENROUTER_API_KEY: string
     VITE_ZAI_API_KEY?: string
     VITE_MINIMAX_API_KEY?: string
+    VITE_DEEPSEEK_API_KEY?: string
     sttProvider: 'openai' | 'groq' | 'google' | 'local'
     ttsProvider?: 'openai' | 'google' | 'local'
     embeddingProvider?: 'openai' | 'local'
@@ -1059,6 +1102,7 @@ export const useSettingsStore = defineStore('settings', () => {
     lmStudioBaseUrl?: string
     zaiBaseUrl?: string
     minimaxBaseUrl?: string
+    deepseekBaseUrl?: string
     useLocalModels?: boolean
     localSttLanguage?: string
   }) {
@@ -1068,6 +1112,8 @@ export const useSettingsStore = defineStore('settings', () => {
     settings.value.VITE_ZAI_API_KEY = onboardingData.VITE_ZAI_API_KEY || ''
     settings.value.VITE_MINIMAX_API_KEY =
       onboardingData.VITE_MINIMAX_API_KEY || ''
+    settings.value.VITE_DEEPSEEK_API_KEY =
+      onboardingData.VITE_DEEPSEEK_API_KEY || ''
     settings.value.sttProvider = onboardingData.sttProvider
     settings.value.aiProvider = onboardingData.aiProvider
     settings.value.VITE_GROQ_API_KEY = onboardingData.VITE_GROQ_API_KEY
@@ -1107,6 +1153,9 @@ export const useSettingsStore = defineStore('settings', () => {
     }
     if (onboardingData.minimaxBaseUrl) {
       settings.value.minimaxBaseUrl = onboardingData.minimaxBaseUrl
+    }
+    if (onboardingData.deepseekBaseUrl) {
+      settings.value.deepseekBaseUrl = onboardingData.deepseekBaseUrl
     }
 
     settings.value.onboardingCompleted = true

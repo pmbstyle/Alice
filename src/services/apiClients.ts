@@ -3,6 +3,7 @@ import Groq from 'groq-sdk'
 import { useSettingsStore } from '../stores/settingsStore'
 import { backendApi } from './backendApi'
 import {
+  DEEPSEEK_OPENAI_BASE_URL,
   MINIMAX_OPENAI_BASE_URL,
   ZAI_CODING_BASE_URL,
 } from './llmProviders/providerCatalog'
@@ -14,6 +15,7 @@ let ollamaClient: OpenAI | null = null
 let lmStudioClient: OpenAI | null = null
 let zaiClient: OpenAI | null = null
 let minimaxClient: OpenAI | null = null
+let deepseekClient: OpenAI | null = null
 
 export function getOpenAIClient(): OpenAI {
   if (!openaiClient) {
@@ -83,6 +85,16 @@ export function getMiniMaxClient(): OpenAI {
     throw new Error('MiniMax client could not be initialized')
   }
   return minimaxClient
+}
+
+export function getDeepSeekClient(): OpenAI {
+  if (!deepseekClient) {
+    initializeDeepSeekClient()
+  }
+  if (!deepseekClient) {
+    throw new Error('DeepSeek client could not be initialized')
+  }
+  return deepseekClient
 }
 
 function initializeOpenAIClient(): void {
@@ -198,6 +210,22 @@ function initializeMiniMaxClient(): void {
   })
 }
 
+function initializeDeepSeekClient(): void {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_DEEPSEEK_API_KEY) {
+    console.error('DeepSeek API Key is not configured.')
+    throw new Error('DeepSeek API Key is not configured.')
+  }
+
+  deepseekClient = new OpenAI({
+    apiKey: settings.VITE_DEEPSEEK_API_KEY,
+    baseURL: settings.deepseekBaseUrl || DEEPSEEK_OPENAI_BASE_URL,
+    dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
+  })
+}
+
 export function reinitializeClients(): void {
   console.log('Reinitializing API clients with updated settings...')
 
@@ -255,6 +283,14 @@ export function reinitializeClients(): void {
   } catch (error) {
     console.error('Failed to reinitialize MiniMax client:', error)
     minimaxClient = null
+  }
+
+  try {
+    initializeDeepSeekClient()
+    console.log('DeepSeek client reinitialized successfully')
+  } catch (error) {
+    console.error('Failed to reinitialize DeepSeek client:', error)
+    deepseekClient = null
   }
 }
 

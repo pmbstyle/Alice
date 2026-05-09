@@ -21,6 +21,7 @@
             <option value="openrouter">OpenRouter</option>
             <option value="zai">Z.ai (Coding Plan)</option>
             <option value="minimax">MiniMax</option>
+            <option value="deepseek">DeepSeek</option>
             <option value="ollama">Ollama (Local)</option>
             <option value="lm-studio">LM Studio (Local)</option>
           </select>
@@ -195,6 +196,37 @@
           />
           <p class="text-xs text-gray-400 mt-1">
             OpenAI-compatible endpoint for MiniMax token/coding plans.
+          </p>
+        </div>
+        <div v-if="currentSettings.aiProvider === 'deepseek'">
+          <label for="deepseek-key" class="block mb-1 text-sm"
+            >DeepSeek API Key *</label
+          >
+          <input
+            id="deepseek-key"
+            type="password"
+            v-model="currentSettings.VITE_DEEPSEEK_API_KEY"
+            class="input focus:outline-none w-full"
+            autocomplete="new-password"
+            placeholder="sk-..."
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            Required for DeepSeek chat models.
+          </p>
+        </div>
+        <div v-if="currentSettings.aiProvider === 'deepseek'">
+          <label for="deepseek-url" class="block mb-1 text-sm"
+            >DeepSeek Base URL *</label
+          >
+          <input
+            id="deepseek-url"
+            type="text"
+            v-model="currentSettings.deepseekBaseUrl"
+            class="input focus:outline-none w-full"
+            placeholder="https://api.deepseek.com"
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            OpenAI-compatible endpoint for DeepSeek chat completions.
           </p>
         </div>
         <div v-if="currentSettings.aiProvider === 'lm-studio'">

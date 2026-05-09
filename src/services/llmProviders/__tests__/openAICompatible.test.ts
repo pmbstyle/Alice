@@ -175,6 +175,41 @@ describe('createOpenAICompatibleResponse', () => {
     expect(request.mock.calls[0][0].headers['x-stainless-os']).toBeUndefined()
   })
 
+  it('sends DeepSeek chat completions with thinking disabled', async () => {
+    const settingsStore = useSettingsStore()
+    settingsStore.updateSetting('aiProvider', 'deepseek')
+    settingsStore.updateSetting('assistantModel', 'deepseek-chat')
+
+    const create = vi.fn().mockResolvedValue({ choices: [] })
+    const client = {
+      chat: {
+        completions: {
+          create,
+        },
+      },
+    }
+
+    await createOpenAICompatibleResponse(
+      'deepseek',
+      () => client as any,
+      [
+        {
+          role: 'user',
+          content: [{ type: 'input_text', text: 'hello' }],
+        } as any,
+      ],
+      false
+    )
+
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'deepseek-v4-flash',
+        thinking: { type: 'disabled' },
+      }),
+      expect.any(Object)
+    )
+  })
+
   it('does not send system-role messages to MiniMax continuations', async () => {
     const settingsStore = useSettingsStore()
     settingsStore.updateSetting('aiProvider', 'minimax')

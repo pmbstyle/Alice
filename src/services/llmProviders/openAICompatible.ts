@@ -10,7 +10,7 @@ import {
 } from './providerCatalog'
 
 type OpenAIClientGetter = () => OpenAI
-type OpenAICompatibleProviderKey = 'zai' | 'minimax'
+type OpenAICompatibleProviderKey = 'zai' | 'minimax' | 'deepseek'
 
 function convertResponsesInputToChatMessages(
   input: OpenAI.Responses.Request.InputItemLike[]
@@ -333,6 +333,10 @@ export async function createOpenAICompatibleResponse(
       : {}),
     tools: convertToolsForChatCompletions(finalToolsForApi),
     stream,
+  }
+
+  if (provider === 'deepseek') {
+    ;(params as any).thinking = { type: 'disabled' }
   }
 
   if (provider === 'minimax') {

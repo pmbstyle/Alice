@@ -23,6 +23,7 @@
         </option>
         <option value="zai">Z.ai (GLM Coding Plan)</option>
         <option value="minimax">MiniMax (OpenAI-compatible)</option>
+        <option value="deepseek">DeepSeek (OpenAI-compatible)</option>
         <option value="ollama">Ollama (Local LLMs)</option>
         <option value="lm-studio">LM Studio (Local LLMs)</option>
       </select>
@@ -386,6 +387,122 @@
       </div>
     </div>
 
+    <!-- DeepSeek Configuration -->
+    <div v-else-if="formData.aiProvider === 'deepseek'" class="space-y-4">
+      <div class="alert alert-info text-sm">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          class="stroke-current shrink-0 w-5 h-5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          ></path>
+        </svg>
+        <span>
+          DeepSeek uses an OpenAI-compatible chat completions endpoint. Alice
+          disables DeepSeek thinking mode for tool-call compatibility.
+        </span>
+      </div>
+
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">DeepSeek API Key</span>
+        </label>
+        <input
+          type="password"
+          v-model="formData.VITE_DEEPSEEK_API_KEY"
+          placeholder="sk-..."
+          class="input input-bordered w-full focus:input-primary"
+          :class="{
+            'input-error':
+              testResult.deepseek.error && !testResult.deepseek.success,
+          }"
+        />
+      </div>
+
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">DeepSeek Base URL</span>
+        </label>
+        <input
+          type="text"
+          v-model="formData.deepseekBaseUrl"
+          placeholder="https://api.deepseek.com"
+          class="input input-bordered w-full focus:input-primary"
+          :class="{
+            'input-error':
+              testResult.deepseek.error && !testResult.deepseek.success,
+          }"
+        />
+      </div>
+
+      <button
+        @click="$emit('test-deepseek')"
+        class="btn btn-secondary w-full"
+        :disabled="
+          isTesting.deepseek ||
+          !formData.VITE_DEEPSEEK_API_KEY.trim() ||
+          !formData.deepseekBaseUrl.trim()
+        "
+      >
+        <span
+          v-if="isTesting.deepseek"
+          class="loading loading-spinner loading-xs mr-2"
+        ></span>
+        Test DeepSeek Key
+      </button>
+
+      <TestResult :result="testResult.deepseek" />
+
+      <div
+        v-if="
+          testResult.deepseek.success && formData.availableModels.length > 0
+        "
+        class="space-y-4"
+      >
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Assistant Model</span>
+          </label>
+          <select
+            v-model="formData.assistantModel"
+            class="select select-bordered w-full focus:select-primary focus:outline-none"
+          >
+            <option
+              v-for="model in formData.availableModels"
+              :key="model"
+              :value="model"
+            >
+              {{ model }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Summarization Model</span>
+          </label>
+          <select
+            v-model="formData.summarizationModel"
+            class="select select-bordered w-full focus:select-primary focus:outline-none"
+          >
+            <option
+              v-for="model in formData.availableModels"
+              :key="model"
+              :value="model"
+            >
+              {{ model }}
+            </option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <!-- Ollama Configuration -->
     <div v-else-if="formData.aiProvider === 'ollama'" class="space-y-4">
       <div class="alert alert-info text-sm">
@@ -594,6 +711,7 @@ defineEmits<{
   'test-openrouter': []
   'test-zai': []
   'test-minimax': []
+  'test-deepseek': []
   'test-ollama': []
   'test-lmstudio': []
   'reset-tests': []

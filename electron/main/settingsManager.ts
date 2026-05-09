@@ -13,6 +13,7 @@ export interface AppSettings {
   VITE_OPENROUTER_API_KEY?: string
   VITE_ZAI_API_KEY?: string
   VITE_MINIMAX_API_KEY?: string
+  VITE_DEEPSEEK_API_KEY?: string
   VITE_GROQ_API_KEY?: string
   sttProvider?: 'openai' | 'groq' | 'transformers'
   aiProvider?:
@@ -22,6 +23,7 @@ export interface AppSettings {
     | 'lm-studio'
     | 'zai'
     | 'minimax'
+    | 'deepseek'
 
   // Transformers STT settings
   transformersModel?: string
@@ -35,6 +37,7 @@ export interface AppSettings {
   lmStudioBaseUrl?: string
   zaiBaseUrl?: string
   minimaxBaseUrl?: string
+  deepseekBaseUrl?: string
 
   assistantModel?: string
   assistantSystemPrompt?: string

@@ -68,6 +68,9 @@
                 (currentSettings.aiProvider === 'minimax' &&
                   currentSettings.VITE_MINIMAX_API_KEY &&
                   currentSettings.minimaxBaseUrl) ||
+                (currentSettings.aiProvider === 'deepseek' &&
+                  currentSettings.VITE_DEEPSEEK_API_KEY &&
+                  currentSettings.deepseekBaseUrl) ||
                 (currentSettings.aiProvider === 'ollama' &&
                   currentSettings.ollamaBaseUrl) ||
                 (currentSettings.aiProvider === 'lm-studio' &&
@@ -306,6 +309,9 @@
                 (currentSettings.aiProvider === 'minimax' &&
                   currentSettings.VITE_MINIMAX_API_KEY &&
                   currentSettings.minimaxBaseUrl) ||
+                (currentSettings.aiProvider === 'deepseek' &&
+                  currentSettings.VITE_DEEPSEEK_API_KEY &&
+                  currentSettings.deepseekBaseUrl) ||
                 (currentSettings.aiProvider === 'ollama' &&
                   currentSettings.ollamaBaseUrl) ||
                 (currentSettings.aiProvider === 'lm-studio' &&
@@ -519,6 +525,7 @@ const getProviderDisplayName = (provider: string): string => {
     'lm-studio': 'LM Studio',
     zai: 'Z.ai',
     minimax: 'MiniMax',
+    deepseek: 'DeepSeek',
   }
   return providerNames[provider] || provider
 }

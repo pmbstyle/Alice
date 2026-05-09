@@ -24,6 +24,7 @@
           @test-openrouter="testOpenRouterKey"
           @test-zai="testZAIKey"
           @test-minimax="testMiniMaxKey"
+          @test-deepseek="testDeepSeekKey"
           @test-ollama="testOllamaConnection"
           @test-lmstudio="testLMStudioConnection"
           @reset-tests="resetTestResults"
@@ -66,11 +67,13 @@ import VoiceModelsStep from './steps/VoiceModelsStep.vue'
 import FinalSetupStep from './steps/FinalSetupStep.vue'
 import OpenAI from 'openai'
 import {
+  DEEPSEEK_OPENAI_BASE_URL,
   MINIMAX_OPENAI_BASE_URL,
   PROVIDER_CONFIGS,
   ZAI_CODING_BASE_URL,
   type AIProviderKey,
 } from '../../services/llmProviders/providerCatalog'
+import { listDeepSeekModelsForConfig } from '../../services/llmProviders/deepseek'
 import { listMiniMaxModelsForConfig } from '../../services/llmProviders/minimax'
 import { listOpenAIModelsForConfig } from '../../services/llmProviders/openai'
 import { listOpenRouterModelsForConfig } from '../../services/llmProviders/openrouter'
@@ -111,6 +114,7 @@ const formData = reactive({
   VITE_OPENROUTER_API_KEY: '',
   VITE_ZAI_API_KEY: '',
   VITE_MINIMAX_API_KEY: '',
+  VITE_DEEPSEEK_API_KEY: '',
   aiProvider: 'openai' as AIProviderKey,
   assistantModel: openaiDefaults.assistantModel as string,
   summarizationModel: openaiDefaults.summarizationModel as string,
@@ -123,6 +127,7 @@ const formData = reactive({
   lmStudioBaseUrl: 'http://localhost:1234',
   zaiBaseUrl: ZAI_CODING_BASE_URL,
   minimaxBaseUrl: MINIMAX_OPENAI_BASE_URL,
+  deepseekBaseUrl: DEEPSEEK_OPENAI_BASE_URL,
   useLocalModels: false,
   availableModels: [] as string[],
   localSttLanguage: 'auto',
@@ -133,6 +138,7 @@ const isTesting = reactive({
   openrouter: false,
   zai: false,
   minimax: false,
+  deepseek: false,
   ollama: false,
   lmStudio: false,
 })
@@ -142,6 +148,7 @@ const testResult = reactive({
   openrouter: { success: false, error: '' },
   zai: { success: false, error: '' },
   minimax: { success: false, error: '' },
+  deepseek: { success: false, error: '' },
   ollama: { success: false, error: '' },
   lmStudio: { success: false, error: '' },
 })
@@ -173,7 +180,8 @@ const canContinue = computed(() => {
           formData.aiProvider === 'lm-studio' ||
           formData.aiProvider === 'openrouter' ||
           formData.aiProvider === 'zai' ||
-          formData.aiProvider === 'minimax') &&
+          formData.aiProvider === 'minimax' ||
+          formData.aiProvider === 'deepseek') &&
         !formData.VITE_OPENAI_API_KEY.trim()
       ) {
         return false
@@ -245,6 +253,8 @@ const fetchAvailableModels = async () => {
       baseURL = formData.zaiBaseUrl
     } else if (formData.aiProvider === 'minimax') {
       baseURL = formData.minimaxBaseUrl
+    } else if (formData.aiProvider === 'deepseek') {
+      baseURL = formData.deepseekBaseUrl
     } else {
       return
     }
@@ -252,6 +262,20 @@ const fetchAvailableModels = async () => {
     if (formData.aiProvider === 'minimax') {
       const models = await listMiniMaxModelsForConfig(
         formData.VITE_MINIMAX_API_KEY,
+        baseURL
+      )
+      formData.availableModels = models.map(model => model.id)
+
+      if (formData.availableModels.length > 0) {
+        formData.assistantModel = formData.availableModels[0]
+        formData.summarizationModel = formData.availableModels[0]
+      }
+      return
+    }
+
+    if (formData.aiProvider === 'deepseek') {
+      const models = await listDeepSeekModelsForConfig(
+        formData.VITE_DEEPSEEK_API_KEY,
         baseURL
       )
       formData.availableModels = models.map(model => model.id)
@@ -414,6 +438,39 @@ const testMiniMaxKey = async () => {
   }
 }
 
+const testDeepSeekKey = async () => {
+  if (!formData.VITE_DEEPSEEK_API_KEY.trim()) {
+    testResult.deepseek.error = 'API Key cannot be empty.'
+    testResult.deepseek.success = false
+    return
+  }
+  if (!formData.deepseekBaseUrl.trim()) {
+    testResult.deepseek.error = 'Base URL cannot be empty.'
+    testResult.deepseek.success = false
+    return
+  }
+
+  isTesting.deepseek = true
+  testResult.deepseek.error = ''
+  testResult.deepseek.success = false
+
+  try {
+    await fetchAvailableModels()
+    testResult.deepseek.success = true
+  } catch (e: any) {
+    testResult.deepseek.error =
+      'API key or OpenAI-compatible endpoint is invalid or has no permissions.'
+    if (e.message?.includes('401')) {
+      testResult.deepseek.error = 'Invalid API key - please check your key.'
+    } else if (e.message?.includes('429')) {
+      testResult.deepseek.error =
+        'Rate limit exceeded - please try again later.'
+    }
+  } finally {
+    isTesting.deepseek = false
+  }
+}
+
 const testOllamaConnection = async () => {
   if (!formData.ollamaBaseUrl.trim()) {
     testResult.ollama.error = 'Ollama Base URL cannot be empty.'
@@ -499,6 +556,8 @@ const resetTestResults = () => {
   testResult.zai.error = ''
   testResult.minimax.success = false
   testResult.minimax.error = ''
+  testResult.deepseek.success = false
+  testResult.deepseek.error = ''
   testResult.ollama.success = false
   testResult.ollama.error = ''
   testResult.lmStudio.success = false
@@ -519,6 +578,12 @@ const isCurrentProviderTested = () => {
   } else if (formData.aiProvider === 'minimax') {
     return (
       testResult.minimax.success &&
+      Boolean(formData.assistantModel) &&
+      Boolean(formData.summarizationModel)
+    )
+  } else if (formData.aiProvider === 'deepseek') {
+    return (
+      testResult.deepseek.success &&
       Boolean(formData.assistantModel) &&
       Boolean(formData.summarizationModel)
     )

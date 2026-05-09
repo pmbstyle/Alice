@@ -9,10 +9,12 @@ export interface BackendServiceDependencies {
     VITE_OPENROUTER_API_KEY?: string
     VITE_ZAI_API_KEY?: string
     VITE_MINIMAX_API_KEY?: string
+    VITE_DEEPSEEK_API_KEY?: string
     ollamaBaseUrl?: string
     lmStudioBaseUrl?: string
     zaiBaseUrl?: string
     minimaxBaseUrl?: string
+    deepseekBaseUrl?: string
   }
   setStatusMessage(message: string): void
   fetchOpenAIModels(): Promise<any[]>
@@ -92,6 +94,14 @@ export function createBackendService(
       deps.logInfo('Cannot fetch models: MiniMax Base URL is missing.')
       return
     }
+    if (provider === 'deepseek' && !config.VITE_DEEPSEEK_API_KEY) {
+      deps.logInfo('Cannot fetch models: DeepSeek API Key is missing.')
+      return
+    }
+    if (provider === 'deepseek' && !config.deepseekBaseUrl) {
+      deps.logInfo('Cannot fetch models: DeepSeek Base URL is missing.')
+      return
+    }
     if (provider === 'ollama' && !config.ollamaBaseUrl) {
       deps.logInfo('Cannot fetch models: Ollama Base URL is missing.')
       return
@@ -112,6 +122,7 @@ export function createBackendService(
         'lm-studio': 'LM Studio',
         zai: 'Z.ai',
         minimax: 'MiniMax',
+        deepseek: 'DeepSeek',
       }
       const providerName = providerNameMap[provider] || provider
       deps.setStatusMessage(`Error: Could not fetch ${providerName} models.`)

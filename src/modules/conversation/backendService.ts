@@ -10,6 +10,7 @@ export interface BackendServiceDependencies {
     VITE_ZAI_API_KEY?: string
     VITE_MINIMAX_API_KEY?: string
     VITE_DEEPSEEK_API_KEY?: string
+    codexAuthConnected?: boolean
     ollamaBaseUrl?: string
     lmStudioBaseUrl?: string
     zaiBaseUrl?: string
@@ -102,6 +103,10 @@ export function createBackendService(
       deps.logInfo('Cannot fetch models: DeepSeek Base URL is missing.')
       return
     }
+    if (provider === 'codex' && !config.codexAuthConnected) {
+      deps.logInfo('Cannot fetch models: ChatGPT Codex is not connected.')
+      return
+    }
     if (provider === 'ollama' && !config.ollamaBaseUrl) {
       deps.logInfo('Cannot fetch models: Ollama Base URL is missing.')
       return
@@ -123,6 +128,7 @@ export function createBackendService(
         zai: 'Z.ai',
         minimax: 'MiniMax',
         deepseek: 'DeepSeek',
+        codex: 'ChatGPT Codex',
       }
       const providerName = providerNameMap[provider] || provider
       deps.setStatusMessage(`Error: Could not fetch ${providerName} models.`)

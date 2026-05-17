@@ -33,6 +33,7 @@ import {
   createDeepSeekResponse,
   listDeepSeekModels,
 } from './llmProviders/deepseek'
+import { listCodexModels } from './llmProviders/codex'
 import {
   createChatCompletionForProvider,
   stripReasoningFromMiniMaxContent,
@@ -139,6 +140,9 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
   }
   if (settings.aiProvider === 'deepseek') {
     return listDeepSeekModels()
+  }
+  if (settings.aiProvider === 'codex') {
+    return listCodexModels()
   }
   return listOpenAIModels()
 }

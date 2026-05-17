@@ -233,13 +233,66 @@
         <div v-if="currentSettings.aiProvider === 'codex'">
           <label class="block mb-1 text-sm">ChatGPT Codex Account *</label>
           <div class="rounded-lg border border-blue-500/30 bg-gray-950/60 p-3">
-            <p class="text-sm text-gray-200">
-              {{
-                currentSettings.codexAuthConnected
-                  ? currentSettings.codexAccountLabel || 'Connected'
-                  : 'Not connected'
-              }}
-            </p>
+            <div class="flex flex-col gap-3">
+              <div>
+                <p class="text-sm text-gray-200">
+                  {{
+                    codexAuthStatus.isAuthenticated
+                      ? codexAuthStatus.accountLabel ||
+                        currentSettings.codexAccountLabel ||
+                        'Connected'
+                      : 'Not connected'
+                  }}
+                </p>
+                <p
+                  v-if="codexAuthStatus.message"
+                  class="text-xs text-green-300 mt-1"
+                >
+                  {{ codexAuthStatus.message }}
+                </p>
+                <p
+                  v-if="codexAuthStatus.error"
+                  class="text-xs text-red-300 mt-1"
+                >
+                  {{ codexAuthStatus.error }}
+                </p>
+              </div>
+              <div class="flex flex-wrap gap-2">
+                <button
+                  v-if="!codexAuthStatus.isAuthenticated"
+                  type="button"
+                  class="btn btn-sm btn-primary"
+                  :disabled="
+                    codexAuthStatus.isLoading ||
+                    codexAuthStatus.authInProgress
+                  "
+                  @click="startCodexAuth"
+                >
+                  {{
+                    codexAuthStatus.authInProgress
+                      ? 'Waiting for browser auth...'
+                      : 'Authorize ChatGPT Codex'
+                  }}
+                </button>
+                <button
+                  v-else
+                  type="button"
+                  class="btn btn-sm btn-outline"
+                  :disabled="codexAuthStatus.isLoading"
+                  @click="disconnectCodex"
+                >
+                  Disconnect
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-sm btn-ghost"
+                  :disabled="codexAuthStatus.isLoading"
+                  @click="checkCodexAuthStatus"
+                >
+                  Check status
+                </button>
+              </div>
+            </div>
             <p class="text-xs text-gray-400 mt-1">
               Uses your ChatGPT Codex subscription for chat inference. OpenAI
               API key is still needed only for OpenAI STT/TTS/embeddings.
@@ -716,6 +769,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import type { AliceSettings } from '../../stores/settingsStore'
 import { backendApi, type Voice } from '../../services/backendApi'
+import { useCodexAuth } from '../../composables/useCodexAuth'
 
 // Type for service status
 interface ServiceStatus {
@@ -752,6 +806,13 @@ const isIndexingRag = ref(false)
 const ragStatusMessage = ref('')
 
 let statusInterval: NodeJS.Timeout | null = null
+
+const {
+  codexAuthStatus,
+  checkCodexAuthStatus,
+  startCodexAuth,
+  disconnectCodex,
+} = useCodexAuth()
 
 const getTargetValue = (event: Event): string => {
   return (event.target as HTMLInputElement | HTMLSelectElement).value

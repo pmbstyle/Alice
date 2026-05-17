@@ -35,6 +35,7 @@ import {
 } from './llmProviders/deepseek'
 import {
   createCodexResponse,
+  createCodexTextResponse,
   listCodexModels,
 } from './llmProviders/codex'
 import {
@@ -751,10 +752,19 @@ export const createSummarizationResponse = async (
   systemPrompt: string
 ): Promise<string | null> => {
   const settings = useSettingsStore().config
-  const client = getAIClient()
   const combinedText = messagesToSummarize
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
+
+  if (settings.aiProvider === 'codex') {
+    return createCodexTextResponse(
+      combinedText,
+      summarizationModel,
+      systemPrompt
+    )
+  }
+
+  const client = getAIClient()
 
   if (isChatCompletionsProvider(settings.aiProvider)) {
     const params = {
@@ -808,11 +818,21 @@ export const createContextAnalysisResponse = async (
   analysisModel: string
 ): Promise<string | null> => {
   const settings = useSettingsStore().config
-  const client = getAIClient()
   const analysisSystemPrompt = `You are an expert in emotional intelligence. Analyze the tone and emotional state of the 'user' in the following conversation transcript. Provide a single, concise sentence describing their likely emotional state. Do not add any extra commentary.`
   const combinedText = messagesToAnalyze
     .map(msg => `${msg.role}: ${msg.content}`)
     .join('\n\n')
+
+  if (settings.aiProvider === 'codex') {
+    const content = await createCodexTextResponse(
+      combinedText,
+      analysisModel,
+      analysisSystemPrompt
+    )
+    return content ? content.replace(/"/g, '') : null
+  }
+
+  const client = getAIClient()
 
   if (isChatCompletionsProvider(settings.aiProvider)) {
     const params = {

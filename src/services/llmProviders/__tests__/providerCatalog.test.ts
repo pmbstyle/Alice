@@ -56,12 +56,17 @@ describe('providerCatalog', () => {
 
   it('exposes Codex subscription models with safe fallbacks', () => {
     expect(getStaticModelsForProvider('codex').map(model => model.id)).toEqual([
-      'gpt-5.2',
+      'gpt-5.4',
+      'gpt-5.2-codex',
+      'gpt-5.1-codex-max',
       'gpt-5.4-mini',
-      'gpt-5.5',
+      'gpt-5.3-codex',
+      'gpt-5.3-codex-spark',
+      'gpt-5.2',
+      'gpt-5.1-codex-mini',
     ])
-    expect(CODEX_TEXT_MODELS[0]?.displayName).toBe('GPT-5.2')
-    expect(getSafeProviderModel('codex', 'gpt-4o-mini')).toBe('gpt-5.2')
+    expect(CODEX_TEXT_MODELS[0]?.displayName).toBe('GPT-5.4')
+    expect(getSafeProviderModel('codex', 'gpt-4o-mini')).toBe('gpt-5.4')
     expect(getSafeProviderModel('codex', 'gpt-5.4-mini')).toBe(
       'gpt-5.4-mini'
     )

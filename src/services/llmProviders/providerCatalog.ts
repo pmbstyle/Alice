@@ -41,9 +41,14 @@ export const DEEPSEEK_TEXT_MODELS: ProviderModelDefinition[] = [
 ]
 
 export const CODEX_TEXT_MODELS: ProviderModelDefinition[] = [
-  { id: 'gpt-5.2', displayName: 'GPT-5.2' },
+  { id: 'gpt-5.4', displayName: 'GPT-5.4' },
+  { id: 'gpt-5.2-codex', displayName: 'GPT-5.2 Codex' },
+  { id: 'gpt-5.1-codex-max', displayName: 'GPT-5.1 Codex Max' },
   { id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini' },
-  { id: 'gpt-5.5', displayName: 'GPT-5.5' },
+  { id: 'gpt-5.3-codex', displayName: 'GPT-5.3 Codex' },
+  { id: 'gpt-5.3-codex-spark', displayName: 'GPT-5.3 Codex Spark' },
+  { id: 'gpt-5.2', displayName: 'GPT-5.2' },
+  { id: 'gpt-5.1-codex-mini', displayName: 'GPT-5.1 Codex Mini' },
 ]
 
 export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
@@ -84,7 +89,7 @@ export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
   },
   codex: {
     displayName: 'ChatGPT Codex',
-    defaultModel: 'gpt-5.2',
+    defaultModel: 'gpt-5.4',
     nativeWebSearch: false,
   },
 }

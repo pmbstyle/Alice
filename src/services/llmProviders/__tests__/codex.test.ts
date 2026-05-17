@@ -4,6 +4,7 @@ import { useSettingsStore } from '../../../stores/settingsStore'
 import {
   convertResponsesInputToCodexInput,
   createCodexResponse,
+  createCodexTextResponse,
   listCodexModels,
 } from '../codex'
 
@@ -53,9 +54,14 @@ describe('listCodexModels', () => {
     const models = await listCodexModels()
 
     expect(models.map(model => model.id)).toEqual([
-      'gpt-5.2',
+      'gpt-5.4',
+      'gpt-5.2-codex',
+      'gpt-5.1-codex-max',
       'gpt-5.4-mini',
-      'gpt-5.5',
+      'gpt-5.3-codex',
+      'gpt-5.3-codex-spark',
+      'gpt-5.2',
+      'gpt-5.1-codex-mini',
     ])
   })
 
@@ -149,5 +155,68 @@ describe('listCodexModels', () => {
     }
 
     expect(startArgs[0]?.model).toBe('gpt-5.2')
+  })
+
+  it('aggregates Codex app-server text for background responses', async () => {
+    const listeners = new Map<string, (event: any, payload: any) => void>()
+    const invoke = vi
+      .fn()
+      .mockImplementation(async (channel: string, args: any) => {
+        if (channel === 'codex-models:list') {
+          return {
+            success: true,
+            models: [{ id: 'gpt-5.3-codex-spark', hidden: false }],
+          }
+        }
+        if (channel === 'codex-response:start') {
+          queueMicrotask(() => {
+            const listener = listeners.get(
+              `codex:stream:event:${args.requestId}`
+            )
+            listener?.(
+              {},
+              {
+                type: 'chunk',
+                data: {
+                  type: 'response.output_text.delta',
+                  delta: 'summary ',
+                },
+              }
+            )
+            listener?.(
+              {},
+              {
+                type: 'chunk',
+                data: {
+                  type: 'response.output_text.delta',
+                  delta: 'done',
+                },
+              }
+            )
+            listener?.({}, { type: 'done' })
+          })
+          return { success: true }
+        }
+        if (channel === 'codex-response:cancel') {
+          return { success: true }
+        }
+        return { success: false, error: `Unexpected channel: ${channel}` }
+      })
+
+    ;(globalThis as any).window = {
+      ipcRenderer: {
+        invoke,
+        on: vi.fn((channel: string, listener: any) => {
+          listeners.set(channel, listener)
+        }),
+        off: vi.fn((channel: string) => {
+          listeners.delete(channel)
+        }),
+      },
+    }
+
+    await expect(
+      createCodexTextResponse('hello', 'gpt-5.3-codex-spark', 'summarize')
+    ).resolves.toBe('summary done')
   })
 })

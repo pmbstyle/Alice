@@ -73,9 +73,20 @@ async function resolveCodexModel(configuredModel?: string): Promise<string> {
   return safeConfigured
 }
 
-async function getFallbackModelCandidates(originalModel: string): Promise<string[]> {
+function normalizeCodexEffort(effort?: string): string {
+  if (effort === 'minimal') {
+    return 'low'
+  }
+  return effort || 'medium'
+}
+
+async function getFallbackModelCandidates(
+  originalModel: string
+): Promise<string[]> {
   const candidates = [...(await listLiveCodexModelIds()), ...fallbackModelIds()]
-  return Array.from(new Set(candidates)).filter(model => model !== originalModel)
+  return Array.from(new Set(candidates)).filter(
+    model => model !== originalModel
+  )
 }
 
 function fallbackModelIds(): string[] {
@@ -228,10 +239,36 @@ export const createCodexResponse = async (
     input: convertResponsesInputToCodexInput(input),
     model,
     instructions,
-    effort: settings.assistantReasoningEffort || 'medium',
+    effort: normalizeCodexEffort(settings.assistantReasoningEffort),
   }
 
   return streamViaCodexAppServerWithFallback(request, signal)
+}
+
+export const createCodexTextResponse = async (
+  text: string,
+  model: string,
+  instructions: string,
+  signal?: AbortSignal
+): Promise<string | null> => {
+  const resolvedModel = await resolveCodexModel(model)
+  const stream = streamViaCodexAppServerWithFallback(
+    {
+      input: [{ type: 'text', text }],
+      model: resolvedModel,
+      instructions,
+      effort: 'low',
+    },
+    signal
+  )
+  let output = ''
+  for await (const event of stream) {
+    if (event.type === 'response.output_text.delta') {
+      output += event.delta || ''
+    }
+  }
+  const trimmed = output.trim()
+  return trimmed || null
 }
 
 async function* streamViaCodexAppServer(

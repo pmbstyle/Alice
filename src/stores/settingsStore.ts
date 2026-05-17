@@ -863,6 +863,8 @@ export const useSettingsStore = defineStore('settings', () => {
         zaiBaseUrl: settings.value.zaiBaseUrl,
         minimaxBaseUrl: settings.value.minimaxBaseUrl,
         deepseekBaseUrl: settings.value.deepseekBaseUrl,
+        codexAuthConnected: settings.value.codexAuthConnected,
+        codexAccountLabel: settings.value.codexAccountLabel,
         assistantModel: settings.value.assistantModel,
         assistantSystemPrompt: settings.value.assistantSystemPrompt,
         assistantTemperature: settings.value.assistantTemperature,

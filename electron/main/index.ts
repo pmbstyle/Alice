@@ -41,6 +41,10 @@ import {
 } from './hotkeyManager'
 import { initializeUpdater, checkForUpdates } from './updaterManager'
 import { registerAuthIPCHandlers, stopAuthServer } from './authManager'
+import {
+  registerCodexIPCHandlers,
+  stopCodexAppServer,
+} from './codexAppServerManager'
 import DesktopManager from './desktopManager'
 import { backendManager } from './backendManager'
 import { setupDependencies } from '../../scripts/setup-dependencies.js'
@@ -148,6 +152,7 @@ function initializeManagers(): void {
   registerIPCHandlers()
   registerGoogleIPCHandlers()
   registerAuthIPCHandlers()
+  registerCodexIPCHandlers()
   console.log(`[Main Index ${initId}] Managers initialization complete.`)
 }
 
@@ -461,6 +466,7 @@ app.on('before-quit', async event => {
   isHandlingQuit = true
   unregisterAllHotkeys()
   stopAuthServer()
+  stopCodexAppServer()
   shutdownScheduler()
   stopWebSocketServer()
   console.log('[Main Index] Before quit: Performing cleanup...')

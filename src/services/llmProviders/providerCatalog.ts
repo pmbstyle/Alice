@@ -6,8 +6,9 @@ export type AIProviderKey =
   | 'zai'
   | 'minimax'
   | 'deepseek'
+  | 'codex'
 
-export type ChatCompletionsProviderKey = Exclude<AIProviderKey, 'openai'>
+export type ChatCompletionsProviderKey = Exclude<AIProviderKey, 'openai' | 'codex'>
 
 export interface ProviderConfig {
   displayName: string
@@ -37,6 +38,12 @@ export const MINIMAX_TEXT_MODELS: ProviderModelDefinition[] = [
 export const DEEPSEEK_TEXT_MODELS: ProviderModelDefinition[] = [
   { id: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash' },
   { id: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro' },
+]
+
+export const CODEX_TEXT_MODELS: ProviderModelDefinition[] = [
+  { id: 'gpt-5.5', displayName: 'GPT-5.5' },
+  { id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini' },
+  { id: 'gpt-5.2', displayName: 'GPT-5.2' },
 ]
 
 export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
@@ -75,6 +82,11 @@ export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
     defaultModel: 'deepseek-v4-flash',
     nativeWebSearch: false,
   },
+  codex: {
+    displayName: 'ChatGPT Codex',
+    defaultModel: 'gpt-5.5',
+    nativeWebSearch: false,
+  },
 }
 
 export const ZAI_CODING_BASE_URL = 'https://api.z.ai/api/coding/paas/v4'
@@ -105,6 +117,9 @@ export function getStaticModelsForProvider(
   }
   if (provider === 'deepseek') {
     return DEEPSEEK_TEXT_MODELS
+  }
+  if (provider === 'codex') {
+    return CODEX_TEXT_MODELS
   }
   return []
 }

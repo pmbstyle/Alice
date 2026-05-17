@@ -22,6 +22,7 @@
             <option value="zai">Z.ai (Coding Plan)</option>
             <option value="minimax">MiniMax</option>
             <option value="deepseek">DeepSeek</option>
+            <option value="codex">ChatGPT Codex</option>
             <option value="ollama">Ollama (Local)</option>
             <option value="lm-studio">LM Studio (Local)</option>
           </select>
@@ -228,6 +229,22 @@
           <p class="text-xs text-gray-400 mt-1">
             OpenAI-compatible endpoint for DeepSeek chat completions.
           </p>
+        </div>
+        <div v-if="currentSettings.aiProvider === 'codex'">
+          <label class="block mb-1 text-sm">ChatGPT Codex Account *</label>
+          <div class="rounded-lg border border-blue-500/30 bg-gray-950/60 p-3">
+            <p class="text-sm text-gray-200">
+              {{
+                currentSettings.codexAuthConnected
+                  ? currentSettings.codexAccountLabel || 'Connected'
+                  : 'Not connected'
+              }}
+            </p>
+            <p class="text-xs text-gray-400 mt-1">
+              Uses your ChatGPT Codex subscription for chat inference. OpenAI
+              API key is still needed only for OpenAI STT/TTS/embeddings.
+            </p>
+          </div>
         </div>
         <div v-if="currentSettings.aiProvider === 'lm-studio'">
           <label for="lmstudio-url" class="block mb-1 text-sm"

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { convertResponsesInputToCodexInput, listCodexModels } from '../codex'
+import { createPinia, setActivePinia } from 'pinia'
+import { useSettingsStore } from '../../../stores/settingsStore'
+import {
+  convertResponsesInputToCodexInput,
+  createCodexResponse,
+  listCodexModels,
+} from '../codex'
 
 describe('listCodexModels', () => {
   afterEach(() => {
@@ -47,9 +53,9 @@ describe('listCodexModels', () => {
     const models = await listCodexModels()
 
     expect(models.map(model => model.id)).toEqual([
-      'gpt-5.5',
-      'gpt-5.4-mini',
       'gpt-5.2',
+      'gpt-5.4-mini',
+      'gpt-5.5',
     ])
   })
 
@@ -80,5 +86,68 @@ describe('listCodexModels', () => {
         ].join('\n\n'),
       },
     ])
+  })
+
+  it('uses live app-server models instead of a stale configured Codex model', async () => {
+    setActivePinia(createPinia())
+    const settingsStore = useSettingsStore()
+    settingsStore.updateSetting('aiProvider', 'codex')
+    settingsStore.updateSetting('assistantModel', 'gpt-5.5')
+
+    const listeners = new Map<string, (event: any, payload: any) => void>()
+    const startArgs: any[] = []
+    const invoke = vi
+      .fn()
+      .mockImplementation(async (channel: string, args: any) => {
+        if (channel === 'codex-models:list') {
+          return {
+            success: true,
+            models: [{ id: 'gpt-5.2', hidden: false }],
+          }
+        }
+        if (channel === 'codex-response:start') {
+          startArgs.push(args)
+          queueMicrotask(() => {
+            listeners.get(`codex:stream:event:${args.requestId}`)?.(
+              {},
+              { type: 'done' }
+            )
+          })
+          return { success: true }
+        }
+        if (channel === 'codex-response:cancel') {
+          return { success: true }
+        }
+        return { success: false, error: `Unexpected channel: ${channel}` }
+      })
+
+    ;(globalThis as any).window = {
+      ipcRenderer: {
+        invoke,
+        on: vi.fn((channel: string, listener: any) => {
+          listeners.set(channel, listener)
+        }),
+        off: vi.fn((channel: string) => {
+          listeners.delete(channel)
+        }),
+      },
+    }
+
+    const stream = await createCodexResponse(
+      [
+        {
+          role: 'user',
+          content: [{ type: 'input_text', text: 'hello' }],
+        },
+      ] as any,
+      null,
+      true
+    )
+
+    for await (const event of stream) {
+      expect(event).toBeDefined()
+    }
+
+    expect(startArgs[0]?.model).toBe('gpt-5.2')
   })
 })

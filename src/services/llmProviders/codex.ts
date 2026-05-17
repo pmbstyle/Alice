@@ -13,13 +13,122 @@ interface CodexModelListResult {
   }>
 }
 
-function fallbackModels(): OpenAI.Models.Model[] {
-  return CODEX_TEXT_MODELS.map(model => ({
-    id: model.id,
+function toOpenAIModel(id: string): OpenAI.Models.Model {
+  return {
+    id,
     object: 'model' as const,
     created: 0,
     owned_by: 'chatgpt-codex',
-  }))
+  }
+}
+
+function fallbackModels(): OpenAI.Models.Model[] {
+  return CODEX_TEXT_MODELS.map(model => toOpenAIModel(model.id))
+}
+
+function normalizeCodexModelIds(result: CodexModelListResult): string[] {
+  if (!result?.success || !Array.isArray(result.models)) {
+    return []
+  }
+
+  return result.models
+    .filter(model => !model.hidden)
+    .map(model => model.id || model.model)
+    .filter((id): id is string => Boolean(id?.trim()))
+}
+
+async function listLiveCodexModelIds(): Promise<string[]> {
+  if (typeof window === 'undefined' || !window.ipcRenderer) {
+    return []
+  }
+
+  try {
+    const result = (await window.ipcRenderer.invoke(
+      'codex-models:list'
+    )) as CodexModelListResult
+    return normalizeCodexModelIds(result)
+  } catch (error) {
+    console.warn('Failed to list ChatGPT Codex models:', error)
+    return []
+  }
+}
+
+async function resolveCodexModel(configuredModel?: string): Promise<string> {
+  const liveModelIds = await listLiveCodexModelIds()
+  const configured = configuredModel?.trim()
+
+  if (configured && liveModelIds.includes(configured)) {
+    return configured
+  }
+
+  const safeConfigured = getSafeProviderModel('codex', configured)
+  if (liveModelIds.includes(safeConfigured)) {
+    return safeConfigured
+  }
+
+  if (liveModelIds.length > 0) {
+    return liveModelIds[0]
+  }
+
+  return safeConfigured
+}
+
+async function getFallbackModelCandidates(originalModel: string): Promise<string[]> {
+  const candidates = [...(await listLiveCodexModelIds()), ...fallbackModelIds()]
+  return Array.from(new Set(candidates)).filter(model => model !== originalModel)
+}
+
+function fallbackModelIds(): string[] {
+  return CODEX_TEXT_MODELS.map(model => model.id)
+}
+
+function isLikelyCodexModelCompatibilityError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return (
+    message.includes('requires a newer version of Codex') ||
+    message.includes('model is not supported when using Codex') ||
+    message.includes('model_not_found') ||
+    message.includes('unsupported_model')
+  )
+}
+
+async function* streamViaCodexAppServerWithFallback(
+  request: {
+    input: Array<{ type: 'text'; text: string }>
+    model: string
+    instructions: string
+    effort?: string
+  },
+  signal?: AbortSignal
+): AsyncGenerator<any> {
+  try {
+    yield* streamViaCodexAppServer(request, signal)
+    return
+  } catch (error) {
+    if (!isLikelyCodexModelCompatibilityError(error)) {
+      throw error
+    }
+  }
+
+  const fallbackCandidates = await getFallbackModelCandidates(request.model)
+  for (const model of fallbackCandidates) {
+    try {
+      yield* streamViaCodexAppServer({ ...request, model }, signal)
+      return
+    } catch (error) {
+      if (!isLikelyCodexModelCompatibilityError(error)) {
+        throw error
+      }
+    }
+  }
+
+  throw new Error(
+    `ChatGPT Codex rejected the configured model '${request.model}', and no compatible fallback model was accepted by the installed Codex CLI.`
+  )
+}
+
+function modelsToOpenAIModels(ids: string[]): OpenAI.Models.Model[] {
+  return ids.map(toOpenAIModel)
 }
 
 type CodexStreamQueueEvent =
@@ -96,35 +205,10 @@ export function convertResponsesInputToCodexInput(
 }
 
 export async function listCodexModels(): Promise<OpenAI.Models.Model[]> {
-  if (typeof window === 'undefined' || !window.ipcRenderer) {
-    return fallbackModels()
-  }
-
-  try {
-    const result = (await window.ipcRenderer.invoke(
-      'codex-models:list'
-    )) as CodexModelListResult
-
-    if (!result?.success || !Array.isArray(result.models)) {
-      return fallbackModels()
-    }
-
-    const liveModels = result.models
-      .filter(model => !model.hidden)
-      .map(model => model.id || model.model)
-      .filter((id): id is string => Boolean(id?.trim()))
-      .map(id => ({
-        id,
-        object: 'model' as const,
-        created: 0,
-        owned_by: 'chatgpt-codex',
-      }))
-
-    return liveModels.length > 0 ? liveModels : fallbackModels()
-  } catch (error) {
-    console.warn('Failed to list ChatGPT Codex models:', error)
-    return fallbackModels()
-  }
+  const liveModelIds = await listLiveCodexModelIds()
+  return liveModelIds.length > 0
+    ? modelsToOpenAIModels(liveModelIds)
+    : fallbackModels()
 }
 
 export const createCodexResponse = async (
@@ -135,22 +219,19 @@ export const createCodexResponse = async (
   signal?: AbortSignal
 ): Promise<any> => {
   const settings = useSettingsStore().config
-  const model = getSafeProviderModel('codex', settings.assistantModel)
+  const model = await resolveCodexModel(settings.assistantModel)
   const instructions =
     customInstructions ||
     buildAssistantSystemPrompt(settings.assistantSystemPrompt)
 
-  return streamViaCodexAppServer(
-    {
-      input: convertResponsesInputToCodexInput(input),
-      model,
-      instructions,
-      effort: settings.assistantReasoningEffort || 'medium',
-      previousResponseId,
-      stream,
-    },
-    signal
-  )
+  const request = {
+    input: convertResponsesInputToCodexInput(input),
+    model,
+    instructions,
+    effort: settings.assistantReasoningEffort || 'medium',
+  }
+
+  return streamViaCodexAppServerWithFallback(request, signal)
 }
 
 async function* streamViaCodexAppServer(
@@ -159,8 +240,6 @@ async function* streamViaCodexAppServer(
     model: string
     instructions: string
     effort?: string
-    previousResponseId?: string | null
-    stream?: boolean
   },
   signal?: AbortSignal
 ): AsyncGenerator<any> {

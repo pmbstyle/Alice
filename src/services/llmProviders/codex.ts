@@ -2,6 +2,13 @@ import type OpenAI from 'openai'
 import { useSettingsStore } from '../../stores/settingsStore'
 import { buildAssistantSystemPrompt } from '../../prompts/systemPrompt'
 import { CODEX_TEXT_MODELS, getSafeProviderModel } from './providerCatalog'
+import { buildToolsForProvider } from './tools'
+
+export interface CodexDynamicToolSpec {
+  name: string
+  description: string
+  inputSchema: Record<string, any>
+}
 
 interface CodexModelListResult {
   success?: boolean
@@ -93,6 +100,39 @@ function fallbackModelIds(): string[] {
   return CODEX_TEXT_MODELS.map(model => model.id)
 }
 
+function toCodexDynamicToolInputSchema(parameters: any): Record<string, any> {
+  if (
+    parameters &&
+    typeof parameters === 'object' &&
+    !Array.isArray(parameters)
+  ) {
+    return parameters
+  }
+
+  return {
+    type: 'object',
+    properties: {},
+    additionalProperties: true,
+  }
+}
+
+export function convertToolsToCodexDynamicTools(
+  tools: any[]
+): CodexDynamicToolSpec[] {
+  return tools
+    .filter(tool => tool?.type === 'function' && typeof tool.name === 'string')
+    .map(tool => ({
+      name: tool.name,
+      description: tool.description || tool.name,
+      inputSchema: toCodexDynamicToolInputSchema(tool.parameters),
+    }))
+}
+
+async function buildCodexDynamicTools(): Promise<CodexDynamicToolSpec[]> {
+  const tools = await buildToolsForProvider()
+  return convertToolsToCodexDynamicTools(tools)
+}
+
 function isLikelyCodexModelCompatibilityError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return (
@@ -109,6 +149,7 @@ async function* streamViaCodexAppServerWithFallback(
     model: string
     instructions: string
     effort?: string
+    dynamicTools?: CodexDynamicToolSpec[]
   },
   signal?: AbortSignal
 ): AsyncGenerator<any> {
@@ -240,6 +281,7 @@ export const createCodexResponse = async (
     model,
     instructions,
     effort: normalizeCodexEffort(settings.assistantReasoningEffort),
+    dynamicTools: await buildCodexDynamicTools(),
   }
 
   return streamViaCodexAppServerWithFallback(request, signal)
@@ -277,6 +319,7 @@ async function* streamViaCodexAppServer(
     model: string
     instructions: string
     effort?: string
+    dynamicTools?: CodexDynamicToolSpec[]
   },
   signal?: AbortSignal
 ): AsyncGenerator<any> {
@@ -336,6 +379,7 @@ async function* streamViaCodexAppServer(
         model: request.model,
         instructions: request.instructions,
         effort: request.effort,
+        dynamicTools: request.dynamicTools,
       }
     )
     if (!startResult?.success) {

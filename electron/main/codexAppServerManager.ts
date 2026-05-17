@@ -66,6 +66,7 @@ interface CodexStreamStartParams {
   model?: string
   instructions?: string
   effort?: string
+  dynamicTools?: CodexDynamicToolSpec[]
 }
 
 interface ActiveCodexStream {
@@ -73,15 +74,45 @@ interface ActiveCodexStream {
   sender: WebContents
   threadId?: string
   turnId?: string
+  dynamicTools: Map<string, CodexDynamicToolSpec>
   cancelled: boolean
   finish: () => void
   fail: (error: any) => void
   onNotification: (notification: RpcNotification) => void
 }
 
+interface CodexDynamicToolSpec {
+  name: string
+  description?: string
+  inputSchema?: JsonValue
+}
+
+interface CodexDynamicToolCallParams {
+  threadId?: string
+  turnId?: string
+  callId?: string
+  tool?: string
+  arguments?: JsonValue
+}
+
+interface CodexToolExecutionResult {
+  requestId?: string
+  success?: boolean
+  contentItems?: Array<Record<string, any>>
+  error?: string
+}
+
+interface PendingCodexToolExecution {
+  sender: WebContents
+  resolve: (value: JsonValue) => void
+  timer: NodeJS.Timeout
+}
+
 const CODEX_REQUEST_TIMEOUT_MS = 30_000
 const CODEX_LOGIN_TIMEOUT_MS = 10 * 60_000
 const CODEX_TURN_TIMEOUT_MS = 120_000
+const CODEX_TOOL_TIMEOUT_MS = 60_000
+const CODEX_TOOL_RESULT_MAX_CHARS = 16_000
 
 class CodexAppServerClient extends EventEmitter {
   private child: ChildProcessWithoutNullStreams | null = null
@@ -285,6 +316,7 @@ class CodexAppServerManager {
   private client: CodexAppServerClient | null = null
   private starting: Promise<CodexAppServerClient> | null = null
   private activeStreams = new Map<string, ActiveCodexStream>()
+  private pendingToolExecutions = new Map<string, PendingCodexToolExecution>()
 
   async getStatus(): Promise<CodexAccountStatus> {
     try {
@@ -384,6 +416,12 @@ class CodexAppServerManager {
     const stream: ActiveCodexStream = {
       client,
       sender,
+      dynamicTools: new Map(
+        normalizeCodexDynamicTools(params.dynamicTools).map(tool => [
+          tool.name,
+          tool,
+        ])
+      ),
       cancelled: false,
       finish: () => undefined,
       fail: () => undefined,
@@ -537,6 +575,11 @@ class CodexAppServerManager {
       stream.finish()
     }
     this.activeStreams.clear()
+    for (const pending of this.pendingToolExecutions.values()) {
+      clearTimeout(pending.timer)
+      pending.resolve(failedDynamicToolResponse('Codex app-server stopped.'))
+    }
+    this.pendingToolExecutions.clear()
     this.client?.close()
     this.client = null
     this.starting = null
@@ -565,7 +608,7 @@ class CodexAppServerManager {
       this.handleNotification(notification as RpcNotification)
     })
     client.on('request', request => {
-      this.handleServerRequest(client, request as RpcRequest)
+      void this.handleServerRequest(client, request as RpcRequest)
     })
     client.on('error', error => {
       console.error('[CodexAppServer] Client error:', error)
@@ -590,25 +633,147 @@ class CodexAppServerManager {
     }
   }
 
-  private handleServerRequest(
+  private async handleServerRequest(
     client: CodexAppServerClient,
     request: RpcRequest
-  ): void {
-    if (request.method.endsWith('/requestApproval')) {
-      client.respond(request.id, { decision: 'decline' })
-      return
-    }
-    if (request.method === 'tool/requestUserInput') {
+  ): Promise<void> {
+    try {
+      if (request.method === 'item/tool/call') {
+        client.respond(
+          request.id,
+          await this.handleDynamicToolCall(client, request.params)
+        )
+        return
+      }
+
+      if (request.method === 'item/tool/requestUserInput') {
+        client.respond(request.id, { answers: {} })
+        return
+      }
+
+      if (request.method === 'item/permissions/requestApproval') {
+        client.respond(request.id, { permissions: {}, scope: 'turn' })
+        return
+      }
+
+      if (request.method.endsWith('/requestApproval')) {
+        client.respond(request.id, { decision: 'decline' })
+        return
+      }
+
       client.respondError(
         request.id,
-        'Alice uses ChatGPT Codex as a text inference provider and does not allow native Codex tool requests.'
+        `Unsupported Codex app-server request: ${request.method}`
       )
-      return
+    } catch (error: any) {
+      client.respondError(
+        request.id,
+        error?.message || `Failed to handle Codex request: ${request.method}`
+      )
     }
-    client.respondError(
-      request.id,
-      `Unsupported Codex app-server request: ${request.method}`
-    )
+  }
+
+  private async handleDynamicToolCall(
+    client: CodexAppServerClient,
+    params: any
+  ): Promise<JsonValue> {
+    const call = normalizeDynamicToolCallParams(params)
+    if (!call.threadId || !call.turnId || !call.callId || !call.tool) {
+      return failedDynamicToolResponse('Invalid Codex dynamic tool call.')
+    }
+
+    const stream = this.findStreamForDynamicToolCall(client, call)
+    if (!stream) {
+      return failedDynamicToolResponse(
+        `No active Alice Codex turn found for tool call ${call.callId}.`
+      )
+    }
+
+    if (!stream.dynamicTools.has(call.tool)) {
+      return failedDynamicToolResponse(`Unknown Alice tool: ${call.tool}`)
+    }
+
+    if (stream.sender.isDestroyed()) {
+      return failedDynamicToolResponse(
+        `Cannot execute Alice tool ${call.tool}: renderer is unavailable.`
+      )
+    }
+
+    const requestId = createToolExecutionRequestId()
+    return await new Promise<JsonValue>(resolve => {
+      const timer = setTimeout(() => {
+        this.pendingToolExecutions.delete(requestId)
+        resolve(
+          failedDynamicToolResponse(
+            `Alice tool ${call.tool} timed out after ${CODEX_TOOL_TIMEOUT_MS}ms.`
+          )
+        )
+      }, CODEX_TOOL_TIMEOUT_MS)
+
+      this.pendingToolExecutions.set(requestId, {
+        sender: stream.sender,
+        resolve,
+        timer,
+      })
+      stream.sender.send('codex-tool:execute', {
+        requestId,
+        callId: call.callId,
+        tool: call.tool,
+        arguments: call.arguments || {},
+      })
+    })
+  }
+
+  private findStreamForDynamicToolCall(
+    client: CodexAppServerClient,
+    call: CodexDynamicToolCallParams
+  ): ActiveCodexStream | undefined {
+    for (const stream of this.activeStreams.values()) {
+      if (stream.client !== client) {
+        continue
+      }
+      if (stream.threadId !== call.threadId) {
+        continue
+      }
+      if (stream.turnId && call.turnId && stream.turnId !== call.turnId) {
+        continue
+      }
+      return stream
+    }
+    return undefined
+  }
+
+  completeToolExecution(
+    sender: WebContents,
+    result: CodexToolExecutionResult
+  ): { success: boolean; error?: string } {
+    const requestId = result?.requestId
+    if (!requestId) {
+      return {
+        success: false,
+        error: 'Codex tool result request id is missing.',
+      }
+    }
+
+    const pending = this.pendingToolExecutions.get(requestId)
+    if (!pending) {
+      return {
+        success: false,
+        error: 'Codex tool request is no longer pending.',
+      }
+    }
+
+    if (pending.sender.id !== sender.id) {
+      return {
+        success: false,
+        error: 'Codex tool result came from a different renderer.',
+      }
+    }
+
+    clearTimeout(pending.timer)
+    this.pendingToolExecutions.delete(requestId)
+    pending.resolve(normalizeToolExecutionResult(result))
+    return { success: true }
   }
 
   private async runResponseStream(
@@ -628,6 +793,10 @@ class CodexAppServerManager {
         serviceName: 'alice_electron',
         ephemeral: true,
         environments: [],
+        dynamicTools:
+          stream.dynamicTools.size > 0
+            ? Array.from(stream.dynamicTools.values())
+            : undefined,
       }),
       CODEX_TURN_TIMEOUT_MS
     )) as any
@@ -738,6 +907,101 @@ function compactObject(value: Record<string, any>): JsonValue {
   ) as JsonValue
 }
 
+function createToolExecutionRequestId(): string {
+  return `codex-tool-${Date.now()}-${Math.random().toString(36).slice(2)}`
+}
+
+function normalizeCodexDynamicTools(
+  tools: CodexDynamicToolSpec[] | undefined
+): CodexDynamicToolSpec[] {
+  if (!Array.isArray(tools)) {
+    return []
+  }
+
+  return tools
+    .filter(tool => typeof tool?.name === 'string' && tool.name.trim())
+    .map(tool => ({
+      name: tool.name,
+      description: tool.description || tool.name,
+      inputSchema:
+        tool.inputSchema &&
+        typeof tool.inputSchema === 'object' &&
+        !Array.isArray(tool.inputSchema)
+          ? tool.inputSchema
+          : {
+              type: 'object',
+              properties: {},
+              additionalProperties: true,
+            },
+    }))
+}
+
+function normalizeDynamicToolCallParams(
+  params: any
+): CodexDynamicToolCallParams {
+  return {
+    threadId:
+      typeof params?.threadId === 'string' ? params.threadId : undefined,
+    turnId: typeof params?.turnId === 'string' ? params.turnId : undefined,
+    callId: typeof params?.callId === 'string' ? params.callId : undefined,
+    tool: typeof params?.tool === 'string' ? params.tool : undefined,
+    arguments: params?.arguments,
+  }
+}
+
+function failedDynamicToolResponse(message: string): JsonValue {
+  return {
+    success: false,
+    contentItems: [{ type: 'inputText', text: message }],
+  }
+}
+
+function normalizeToolExecutionResult(
+  result: CodexToolExecutionResult
+): JsonValue {
+  const contentItems = Array.isArray(result.contentItems)
+    ? result.contentItems.flatMap(normalizeToolContentItem)
+    : []
+
+  if (contentItems.length === 0) {
+    contentItems.push({
+      type: 'inputText',
+      text: result.error || 'Alice tool returned no output.',
+    })
+  }
+
+  return {
+    success: result.success === true,
+    contentItems,
+  }
+}
+
+function normalizeToolContentItem(item: Record<string, any>): JsonValue[] {
+  if (item?.type === 'inputImage' && typeof item.imageUrl === 'string') {
+    return [{ type: 'inputImage', imageUrl: item.imageUrl }]
+  }
+
+  const text = typeof item?.text === 'string' ? item.text : JSON.stringify(item)
+  return [
+    {
+      type: 'inputText',
+      text: truncateDynamicToolText(text),
+    },
+  ]
+}
+
+function truncateDynamicToolText(text: string): string {
+  if (text.length <= CODEX_TOOL_RESULT_MAX_CHARS) {
+    return text
+  }
+
+  const notice = `\n...(Alice truncated tool result: original ${text.length} chars, showing ${CODEX_TOOL_RESULT_MAX_CHARS}.)`
+  return `${text.slice(
+    0,
+    Math.max(0, CODEX_TOOL_RESULT_MAX_CHARS - notice.length)
+  )}${notice}`
+}
+
 function normalizeModelInfo(model: any): CodexModelInfo {
   return {
     id: model.id || model.model,
@@ -787,6 +1051,10 @@ export function registerCodexIPCHandlers(): void {
 
   ipcMain.handle('codex-response:cancel', async (event, args) => {
     return codexAppServerManager.cancelResponseStream(args?.requestId)
+  })
+
+  ipcMain.handle('codex-tool:result', async (event, args) => {
+    return codexAppServerManager.completeToolExecution(event.sender, args)
   })
 }
 

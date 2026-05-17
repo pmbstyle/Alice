@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import {
+  convertToolsToCodexDynamicTools,
   convertResponsesInputToCodexInput,
   createCodexResponse,
   createCodexTextResponse,
@@ -94,11 +95,40 @@ describe('listCodexModels', () => {
     ])
   })
 
+  it('converts function tools into Codex dynamic tool specs', () => {
+    expect(
+      convertToolsToCodexDynamicTools([
+        {
+          type: 'function',
+          name: 'get_current_datetime',
+          description: 'Gets the current date and time.',
+          parameters: {
+            type: 'object',
+            properties: { format: { type: 'string' } },
+            required: ['format'],
+          },
+        },
+        { type: 'web_search_preview' },
+      ])
+    ).toEqual([
+      {
+        name: 'get_current_datetime',
+        description: 'Gets the current date and time.',
+        inputSchema: {
+          type: 'object',
+          properties: { format: { type: 'string' } },
+          required: ['format'],
+        },
+      },
+    ])
+  })
+
   it('uses live app-server models instead of a stale configured Codex model', async () => {
     setActivePinia(createPinia())
     const settingsStore = useSettingsStore()
     settingsStore.updateSetting('aiProvider', 'codex')
     settingsStore.updateSetting('assistantModel', 'gpt-5.5')
+    settingsStore.updateSetting('assistantTools', ['get_current_datetime'])
 
     const listeners = new Map<string, (event: any, payload: any) => void>()
     const startArgs: any[] = []
@@ -137,6 +167,17 @@ describe('listCodexModels', () => {
           listeners.delete(channel)
         }),
       },
+      customToolsAPI: {
+        list: vi.fn().mockResolvedValue({
+          success: true,
+          data: {
+            tools: [],
+            diagnostics: [],
+            filePath: '',
+            lastModified: Date.now(),
+          },
+        }),
+      },
     }
 
     const stream = await createCodexResponse(
@@ -155,6 +196,14 @@ describe('listCodexModels', () => {
     }
 
     expect(startArgs[0]?.model).toBe('gpt-5.2')
+    expect(startArgs[0]?.dynamicTools).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'get_current_datetime',
+          inputSchema: expect.objectContaining({ type: 'object' }),
+        }),
+      ])
+    )
   })
 
   it('aggregates Codex app-server text for background responses', async () => {

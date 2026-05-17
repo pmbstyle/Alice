@@ -24,6 +24,7 @@
         <option value="zai">Z.ai (GLM Coding Plan)</option>
         <option value="minimax">MiniMax (OpenAI-compatible)</option>
         <option value="deepseek">DeepSeek (OpenAI-compatible)</option>
+        <option value="codex">ChatGPT Codex (subscription)</option>
         <option value="ollama">Ollama (Local LLMs)</option>
         <option value="lm-studio">LM Studio (Local LLMs)</option>
       </select>
@@ -503,6 +504,102 @@
       </div>
     </div>
 
+    <!-- ChatGPT Codex Configuration -->
+    <div v-else-if="formData.aiProvider === 'codex'" class="space-y-4">
+      <div class="alert alert-info text-sm">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          class="stroke-current shrink-0 w-5 h-5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          ></path>
+        </svg>
+        <span>
+          Uses your ChatGPT Codex subscription for text inference. Voice,
+          embeddings, and image generation stay on their own providers.
+        </span>
+      </div>
+
+      <div class="rounded-lg border border-base-300 p-4 bg-base-200/40">
+        <p class="text-sm font-medium">
+          {{
+            formData.codexAuthConnected
+              ? formData.codexAccountLabel || 'Connected'
+              : 'Not connected'
+          }}
+        </p>
+        <p class="text-sm text-base-content/70 mt-1">
+          Alice opens the official ChatGPT login in your browser. Tokens stay in
+          the Codex app-server profile managed by the desktop app.
+        </p>
+      </div>
+
+      <button
+        @click="$emit('test-codex')"
+        class="btn btn-secondary w-full"
+        :disabled="isTesting.codex"
+      >
+        <span
+          v-if="isTesting.codex"
+          class="loading loading-spinner loading-xs mr-2"
+        ></span>
+        {{
+          formData.codexAuthConnected
+            ? 'Refresh ChatGPT Codex Status'
+            : 'Authorize ChatGPT Codex'
+        }}
+      </button>
+
+      <TestResult :result="testResult.codex" />
+
+      <div
+        v-if="testResult.codex.success && formData.availableModels.length > 0"
+        class="space-y-4"
+      >
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Assistant Model</span>
+          </label>
+          <select
+            v-model="formData.assistantModel"
+            class="select select-bordered w-full focus:select-primary focus:outline-none"
+          >
+            <option
+              v-for="model in formData.availableModels"
+              :key="model"
+              :value="model"
+            >
+              {{ model }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Summarization Model</span>
+          </label>
+          <select
+            v-model="formData.summarizationModel"
+            class="select select-bordered w-full focus:select-primary focus:outline-none"
+          >
+            <option
+              v-for="model in formData.availableModels"
+              :key="model"
+              :value="model"
+            >
+              {{ model }}
+            </option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <!-- Ollama Configuration -->
     <div v-else-if="formData.aiProvider === 'ollama'" class="space-y-4">
       <div class="alert alert-info text-sm">
@@ -712,6 +809,7 @@ defineEmits<{
   'test-zai': []
   'test-minimax': []
   'test-deepseek': []
+  'test-codex': []
   'test-ollama': []
   'test-lmstudio': []
   'reset-tests': []

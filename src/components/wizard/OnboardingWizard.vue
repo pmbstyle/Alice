@@ -25,6 +25,7 @@
           @test-zai="testZAIKey"
           @test-minimax="testMiniMaxKey"
           @test-deepseek="testDeepSeekKey"
+          @test-codex="testCodexAuth"
           @test-ollama="testOllamaConnection"
           @test-lmstudio="testLMStudioConnection"
           @reset-tests="resetTestResults"
@@ -57,7 +58,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, nextTick, onMounted } from 'vue'
+import {
+  ref,
+  reactive,
+  computed,
+  watch,
+  nextTick,
+  onMounted,
+  onUnmounted,
+} from 'vue'
 import { useSettingsStore } from '../../stores/settingsStore'
 import WizardHeader from './WizardHeader.vue'
 import WizardFooter from './WizardFooter.vue'
@@ -74,6 +83,7 @@ import {
   type AIProviderKey,
 } from '../../services/llmProviders/providerCatalog'
 import { listDeepSeekModelsForConfig } from '../../services/llmProviders/deepseek'
+import { listCodexModels } from '../../services/llmProviders/codex'
 import { listMiniMaxModelsForConfig } from '../../services/llmProviders/minimax'
 import { listOpenAIModelsForConfig } from '../../services/llmProviders/openai'
 import { listOpenRouterModelsForConfig } from '../../services/llmProviders/openrouter'
@@ -115,6 +125,8 @@ const formData = reactive({
   VITE_ZAI_API_KEY: '',
   VITE_MINIMAX_API_KEY: '',
   VITE_DEEPSEEK_API_KEY: '',
+  codexAuthConnected: false,
+  codexAccountLabel: '',
   aiProvider: 'openai' as AIProviderKey,
   assistantModel: openaiDefaults.assistantModel as string,
   summarizationModel: openaiDefaults.summarizationModel as string,
@@ -139,6 +151,7 @@ const isTesting = reactive({
   zai: false,
   minimax: false,
   deepseek: false,
+  codex: false,
   ollama: false,
   lmStudio: false,
 })
@@ -149,6 +162,7 @@ const testResult = reactive({
   zai: { success: false, error: '' },
   minimax: { success: false, error: '' },
   deepseek: { success: false, error: '' },
+  codex: { success: false, error: '' },
   ollama: { success: false, error: '' },
   lmStudio: { success: false, error: '' },
 })
@@ -181,7 +195,8 @@ const canContinue = computed(() => {
           formData.aiProvider === 'openrouter' ||
           formData.aiProvider === 'zai' ||
           formData.aiProvider === 'minimax' ||
-          formData.aiProvider === 'deepseek') &&
+          formData.aiProvider === 'deepseek' ||
+          formData.aiProvider === 'codex') &&
         !formData.VITE_OPENAI_API_KEY.trim()
       ) {
         return false
@@ -218,6 +233,13 @@ watch(step, async () => {
 
 onMounted(() => {
   window.electron?.resize?.(WIZARD_WINDOW_SIZE)
+  window.ipcRenderer?.on?.('codex-auth-status-changed', handleCodexStatus)
+  window.ipcRenderer?.on?.('codex-auth-login-completed', handleCodexLogin)
+})
+
+onUnmounted(() => {
+  window.ipcRenderer?.off?.('codex-auth-status-changed', handleCodexStatus)
+  window.ipcRenderer?.off?.('codex-auth-login-completed', handleCodexLogin)
 })
 
 const toggleLocalModels = (useLocal: boolean) => {
@@ -255,6 +277,15 @@ const fetchAvailableModels = async () => {
       baseURL = formData.minimaxBaseUrl
     } else if (formData.aiProvider === 'deepseek') {
       baseURL = formData.deepseekBaseUrl
+    } else if (formData.aiProvider === 'codex') {
+      const models = await listCodexModels()
+      formData.availableModels = models.map(model => model.id)
+
+      if (formData.availableModels.length > 0) {
+        formData.assistantModel = formData.availableModels[0]
+        formData.summarizationModel = formData.availableModels[0]
+      }
+      return
     } else {
       return
     }
@@ -471,6 +502,73 @@ const testDeepSeekKey = async () => {
   }
 }
 
+const syncCodexStatus = async () => {
+  const status = await window.ipcRenderer.invoke('codex-auth:status')
+  const connected = Boolean(status?.connected)
+  formData.codexAuthConnected = connected
+  formData.codexAccountLabel = connected ? status.accountLabel || 'Connected' : ''
+  testResult.codex.success = connected
+  testResult.codex.error = connected
+    ? ''
+    : status?.error || 'ChatGPT Codex is not connected.'
+
+  if (connected) {
+    await fetchAvailableModels()
+  }
+
+  return connected
+}
+
+const testCodexAuth = async () => {
+  isTesting.codex = true
+  testResult.codex.error = ''
+  testResult.codex.success = false
+
+  try {
+    if (await syncCodexStatus()) {
+      return
+    }
+
+    const result = await window.ipcRenderer.invoke('codex-auth:start-login')
+    if (!result?.success) {
+      testResult.codex.error =
+        result?.error || 'Failed to start ChatGPT Codex authorization.'
+      return
+    }
+
+    testResult.codex.error =
+      'Browser authorization opened. Finish it, then return to Alice.'
+  } catch (e: any) {
+    testResult.codex.error =
+      'ChatGPT Codex authorization failed: ' + (e.message || String(e))
+  } finally {
+    isTesting.codex = false
+  }
+}
+
+function handleCodexStatus(event: any, status: any) {
+  const connected = Boolean(status?.connected)
+  formData.codexAuthConnected = connected
+  formData.codexAccountLabel = connected ? status.accountLabel || 'Connected' : ''
+  testResult.codex.success = connected
+  testResult.codex.error = connected
+    ? ''
+    : status?.error || 'ChatGPT Codex is not connected.'
+  if (connected && formData.aiProvider === 'codex') {
+    void fetchAvailableModels()
+  }
+}
+
+function handleCodexLogin(event: any, payload: any) {
+  if (payload?.success === false) {
+    testResult.codex.success = false
+    testResult.codex.error =
+      payload?.error || 'ChatGPT Codex authorization failed.'
+    return
+  }
+  void syncCodexStatus()
+}
+
 const testOllamaConnection = async () => {
   if (!formData.ollamaBaseUrl.trim()) {
     testResult.ollama.error = 'Ollama Base URL cannot be empty.'
@@ -558,6 +656,8 @@ const resetTestResults = () => {
   testResult.minimax.error = ''
   testResult.deepseek.success = false
   testResult.deepseek.error = ''
+  testResult.codex.success = false
+  testResult.codex.error = ''
   testResult.ollama.success = false
   testResult.ollama.error = ''
   testResult.lmStudio.success = false
@@ -584,6 +684,13 @@ const isCurrentProviderTested = () => {
   } else if (formData.aiProvider === 'deepseek') {
     return (
       testResult.deepseek.success &&
+      Boolean(formData.assistantModel) &&
+      Boolean(formData.summarizationModel)
+    )
+  } else if (formData.aiProvider === 'codex') {
+    return (
+      testResult.codex.success &&
+      formData.codexAuthConnected &&
       Boolean(formData.assistantModel) &&
       Boolean(formData.summarizationModel)
     )

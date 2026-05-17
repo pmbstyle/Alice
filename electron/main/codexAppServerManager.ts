@@ -1,4 +1,4 @@
-import { app, ipcMain, shell } from 'electron'
+import { app, ipcMain, shell, type WebContents } from 'electron'
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { EventEmitter } from 'node:events'
 import fs from 'node:fs/promises'
@@ -29,6 +29,12 @@ interface RpcNotification {
   params?: any
 }
 
+interface RpcRequest {
+  id: number | string
+  method: string
+  params?: any
+}
+
 interface PendingRequest {
   method: string
   resolve: (value: JsonValue) => void
@@ -54,8 +60,28 @@ export interface CodexModelInfo {
   supportedReasoningEfforts?: string[]
 }
 
+interface CodexStreamStartParams {
+  requestId: string
+  input: Array<Record<string, any>>
+  model?: string
+  instructions?: string
+  effort?: string
+}
+
+interface ActiveCodexStream {
+  client: CodexAppServerClient
+  sender: WebContents
+  threadId?: string
+  turnId?: string
+  cancelled: boolean
+  finish: () => void
+  fail: (error: any) => void
+  onNotification: (notification: RpcNotification) => void
+}
+
 const CODEX_REQUEST_TIMEOUT_MS = 30_000
 const CODEX_LOGIN_TIMEOUT_MS = 10 * 60_000
+const CODEX_TURN_TIMEOUT_MS = 120_000
 
 class CodexAppServerClient extends EventEmitter {
   private child: ChildProcessWithoutNullStreams | null = null
@@ -161,6 +187,26 @@ class CodexAppServerClient extends EventEmitter {
     this.child.stdin.write(`${JSON.stringify(message)}\n`)
   }
 
+  respond(id: number | string, result: JsonValue): void {
+    if (!this.child || this.closed) {
+      return
+    }
+    this.child.stdin.write(`${JSON.stringify({ id, result })}\n`)
+  }
+
+  respondError(
+    id: number | string,
+    message: string,
+    code: number = -32000
+  ): void {
+    if (!this.child || this.closed) {
+      return
+    }
+    this.child.stdin.write(
+      `${JSON.stringify({ id, error: { code, message } })}\n`
+    )
+  }
+
   close(): void {
     this.closed = true
     for (const pending of this.pending.values()) {
@@ -185,6 +231,16 @@ class CodexAppServerClient extends EventEmitter {
       message = JSON.parse(trimmed)
     } catch (error) {
       console.warn('[CodexAppServer] Failed to parse JSON-RPC line:', trimmed)
+      return
+    }
+
+    if (
+      'id' in message &&
+      message.id !== undefined &&
+      'method' in message &&
+      typeof message.method === 'string'
+    ) {
+      this.emit('request', message)
       return
     }
 
@@ -228,6 +284,7 @@ class CodexAppServerClient extends EventEmitter {
 class CodexAppServerManager {
   private client: CodexAppServerClient | null = null
   private starting: Promise<CodexAppServerClient> | null = null
+  private activeStreams = new Map<string, ActiveCodexStream>()
 
   async getStatus(): Promise<CodexAccountStatus> {
     try {
@@ -308,6 +365,161 @@ class CodexAppServerManager {
     }
   }
 
+  async startResponseStream(
+    sender: WebContents,
+    params: CodexStreamStartParams
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!params?.requestId) {
+      return { success: false, error: 'Codex stream request id is required.' }
+    }
+    if (!Array.isArray(params.input) || params.input.length === 0) {
+      return { success: false, error: 'Codex stream input is required.' }
+    }
+    if (this.activeStreams.has(params.requestId)) {
+      return { success: false, error: 'Codex stream request already exists.' }
+    }
+
+    const client = await this.getClient()
+    const requestId = params.requestId
+    const stream: ActiveCodexStream = {
+      client,
+      sender,
+      cancelled: false,
+      finish: () => undefined,
+      fail: () => undefined,
+      onNotification: () => undefined,
+    }
+    let done = false
+
+    const sendEvent = (event: Record<string, any>) => {
+      if (!sender.isDestroyed()) {
+        sender.send(`codex:stream:event:${requestId}`, event)
+      }
+    }
+
+    stream.finish = () => {
+      if (done) {
+        return
+      }
+      done = true
+      client.off('notification', stream.onNotification)
+      this.activeStreams.delete(requestId)
+      sendEvent({ type: 'done' })
+    }
+
+    stream.fail = (error: any) => {
+      if (done) {
+        return
+      }
+      done = true
+      client.off('notification', stream.onNotification)
+      this.activeStreams.delete(requestId)
+      sendEvent({
+        type: 'error',
+        error:
+          error?.message ||
+          error?.error?.message ||
+          error?.params?.error?.message ||
+          String(error),
+      })
+    }
+
+    const startedAgentMessageIds = new Set<string>()
+    stream.onNotification = (notification: RpcNotification) => {
+      const payload = notification.params || {}
+      if (stream.threadId && payload.threadId !== stream.threadId) {
+        return
+      }
+      if (stream.turnId && payload.turnId && payload.turnId !== stream.turnId) {
+        return
+      }
+
+      if (notification.method === 'turn/started') {
+        stream.turnId = payload.turn?.id || payload.turnId || stream.turnId
+        return
+      }
+
+      if (notification.method === 'item/agentMessage/delta') {
+        const itemId = payload.itemId || payload.item_id || 'codex-message'
+        if (!startedAgentMessageIds.has(itemId)) {
+          startedAgentMessageIds.add(itemId)
+          sendEvent({
+            type: 'chunk',
+            data: {
+              type: 'response.output_item.added',
+              item: { id: itemId, type: 'message', role: 'assistant' },
+            },
+          })
+        }
+        sendEvent({
+          type: 'chunk',
+          data: {
+            type: 'response.output_text.delta',
+            item_id: itemId,
+            delta: payload.delta || '',
+          },
+        })
+        return
+      }
+
+      if (notification.method === 'item/completed') {
+        const item = payload.item
+        if (item?.type === 'agentMessage' && item.id) {
+          sendEvent({
+            type: 'chunk',
+            data: {
+              type: 'response.output_item.done',
+              item: { id: item.id, type: 'message', role: 'assistant' },
+            },
+          })
+        }
+        return
+      }
+
+      if (notification.method === 'turn/completed') {
+        stream.finish()
+        return
+      }
+
+      if (notification.method === 'error') {
+        stream.fail(payload?.error || payload)
+      }
+    }
+
+    client.on('notification', stream.onNotification)
+    this.activeStreams.set(requestId, stream)
+
+    void this.runResponseStream(stream, params).catch(error =>
+      stream.fail(error)
+    )
+    return { success: true }
+  }
+
+  async cancelResponseStream(
+    requestId: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!requestId) {
+      return { success: true }
+    }
+    const stream = this.activeStreams.get(requestId)
+    if (!stream) {
+      return { success: true }
+    }
+    stream.cancelled = true
+    if (stream.threadId && stream.turnId) {
+      try {
+        await stream.client.request('turn/interrupt', {
+          threadId: stream.threadId,
+          turnId: stream.turnId,
+        })
+      } catch (error) {
+        console.warn('[CodexAppServer] Failed to interrupt turn:', error)
+      }
+    }
+    stream.finish()
+    return { success: true }
+  }
+
   async getClient(): Promise<CodexAppServerClient> {
     if (this.client) {
       return this.client
@@ -321,6 +533,10 @@ class CodexAppServerManager {
   }
 
   stop(): void {
+    for (const stream of this.activeStreams.values()) {
+      stream.finish()
+    }
+    this.activeStreams.clear()
     this.client?.close()
     this.client = null
     this.starting = null
@@ -348,6 +564,9 @@ class CodexAppServerManager {
     client.on('notification', notification => {
       this.handleNotification(notification as RpcNotification)
     })
+    client.on('request', request => {
+      this.handleServerRequest(client, request as RpcRequest)
+    })
     client.on('error', error => {
       console.error('[CodexAppServer] Client error:', error)
       if (this.client === client) {
@@ -369,6 +588,80 @@ class CodexAppServerManager {
     } else if (notification.method === 'account/updated') {
       win.webContents.send('codex-auth-updated', notification.params)
     }
+  }
+
+  private handleServerRequest(
+    client: CodexAppServerClient,
+    request: RpcRequest
+  ): void {
+    if (request.method.endsWith('/requestApproval')) {
+      client.respond(request.id, { decision: 'decline' })
+      return
+    }
+    if (request.method === 'tool/requestUserInput') {
+      client.respondError(
+        request.id,
+        'Alice uses ChatGPT Codex as a text inference provider and does not allow native Codex tool requests.'
+      )
+      return
+    }
+    client.respondError(
+      request.id,
+      `Unsupported Codex app-server request: ${request.method}`
+    )
+  }
+
+  private async runResponseStream(
+    stream: ActiveCodexStream,
+    params: CodexStreamStartParams
+  ): Promise<void> {
+    const cwd = app.getPath('userData')
+    const threadResponse = (await stream.client.request(
+      'thread/start',
+      compactObject({
+        model: params.model || undefined,
+        cwd,
+        approvalPolicy: 'never',
+        sandbox: 'readOnly',
+        developerInstructions: params.instructions || null,
+        personality: 'none',
+        serviceName: 'alice_electron',
+        ephemeral: true,
+        environments: [],
+      }),
+      CODEX_TURN_TIMEOUT_MS
+    )) as any
+    stream.threadId = threadResponse?.thread?.id
+    if (!stream.threadId) {
+      throw new Error('Codex did not return a thread id.')
+    }
+
+    const responseId = `codex-${stream.threadId}-${params.requestId}`
+    if (!stream.sender.isDestroyed()) {
+      stream.sender.send(`codex:stream:event:${params.requestId}`, {
+        type: 'chunk',
+        data: {
+          type: 'response.created',
+          response: { id: responseId },
+        },
+      })
+    }
+
+    const turnResponse = (await stream.client.request(
+      'turn/start',
+      compactObject({
+        threadId: stream.threadId,
+        input: params.input,
+        cwd,
+        model: params.model || undefined,
+        approvalPolicy: 'never',
+        sandboxPolicy: { type: 'readOnly', networkAccess: false },
+        effort: params.effort || undefined,
+        environments: [],
+      }),
+      CODEX_TURN_TIMEOUT_MS
+    )) as any
+    stream.turnId = turnResponse?.turn?.id || stream.turnId
   }
 
   private waitForLoginCompletion(
@@ -439,6 +732,12 @@ function normalizeAccountStatus(response: any): CodexAccountStatus {
   }
 }
 
+function compactObject(value: Record<string, any>): JsonValue {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, entry]) => entry !== undefined)
+  ) as JsonValue
+}
+
 function normalizeModelInfo(model: any): CodexModelInfo {
   return {
     id: model.id || model.model,
@@ -480,6 +779,14 @@ export function registerCodexIPCHandlers(): void {
 
   ipcMain.handle('codex-models:list', async () => {
     return codexAppServerManager.listModels()
+  })
+
+  ipcMain.handle('codex-response:start', async (event, args) => {
+    return codexAppServerManager.startResponseStream(event.sender, args)
+  })
+
+  ipcMain.handle('codex-response:cancel', async (event, args) => {
+    return codexAppServerManager.cancelResponseStream(args?.requestId)
   })
 }
 

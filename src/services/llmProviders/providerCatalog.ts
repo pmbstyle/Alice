@@ -129,6 +129,12 @@ export function isKnownProviderModel(provider: string, model: string): boolean {
   if (staticModels.length === 0) {
     return true
   }
+  if (provider === 'codex') {
+    return (
+      staticModels.some(staticModel => staticModel.id === model) ||
+      model.startsWith('gpt-5')
+    )
+  }
   return staticModels.some(staticModel => staticModel.id === model)
 }
 

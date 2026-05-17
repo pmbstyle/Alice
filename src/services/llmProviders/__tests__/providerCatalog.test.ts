@@ -65,5 +65,8 @@ describe('providerCatalog', () => {
     expect(getSafeProviderModel('codex', 'gpt-5.4-mini')).toBe(
       'gpt-5.4-mini'
     )
+    expect(getSafeProviderModel('codex', 'gpt-5.1-codex')).toBe(
+      'gpt-5.1-codex'
+    )
   })
 })

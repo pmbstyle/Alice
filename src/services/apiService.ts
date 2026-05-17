@@ -33,7 +33,10 @@ import {
   createDeepSeekResponse,
   listDeepSeekModels,
 } from './llmProviders/deepseek'
-import { listCodexModels } from './llmProviders/codex'
+import {
+  createCodexResponse,
+  listCodexModels,
+} from './llmProviders/codex'
 import {
   createChatCompletionForProvider,
   stripReasoningFromMiniMaxContent,
@@ -203,6 +206,15 @@ export const createOpenAIResponse = async (
   }
   if (settings.aiProvider === 'deepseek') {
     return createDeepSeekResponse(
+      input,
+      previousResponseId,
+      stream,
+      customInstructions,
+      signal
+    )
+  }
+  if (settings.aiProvider === 'codex') {
+    return createCodexResponse(
       input,
       previousResponseId,
       stream,

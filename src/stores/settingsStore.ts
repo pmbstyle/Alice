@@ -50,6 +50,8 @@ export interface AliceSettings {
   zaiBaseUrl: string
   minimaxBaseUrl: string
   deepseekBaseUrl: string
+  codexAuthConnected: boolean
+  codexAccountLabel: string
 
   assistantModel: string
   assistantSystemPrompt: string
@@ -111,6 +113,9 @@ function hasMinimumConfigForOnboarding(config: AliceSettings): boolean {
   if (config.VITE_DEEPSEEK_API_KEY?.trim()) {
     return true
   }
+  if (config.codexAuthConnected) {
+    return true
+  }
 
   if (config.aiProvider === 'ollama') {
     return Boolean(config.ollamaBaseUrl?.trim())
@@ -143,6 +148,8 @@ const defaultSettings: AliceSettings = {
   zaiBaseUrl: ZAI_CODING_BASE_URL,
   minimaxBaseUrl: MINIMAX_OPENAI_BASE_URL,
   deepseekBaseUrl: DEEPSEEK_OPENAI_BASE_URL,
+  codexAuthConnected: false,
+  codexAccountLabel: '',
 
   assistantModel: 'gpt-4.1-mini',
   assistantSystemPrompt: DEFAULT_PERSONA_PROMPT,
@@ -216,6 +223,8 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   zaiBaseUrl: 'Z.ai Base URL',
   minimaxBaseUrl: 'MiniMax Base URL',
   deepseekBaseUrl: 'DeepSeek Base URL',
+  codexAuthConnected: 'ChatGPT Codex authorization',
+  codexAccountLabel: 'ChatGPT Codex account',
 
   assistantModel: 'Assistant Model',
   assistantSystemPrompt: 'Assistant Persona Prompt',
@@ -339,6 +348,7 @@ export const useSettingsStore = defineStore('settings', () => {
       'zai',
       'minimax',
       'deepseek',
+      'codex',
     ] as const
     if (!validAIProviders.includes(validated.aiProvider as any)) {
       validated.aiProvider = 'openai'
@@ -425,6 +435,8 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('VITE_MINIMAX_API_KEY', 'minimaxBaseUrl')
     } else if (settings.value.aiProvider === 'deepseek') {
       essentialKeys.push('VITE_DEEPSEEK_API_KEY', 'deepseekBaseUrl')
+    } else if (settings.value.aiProvider === 'codex') {
+      essentialKeys.push('codexAuthConnected')
     } else if (settings.value.aiProvider === 'ollama') {
       essentialKeys.push('ollamaBaseUrl')
     } else if (settings.value.aiProvider === 'lm-studio') {
@@ -499,6 +511,10 @@ export const useSettingsStore = defineStore('settings', () => {
 
     if (settings.value.aiProvider === 'lm-studio') {
       return !!settings.value.lmStudioBaseUrl?.trim()
+    }
+
+    if (settings.value.aiProvider === 'codex') {
+      return settings.value.codexAuthConnected
     }
 
     return true
@@ -742,6 +758,10 @@ export const useSettingsStore = defineStore('settings', () => {
         settings.value.assistantModel = PROVIDER_CONFIGS.deepseek.defaultModel
         settings.value.SUMMARIZATION_MODEL =
           PROVIDER_CONFIGS.deepseek.defaultModel
+      } else if (settings.value.aiProvider === 'codex') {
+        settings.value.assistantModel = PROVIDER_CONFIGS.codex.defaultModel
+        settings.value.SUMMARIZATION_MODEL =
+          PROVIDER_CONFIGS.codex.defaultModel
       }
     }
     if (key === 'assistantReasoningEffort') {
@@ -788,6 +808,7 @@ export const useSettingsStore = defineStore('settings', () => {
       key === 'zaiBaseUrl' ||
       key === 'minimaxBaseUrl' ||
       key === 'deepseekBaseUrl' ||
+      key === 'codexAuthConnected' ||
       key === 'aiProvider'
     ) {
       coreOpenAISettingsValid.value = false
@@ -842,6 +863,8 @@ export const useSettingsStore = defineStore('settings', () => {
         zaiBaseUrl: settings.value.zaiBaseUrl,
         minimaxBaseUrl: settings.value.minimaxBaseUrl,
         deepseekBaseUrl: settings.value.deepseekBaseUrl,
+        codexAuthConnected: settings.value.codexAuthConnected,
+        codexAccountLabel: settings.value.codexAccountLabel,
         assistantModel: settings.value.assistantModel,
         assistantSystemPrompt: settings.value.assistantSystemPrompt,
         assistantTemperature: settings.value.assistantTemperature,
@@ -968,6 +991,13 @@ export const useSettingsStore = defineStore('settings', () => {
       if (!currentConfigForTest.deepseekBaseUrl?.trim()) {
         error.value = `Essential setting '${settingKeyToLabelMap.deepseekBaseUrl}' is missing.`
         generalStore.statusMessage = 'DeepSeek Base URL is required.'
+        isSaving.value = false
+        return
+      }
+    } else if (currentConfigForTest.aiProvider === 'codex') {
+      if (!currentConfigForTest.codexAuthConnected) {
+        error.value = `Essential setting '${settingKeyToLabelMap.codexAuthConnected}' is missing.`
+        generalStore.statusMessage = 'ChatGPT Codex authorization is required.'
         isSaving.value = false
         return
       }

@@ -6,8 +6,9 @@ export type AIProviderKey =
   | 'zai'
   | 'minimax'
   | 'deepseek'
+  | 'codex'
 
-export type ChatCompletionsProviderKey = Exclude<AIProviderKey, 'openai'>
+export type ChatCompletionsProviderKey = Exclude<AIProviderKey, 'openai' | 'codex'>
 
 export interface ProviderConfig {
   displayName: string
@@ -37,6 +38,17 @@ export const MINIMAX_TEXT_MODELS: ProviderModelDefinition[] = [
 export const DEEPSEEK_TEXT_MODELS: ProviderModelDefinition[] = [
   { id: 'deepseek-v4-flash', displayName: 'DeepSeek V4 Flash' },
   { id: 'deepseek-v4-pro', displayName: 'DeepSeek V4 Pro' },
+]
+
+export const CODEX_TEXT_MODELS: ProviderModelDefinition[] = [
+  { id: 'gpt-5.4', displayName: 'GPT-5.4' },
+  { id: 'gpt-5.2-codex', displayName: 'GPT-5.2 Codex' },
+  { id: 'gpt-5.1-codex-max', displayName: 'GPT-5.1 Codex Max' },
+  { id: 'gpt-5.4-mini', displayName: 'GPT-5.4 Mini' },
+  { id: 'gpt-5.3-codex', displayName: 'GPT-5.3 Codex' },
+  { id: 'gpt-5.3-codex-spark', displayName: 'GPT-5.3 Codex Spark' },
+  { id: 'gpt-5.2', displayName: 'GPT-5.2' },
+  { id: 'gpt-5.1-codex-mini', displayName: 'GPT-5.1 Codex Mini' },
 ]
 
 export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
@@ -75,6 +87,11 @@ export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
     defaultModel: 'deepseek-v4-flash',
     nativeWebSearch: false,
   },
+  codex: {
+    displayName: 'ChatGPT Codex',
+    defaultModel: 'gpt-5.4',
+    nativeWebSearch: false,
+  },
 }
 
 export const ZAI_CODING_BASE_URL = 'https://api.z.ai/api/coding/paas/v4'
@@ -106,6 +123,9 @@ export function getStaticModelsForProvider(
   if (provider === 'deepseek') {
     return DEEPSEEK_TEXT_MODELS
   }
+  if (provider === 'codex') {
+    return CODEX_TEXT_MODELS
+  }
   return []
 }
 
@@ -113,6 +133,12 @@ export function isKnownProviderModel(provider: string, model: string): boolean {
   const staticModels = getStaticModelsForProvider(provider)
   if (staticModels.length === 0) {
     return true
+  }
+  if (provider === 'codex') {
+    return (
+      staticModels.some(staticModel => staticModel.id === model) ||
+      model.startsWith('gpt-5')
+    )
   }
   return staticModels.some(staticModel => staticModel.id === model)
 }

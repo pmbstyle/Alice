@@ -24,6 +24,7 @@ export interface AppSettings {
     | 'zai'
     | 'minimax'
     | 'deepseek'
+    | 'codex'
 
   // Transformers STT settings
   transformersModel?: string
@@ -38,6 +39,8 @@ export interface AppSettings {
   zaiBaseUrl?: string
   minimaxBaseUrl?: string
   deepseekBaseUrl?: string
+  codexAuthConnected?: boolean
+  codexAccountLabel?: string
 
   assistantModel?: string
   assistantSystemPrompt?: string

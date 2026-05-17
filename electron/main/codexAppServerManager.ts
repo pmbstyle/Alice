@@ -67,6 +67,7 @@ interface CodexStreamStartParams {
   instructions?: string
   effort?: string
   dynamicTools?: CodexDynamicToolSpec[]
+  config?: Record<string, any>
 }
 
 interface ActiveCodexStream {
@@ -793,6 +794,7 @@ class CodexAppServerManager {
         serviceName: 'alice_electron',
         ephemeral: true,
         environments: [],
+        config: params.config || undefined,
         dynamicTools:
           stream.dynamicTools.size > 0
             ? Array.from(stream.dynamicTools.values())

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import { useSettingsStore } from '../../../stores/settingsStore'
 import {
+  convertToolsToCodexRuntimeConfig,
   convertToolsToCodexDynamicTools,
   convertResponsesInputToCodexInput,
   createCodexResponse,
@@ -123,12 +124,45 @@ describe('listCodexModels', () => {
     ])
   })
 
+  it('projects OpenAI MCP tools into Codex runtime mcp_servers config', () => {
+    expect(
+      convertToolsToCodexRuntimeConfig([
+        {
+          type: 'mcp',
+          server_label: 'deepwiki',
+          server_url: 'https://mcp.deepwiki.com/mcp',
+          require_approval: 'never',
+          headers: { Authorization: 'Bearer test' },
+        },
+      ])
+    ).toEqual({
+      mcp_servers: {
+        deepwiki: {
+          url: 'https://mcp.deepwiki.com/mcp',
+          default_tools_approval_mode: 'approve',
+          http_headers: { Authorization: 'Bearer test' },
+        },
+      },
+    })
+  })
+
   it('uses live app-server models instead of a stale configured Codex model', async () => {
     setActivePinia(createPinia())
     const settingsStore = useSettingsStore()
     settingsStore.updateSetting('aiProvider', 'codex')
     settingsStore.updateSetting('assistantModel', 'gpt-5.5')
     settingsStore.updateSetting('assistantTools', ['get_current_datetime'])
+    settingsStore.updateSetting(
+      'mcpServersConfig',
+      JSON.stringify([
+        {
+          type: 'mcp',
+          server_label: 'deepwiki',
+          server_url: 'https://mcp.deepwiki.com/mcp',
+          require_approval: 'never',
+        },
+      ])
+    )
 
     const listeners = new Map<string, (event: any, payload: any) => void>()
     const startArgs: any[] = []
@@ -204,6 +238,14 @@ describe('listCodexModels', () => {
         }),
       ])
     )
+    expect(startArgs[0]?.config).toEqual({
+      mcp_servers: {
+        deepwiki: {
+          url: 'https://mcp.deepwiki.com/mcp',
+          default_tools_approval_mode: 'approve',
+        },
+      },
+    })
   })
 
   it('aggregates Codex app-server text for background responses', async () => {

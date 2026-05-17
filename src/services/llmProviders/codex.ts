@@ -10,6 +10,10 @@ export interface CodexDynamicToolSpec {
   inputSchema: Record<string, any>
 }
 
+export interface CodexRuntimeConfig {
+  mcp_servers?: Record<string, Record<string, any>>
+}
+
 interface CodexModelListResult {
   success?: boolean
   models?: Array<{
@@ -128,9 +132,79 @@ export function convertToolsToCodexDynamicTools(
     }))
 }
 
-async function buildCodexDynamicTools(): Promise<CodexDynamicToolSpec[]> {
+function normalizeCodexMcpApprovalMode(value: unknown): string | undefined {
+  if (value === 'never' || value === false) {
+    return 'approve'
+  }
+  if (value === 'always' || value === true) {
+    return 'prompt'
+  }
+  return undefined
+}
+
+function normalizeStringRecord(value: unknown): Record<string, string> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>).filter(
+    (entry): entry is [string, string] =>
+      typeof entry[0] === 'string' && typeof entry[1] === 'string'
+  )
+
+  return entries.length > 0 ? Object.fromEntries(entries) : null
+}
+
+export function convertToolsToCodexRuntimeConfig(
+  tools: any[]
+): CodexRuntimeConfig | undefined {
+  const mcpServers: Record<string, Record<string, any>> = {}
+
+  for (const tool of tools) {
+    if (
+      tool?.type !== 'mcp' ||
+      typeof tool.server_label !== 'string' ||
+      typeof tool.server_url !== 'string'
+    ) {
+      continue
+    }
+
+    const serverName = tool.server_label.trim()
+    const serverUrl = tool.server_url.trim()
+    if (!serverName || !serverUrl) {
+      continue
+    }
+
+    const serverConfig: Record<string, any> = { url: serverUrl }
+    const approvalMode = normalizeCodexMcpApprovalMode(tool.require_approval)
+    if (approvalMode) {
+      serverConfig.default_tools_approval_mode = approvalMode
+    }
+
+    const headers = normalizeStringRecord(tool.headers)
+    if (headers) {
+      serverConfig.http_headers = headers
+    }
+
+    mcpServers[serverName] = serverConfig
+  }
+
+  if (Object.keys(mcpServers).length === 0) {
+    return undefined
+  }
+
+  return { mcp_servers: mcpServers }
+}
+
+async function buildCodexTooling(): Promise<{
+  dynamicTools: CodexDynamicToolSpec[]
+  config?: CodexRuntimeConfig
+}> {
   const tools = await buildToolsForProvider()
-  return convertToolsToCodexDynamicTools(tools)
+  return {
+    dynamicTools: convertToolsToCodexDynamicTools(tools),
+    config: convertToolsToCodexRuntimeConfig(tools),
+  }
 }
 
 function isLikelyCodexModelCompatibilityError(error: unknown): boolean {
@@ -150,6 +224,7 @@ async function* streamViaCodexAppServerWithFallback(
     instructions: string
     effort?: string
     dynamicTools?: CodexDynamicToolSpec[]
+    config?: CodexRuntimeConfig
   },
   signal?: AbortSignal
 ): AsyncGenerator<any> {
@@ -275,13 +350,15 @@ export const createCodexResponse = async (
   const instructions =
     customInstructions ||
     buildAssistantSystemPrompt(settings.assistantSystemPrompt)
+  const tooling = await buildCodexTooling()
 
   const request = {
     input: convertResponsesInputToCodexInput(input),
     model,
     instructions,
     effort: normalizeCodexEffort(settings.assistantReasoningEffort),
-    dynamicTools: await buildCodexDynamicTools(),
+    dynamicTools: tooling.dynamicTools,
+    config: tooling.config,
   }
 
   return streamViaCodexAppServerWithFallback(request, signal)
@@ -320,6 +397,7 @@ async function* streamViaCodexAppServer(
     instructions: string
     effort?: string
     dynamicTools?: CodexDynamicToolSpec[]
+    config?: CodexRuntimeConfig
   },
   signal?: AbortSignal
 ): AsyncGenerator<any> {
@@ -380,6 +458,7 @@ async function* streamViaCodexAppServer(
         instructions: request.instructions,
         effort: request.effort,
         dynamicTools: request.dynamicTools,
+        config: request.config,
       }
     )
     if (!startResult?.success) {

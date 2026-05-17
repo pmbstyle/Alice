@@ -655,7 +655,7 @@ class CodexAppServerManager {
         cwd,
         model: params.model || undefined,
         approvalPolicy: 'never',
-        sandboxPolicy: { type: 'read-only', networkAccess: false },
+        sandboxPolicy: { type: 'readOnly', networkAccess: false },
         effort: params.effort || undefined,
         environments: [],
       }),

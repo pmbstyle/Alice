@@ -18,7 +18,7 @@ Alice is more than a chatbot; she’s built to feel present, responsive, emotion
 
 ### 💻 Local and Cloud use
 
-Alice is designed to work with Cloud(OpenAI, OpenRouter, Z.ai, Minimax, Deepseek) and Local LLMs (Ollama/LM Studio).
+Alice is designed to work with Cloud(OpenAI / Codex subscription, OpenRouter, Z.ai, Minimax, Deepseek) and Local LLMs (Ollama/LM Studio).
 Has built-in speech-to-text, text-to-speech, and embedding services.
 While the OpenAI cloud API is preferred and provides the best user experience, Alice can also operate **fully locally** (experimental).
 

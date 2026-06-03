@@ -27,15 +27,13 @@ describe('providerCatalog', () => {
   it('exposes MiniMax text models with API model ids', () => {
     expect(
       getStaticModelsForProvider('minimax').map(model => model.id)
-    ).toEqual(['MiniMax-M2.7', 'MiniMax-M2.5', 'MiniMax-M2.1', 'MiniMax-M2'])
-    expect(MINIMAX_TEXT_MODELS[0]?.displayName).toBe('MiniMax M2.7')
+    ).toEqual(['MiniMax-M3', 'MiniMax-M2.7', 'MiniMax-M2.7-highspeed'])
+    expect(MINIMAX_TEXT_MODELS[0]?.displayName).toBe('MiniMax M3')
   })
 
   it('falls back to the MiniMax default for non-MiniMax model ids', () => {
-    expect(getSafeProviderModel('minimax', 'gpt-4o-mini')).toBe('MiniMax-M2.7')
-    expect(getSafeProviderModel('minimax', 'MiniMax-M2.7-highspeed')).toBe(
-      'MiniMax-M2.7'
-    )
+    expect(getSafeProviderModel('minimax', 'gpt-4o-mini')).toBe('MiniMax-M3')
+    expect(getSafeProviderModel('minimax', 'MiniMax-M2.5')).toBe('MiniMax-M3')
   })
 
   it('exposes DeepSeek text models with current API model ids', () => {

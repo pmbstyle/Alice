@@ -29,10 +29,9 @@ export const ZAI_CODING_MODELS: ProviderModelDefinition[] = [
 ]
 
 export const MINIMAX_TEXT_MODELS: ProviderModelDefinition[] = [
+  { id: 'MiniMax-M3', displayName: 'MiniMax M3' },
   { id: 'MiniMax-M2.7', displayName: 'MiniMax M2.7' },
-  { id: 'MiniMax-M2.5', displayName: 'MiniMax M2.5' },
-  { id: 'MiniMax-M2.1', displayName: 'MiniMax M2.1' },
-  { id: 'MiniMax-M2', displayName: 'MiniMax M2' },
+  { id: 'MiniMax-M2.7-highspeed', displayName: 'MiniMax M2.7 Highspeed' },
 ]
 
 export const DEEPSEEK_TEXT_MODELS: ProviderModelDefinition[] = [
@@ -79,7 +78,7 @@ export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
   },
   minimax: {
     displayName: 'MiniMax',
-    defaultModel: 'MiniMax-M2.7',
+    defaultModel: 'MiniMax-M3',
     nativeWebSearch: false,
   },
   deepseek: {

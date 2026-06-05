@@ -166,7 +166,7 @@ describe('createOpenAICompatibleResponse', () => {
           'Content-Type': 'application/json',
         },
         data: expect.objectContaining({
-          model: 'MiniMax-M2.7',
+          model: 'MiniMax-M3',
           reasoning_split: true,
           stream: false,
         }),
@@ -317,7 +317,7 @@ describe('createOpenAICompatibleResponse', () => {
         'Content-Type': 'application/json',
       },
       data: expect.objectContaining({
-        model: 'MiniMax-M2.7',
+        model: 'MiniMax-M3',
         reasoning_split: true,
         stream: true,
       }),

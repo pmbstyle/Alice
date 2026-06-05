@@ -532,8 +532,8 @@ func downloadFile(url, dst string, timeout time.Duration) error {
 }
 
 func fileExists(p string) bool {
-	_, err := os.Stat(p)
-	return err == nil
+	info, err := os.Stat(p)
+	return err == nil && !info.IsDir() && info.Size() > 0
 }
 
 // unzipOne extracts a specific file from a zip archive to dstDir
@@ -595,10 +595,11 @@ func untarSelect(tgzPath, dstDir string, names []string) error {
 			return err
 		}
 		base := filepath.Base(hdr.Name)
-		if !set[base] || hdr.FileInfo().IsDir() {
+		wanted, ok := selectedTarOutputName(hdr.Name, base, set)
+		if !ok || hdr.FileInfo().IsDir() || hdr.Typeflag != tar.TypeReg {
 			continue
 		}
-		out := filepath.Join(dstDir, base)
+		out := filepath.Join(dstDir, wanted)
 		of, err := os.Create(out)
 		if err != nil {
 			return err
@@ -611,7 +612,7 @@ func untarSelect(tgzPath, dstDir string, names []string) error {
 		if runtime.GOOS != "windows" {
 			_ = os.Chmod(out, 0o755)
 		}
-		delete(set, base)
+		delete(set, wanted)
 		if len(set) == 0 {
 			break
 		}
@@ -620,6 +621,35 @@ func untarSelect(tgzPath, dstDir string, names []string) error {
 		return fmt.Errorf("missing files: %v", keys(set))
 	}
 	return nil
+}
+
+func selectedTarOutputName(entryName, base string, set map[string]bool) (string, bool) {
+	if set[base] {
+		return base, true
+	}
+
+	if strings.Contains(entryName, ".dSYM/") {
+		return "", false
+	}
+
+	for wanted := range set {
+		if isVersionedSharedLibraryName(wanted, base) {
+			return wanted, true
+		}
+	}
+	return "", false
+}
+
+func isVersionedSharedLibraryName(wanted, candidate string) bool {
+	if strings.HasSuffix(wanted, ".dylib") {
+		prefix := strings.TrimSuffix(wanted, ".dylib") + "."
+		return strings.HasPrefix(candidate, prefix) && strings.HasSuffix(candidate, ".dylib")
+	}
+	if strings.HasSuffix(wanted, ".so") {
+		prefix := wanted + "."
+		return strings.HasPrefix(candidate, prefix)
+	}
+	return false
 }
 
 func keys(m map[string]bool) []string {

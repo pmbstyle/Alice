@@ -55,7 +55,11 @@ function downloadFile(url, outputPath) {
     https
       .get(url, response => {
         // Handle redirects
-        if (response.statusCode === 302 || response.statusCode === 301) {
+        if (
+          response.statusCode >= 300 &&
+          response.statusCode < 400 &&
+          response.headers.location
+        ) {
           file.close()
           fs.unlinkSync(outputPath)
 

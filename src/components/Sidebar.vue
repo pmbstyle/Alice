@@ -252,14 +252,11 @@ const retryInitialization = async () => {
   }
 }
 
-const resizeWindow = async (open: boolean) => {
-  const targetWidth = open ? 1200 : 500
-  const targetHeight = 500
-  if (window.electron?.resize) {
-    window.electron.resize({
-      width: targetWidth,
-      height: targetHeight,
-    })
+const restoreInteractiveAudioState = () => {
+  if (generalStore.isRecordingRequested) {
+    generalStore.setAudioState('LISTENING')
+  } else {
+    generalStore.setAudioState('IDLE')
   }
 }
 
@@ -279,11 +276,6 @@ onMounted(async () => {
     generalStore.setAudioState('CONFIG')
   } else if (aiNeedsInitialization) {
     generalStore.statusMessage = 'Initializing AI...'
-    changeSidebarView('chat')
-    if (!generalStore.openSidebar) {
-      generalStore.openSidebar = true
-      resizeWindow(true)
-    }
 
     const initSuccess = await conversationStore.initialize()
     if (initSuccess) {
@@ -291,23 +283,14 @@ onMounted(async () => {
         generalStore.audioState === 'CONFIG' ||
         generalStore.statusMessage.startsWith('Initializing AI')
       ) {
-        if (generalStore.isRecordingRequested) {
-          generalStore.setAudioState('LISTENING')
-        } else {
-          generalStore.setAudioState('IDLE')
-        }
+        restoreInteractiveAudioState()
       }
     } else {
       console.log('[Sidebar] AI initialization failed on mount.')
     }
   } else if (conversationStore.isInitialized) {
-    changeSidebarView('chat')
     if (generalStore.audioState === 'CONFIG') {
-      if (generalStore.isRecordingRequested) {
-        generalStore.setAudioState('LISTENING')
-      } else {
-        generalStore.setAudioState('IDLE')
-      }
+      restoreInteractiveAudioState()
     } else if (
       generalStore.audioState !== 'LISTENING' &&
       generalStore.audioState !== 'SPEAKING' &&
@@ -318,7 +301,6 @@ onMounted(async () => {
       generalStore.setAudioState('IDLE')
     }
   } else {
-    changeSidebarView('chat')
     if (generalStore.audioState === 'CONFIG') generalStore.setAudioState('IDLE')
   }
 })
@@ -334,17 +316,13 @@ watch(
         settingsStore.successMessage = null
 
         setTimeout(() => {
-          // Ensure main window shows chat and close settings window
+          // Keep chat selected when the user opens the panel after settings close.
           changeSidebarView('chat')
           if (window.ipcRenderer) {
             window.ipcRenderer.invoke('settings-window:close').catch(console.error)
           }
           if (generalStore.audioState === 'CONFIG') {
-            if (generalStore.isRecordingRequested) {
-              generalStore.setAudioState('LISTENING')
-            } else {
-              generalStore.setAudioState('IDLE')
-            }
+            restoreInteractiveAudioState()
           }
         }, 1500)
       } else {

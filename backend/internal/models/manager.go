@@ -40,7 +40,7 @@ func (m *Manager) Initialize(ctx context.Context) error {
 		log.Println("Initializing STT service...")
 		sttConfig := &whisper.Config{
 			Language:       "en",
-			ModelPath:      "models/whisper-base.bin",
+			ModelPath:      m.config.Models.Whisper.Path,
 			SampleRate:     16000,
 			VoiceThreshold: 0.02,
 		}
@@ -57,7 +57,7 @@ func (m *Manager) Initialize(ctx context.Context) error {
 		log.Println("Initializing TTS service...")
 		ttsConfig := &piper.Config{
 			PiperPath: "", // Let ensurePiper set the correct OS-specific path
-			ModelPath: "models/piper",
+			ModelPath: m.config.Models.Piper.Path,
 			Voice:     "en_US-amy-medium",
 			Speed:     1.0,
 		}

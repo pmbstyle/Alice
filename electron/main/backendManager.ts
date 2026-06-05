@@ -72,16 +72,19 @@ export class BackendManager {
       }
 
       console.log('[BackendManager] Using backend at:', backendPath)
+      const backendDir = path.dirname(backendPath)
+      const modelsDir = path.join(backendDir, 'models')
 
       // Set environment variables for Go backend
       const env = {
         ...process.env,
-        ALICE_HOST: this.config.host,
-        ALICE_PORT: this.config.port.toString(),
-        ALICE_LOG_LEVEL: 'INFO',
-        ALICE_ENABLE_STT: 'true',
-        ALICE_ENABLE_TTS: 'true', // Enable TTS
-        ALICE_ENABLE_EMBEDDINGS: 'true',
+        PORT: this.config.port.toString(),
+        ENABLE_STT: 'true',
+        ENABLE_TTS: 'true',
+        ENABLE_EMBEDDINGS: 'true',
+        WHISPER_MODEL_PATH: path.join(modelsDir, 'whisper-base.bin'),
+        PIPER_MODEL_PATH: path.join(modelsDir, 'piper'),
+        MINILM_MODEL_PATH: path.join(modelsDir, 'minilm'),
       }
 
       // Spawn Go process

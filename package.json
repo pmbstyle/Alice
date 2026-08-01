@@ -75,7 +75,7 @@
     "mammoth": "^1.12.0",
     "node-cron": "^4.2.1",
     "path": "^0.12.7",
-    "pdfjs-dist": "^5.7.284",
+    "pdfjs-dist": "^6.2.108",
     "prettier": "^3.7.4",
     "turndown": "^7.2.4",
     "vue-router": "^5.0.6",

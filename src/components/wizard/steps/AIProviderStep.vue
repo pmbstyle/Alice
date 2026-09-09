@@ -24,6 +24,7 @@
         <option value="zai">Z.ai (GLM Coding Plan)</option>
         <option value="minimax">MiniMax (OpenAI-compatible)</option>
         <option value="deepseek">DeepSeek (OpenAI-compatible)</option>
+        <option value="api-route">API Route (OpenAI-compatible)</option>
         <option value="codex">ChatGPT Codex (subscription)</option>
         <option value="ollama">Ollama (Local LLMs)</option>
         <option value="lm-studio">LM Studio (Local LLMs)</option>
@@ -160,6 +161,113 @@
       </button>
 
       <TestResult :result="testResult.openrouter" />
+    </div>
+
+    <!-- API Route Configuration -->
+    <div v-else-if="formData.aiProvider === 'api-route'" class="space-y-4">
+      <div class="alert alert-info text-sm">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          class="stroke-current shrink-0 w-5 h-5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          ></path>
+        </svg>
+        <span>
+          API Route provides OpenAI-compatible access to multiple model
+          providers through one API key.
+        </span>
+      </div>
+
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">API Route API Key</span>
+        </label>
+        <div class="text-sm text-base-content/70 mb-2">
+          Get your key from
+          <a
+            href="https://www.api-route.com/api-keys"
+            target="_blank"
+            class="link"
+            >API Route</a
+          >.
+        </div>
+        <input
+          type="password"
+          v-model="formData.VITE_API_ROUTE_API_KEY"
+          placeholder="sk-..."
+          class="input input-bordered w-full focus:input-primary"
+          :class="{
+            'input-error':
+              testResult.apiRoute.error && !testResult.apiRoute.success,
+          }"
+        />
+      </div>
+
+      <button
+        @click="$emit('test-api-route')"
+        class="btn btn-secondary w-full"
+        :disabled="
+          isTesting.apiRoute || !formData.VITE_API_ROUTE_API_KEY.trim()
+        "
+      >
+        <span
+          v-if="isTesting.apiRoute"
+          class="loading loading-spinner loading-xs mr-2"
+        ></span>
+        Test API Route Key
+      </button>
+
+      <TestResult :result="testResult.apiRoute" />
+
+      <div
+        v-if="
+          testResult.apiRoute.success && formData.availableModels.length > 0
+        "
+        class="space-y-4"
+      >
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Assistant Model</span>
+          </label>
+          <select
+            v-model="formData.assistantModel"
+            class="select select-bordered w-full focus:select-primary focus:outline-none"
+          >
+            <option
+              v-for="model in formData.availableModels"
+              :key="model"
+              :value="model"
+            >
+              {{ model }}
+            </option>
+          </select>
+        </div>
+
+        <div class="form-control">
+          <label class="label">
+            <span class="label-text">Summarization Model</span>
+          </label>
+          <select
+            v-model="formData.summarizationModel"
+            class="select select-bordered w-full focus:select-primary focus:outline-none"
+          >
+            <option
+              v-for="model in formData.availableModels"
+              :key="model"
+              :value="model"
+            >
+              {{ model }}
+            </option>
+          </select>
+        </div>
+      </div>
     </div>
 
     <!-- Z.ai Configuration -->
@@ -809,6 +917,7 @@ defineEmits<{
   'test-zai': []
   'test-minimax': []
   'test-deepseek': []
+  'test-api-route': []
   'test-codex': []
   'test-ollama': []
   'test-lmstudio': []

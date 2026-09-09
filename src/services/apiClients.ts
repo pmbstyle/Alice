@@ -3,6 +3,7 @@ import Groq from 'groq-sdk'
 import { useSettingsStore } from '../stores/settingsStore'
 import { backendApi } from './backendApi'
 import {
+  API_ROUTE_OPENAI_BASE_URL,
   DEEPSEEK_OPENAI_BASE_URL,
   MINIMAX_OPENAI_BASE_URL,
   ZAI_CODING_BASE_URL,
@@ -16,6 +17,7 @@ let lmStudioClient: OpenAI | null = null
 let zaiClient: OpenAI | null = null
 let minimaxClient: OpenAI | null = null
 let deepseekClient: OpenAI | null = null
+let apiRouteClient: OpenAI | null = null
 
 export function getOpenAIClient(): OpenAI {
   if (!openaiClient) {
@@ -95,6 +97,16 @@ export function getDeepSeekClient(): OpenAI {
     throw new Error('DeepSeek client could not be initialized')
   }
   return deepseekClient
+}
+
+export function getAPIRouteClient(): OpenAI {
+  if (!apiRouteClient) {
+    initializeAPIRouteClient()
+  }
+  if (!apiRouteClient) {
+    throw new Error('API Route client could not be initialized')
+  }
+  return apiRouteClient
 }
 
 function initializeOpenAIClient(): void {
@@ -226,6 +238,21 @@ function initializeDeepSeekClient(): void {
   })
 }
 
+function initializeAPIRouteClient(): void {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_API_ROUTE_API_KEY) {
+    throw new Error('API Route API Key is not configured.')
+  }
+
+  apiRouteClient = new OpenAI({
+    apiKey: settings.VITE_API_ROUTE_API_KEY,
+    baseURL: API_ROUTE_OPENAI_BASE_URL,
+    dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
+  })
+}
+
 export function reinitializeClients(): void {
   console.log('Reinitializing API clients with updated settings...')
 
@@ -291,6 +318,14 @@ export function reinitializeClients(): void {
   } catch (error) {
     console.error('Failed to reinitialize DeepSeek client:', error)
     deepseekClient = null
+  }
+
+  try {
+    initializeAPIRouteClient()
+    console.log('API Route client reinitialized successfully')
+  } catch (error) {
+    console.error('Failed to reinitialize API Route client:', error)
+    apiRouteClient = null
   }
 }
 

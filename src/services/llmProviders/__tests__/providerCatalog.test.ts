@@ -41,9 +41,7 @@ describe('providerCatalog', () => {
 
   it('falls back to the MiniMax default for non-MiniMax model ids', () => {
     expect(getSafeProviderModel('minimax', 'gpt-4o-mini')).toBe('MiniMax-M3')
-    expect(getSafeProviderModel('minimax', 'MiniMax-M2.5')).toBe(
-      'MiniMax-M2.5'
-    )
+    expect(getSafeProviderModel('minimax', 'MiniMax-M2.5')).toBe('MiniMax-M2.5')
   })
 
   it('exposes DeepSeek text models with current API model ids', () => {
@@ -75,11 +73,15 @@ describe('providerCatalog', () => {
     ])
     expect(CODEX_TEXT_MODELS[0]?.displayName).toBe('GPT-5.4')
     expect(getSafeProviderModel('codex', 'gpt-4o-mini')).toBe('gpt-5.4')
-    expect(getSafeProviderModel('codex', 'gpt-5.4-mini')).toBe(
-      'gpt-5.4-mini'
-    )
-    expect(getSafeProviderModel('codex', 'gpt-5.1-codex')).toBe(
-      'gpt-5.1-codex'
+    expect(getSafeProviderModel('codex', 'gpt-5.4-mini')).toBe('gpt-5.4-mini')
+    expect(getSafeProviderModel('codex', 'gpt-5.1-codex')).toBe('gpt-5.1-codex')
+  })
+
+  it('accepts dynamically discovered API Route models', () => {
+    expect(getStaticModelsForProvider('api-route')).toEqual([])
+    expect(getSafeProviderModel('api-route', '')).toBe('gpt-5.4-mini')
+    expect(getSafeProviderModel('api-route', 'claude-sonnet-4-5')).toBe(
+      'claude-sonnet-4-5'
     )
   })
 })

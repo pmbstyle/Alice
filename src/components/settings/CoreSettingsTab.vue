@@ -22,6 +22,7 @@
             <option value="zai">Z.ai (Coding Plan)</option>
             <option value="minimax">MiniMax</option>
             <option value="deepseek">DeepSeek</option>
+            <option value="api-route">API Route</option>
             <option value="codex">ChatGPT Codex</option>
             <option value="ollama">Ollama (Local)</option>
             <option value="lm-studio">LM Studio (Local)</option>
@@ -213,6 +214,28 @@
           />
           <p class="text-xs text-gray-400 mt-1">
             Required for DeepSeek chat models.
+          </p>
+        </div>
+        <div v-if="currentSettings.aiProvider === 'api-route'">
+          <label for="api-route-key" class="block mb-1 text-sm"
+            >API Route API Key *</label
+          >
+          <input
+            id="api-route-key"
+            type="password"
+            v-model="currentSettings.VITE_API_ROUTE_API_KEY"
+            class="input focus:outline-none w-full"
+            autocomplete="new-password"
+            placeholder="sk-..."
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            Required for API Route chat models.
+            <a
+              href="https://www.api-route.com/api-keys"
+              target="_blank"
+              class="link"
+              >Get an API key</a
+            >.
           </p>
         </div>
         <div v-if="currentSettings.aiProvider === 'deepseek'">

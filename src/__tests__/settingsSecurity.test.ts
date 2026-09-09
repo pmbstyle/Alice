@@ -9,12 +9,16 @@ describe('settings secret boundaries', () => {
   it('keeps secrets out of the public settings record', () => {
     const result = splitSecretSettings({
       VITE_OPENAI_API_KEY: 'sk-test',
+      VITE_API_ROUTE_API_KEY: 'sk-route',
       VITE_QB_PASSWORD: '',
       aiProvider: 'openai',
     })
 
     expect(result.publicSettings).toEqual({ aiProvider: 'openai' })
-    expect(result.secrets).toEqual({ VITE_OPENAI_API_KEY: 'sk-test' })
+    expect(result.secrets).toEqual({
+      VITE_OPENAI_API_KEY: 'sk-test',
+      VITE_API_ROUTE_API_KEY: 'sk-route',
+    })
     expect(result.hadSecretFields).toBe(true)
     expect(hasSecretValues(result.secrets)).toBe(true)
   })

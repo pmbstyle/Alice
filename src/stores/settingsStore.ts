@@ -34,6 +34,7 @@ export interface AliceSettings {
   VITE_ZAI_API_KEY: string
   VITE_MINIMAX_API_KEY: string
   VITE_DEEPSEEK_API_KEY: string
+  VITE_API_ROUTE_API_KEY: string
   VITE_GROQ_API_KEY: string
   VITE_GOOGLE_API_KEY: string
   sttProvider: 'openai' | 'groq' | 'google' | 'local'
@@ -126,6 +127,9 @@ function hasMinimumConfigForOnboarding(config: AliceSettings): boolean {
   if (config.VITE_DEEPSEEK_API_KEY?.trim()) {
     return true
   }
+  if (config.VITE_API_ROUTE_API_KEY?.trim()) {
+    return true
+  }
   if (config.codexAuthConnected) {
     return true
   }
@@ -146,6 +150,7 @@ const defaultSettings: AliceSettings = {
   VITE_ZAI_API_KEY: '',
   VITE_MINIMAX_API_KEY: '',
   VITE_DEEPSEEK_API_KEY: '',
+  VITE_API_ROUTE_API_KEY: '',
   VITE_GROQ_API_KEY: '',
   VITE_GOOGLE_API_KEY: '',
   sttProvider: 'openai',
@@ -220,6 +225,7 @@ const settingKeyToLabelMap: Record<keyof AliceSettings, string> = {
   VITE_ZAI_API_KEY: 'Z.ai API Key',
   VITE_MINIMAX_API_KEY: 'MiniMax API Key',
   VITE_DEEPSEEK_API_KEY: 'DeepSeek API Key',
+  VITE_API_ROUTE_API_KEY: 'API Route API Key',
   VITE_GROQ_API_KEY: 'Groq API Key (STT)',
   VITE_GOOGLE_API_KEY: 'Google API Key',
   sttProvider: 'Speech-to-Text Provider',
@@ -287,6 +293,7 @@ const ESSENTIAL_CORE_API_KEYS: (keyof AliceSettings)[] = [
   'VITE_ZAI_API_KEY',
   'VITE_MINIMAX_API_KEY',
   'VITE_DEEPSEEK_API_KEY',
+  'VITE_API_ROUTE_API_KEY',
 ]
 
 function requiresOpenAIKey(config: AliceSettings): boolean {
@@ -361,6 +368,7 @@ export const useSettingsStore = defineStore('settings', () => {
       'zai',
       'minimax',
       'deepseek',
+      'api-route',
       'codex',
     ] as const
     if (!validAIProviders.includes(validated.aiProvider as any)) {
@@ -448,6 +456,8 @@ export const useSettingsStore = defineStore('settings', () => {
       essentialKeys.push('VITE_MINIMAX_API_KEY', 'minimaxBaseUrl')
     } else if (settings.value.aiProvider === 'deepseek') {
       essentialKeys.push('VITE_DEEPSEEK_API_KEY', 'deepseekBaseUrl')
+    } else if (settings.value.aiProvider === 'api-route') {
+      essentialKeys.push('VITE_API_ROUTE_API_KEY')
     } else if (settings.value.aiProvider === 'codex') {
       essentialKeys.push('codexAuthConnected')
     } else if (settings.value.aiProvider === 'ollama') {
@@ -516,6 +526,10 @@ export const useSettingsStore = defineStore('settings', () => {
         !!settings.value.VITE_DEEPSEEK_API_KEY?.trim() &&
         !!settings.value.deepseekBaseUrl?.trim()
       )
+    }
+
+    if (settings.value.aiProvider === 'api-route') {
+      return !!settings.value.VITE_API_ROUTE_API_KEY?.trim()
     }
 
     if (settings.value.aiProvider === 'ollama') {
@@ -771,10 +785,14 @@ export const useSettingsStore = defineStore('settings', () => {
         settings.value.assistantModel = PROVIDER_CONFIGS.deepseek.defaultModel
         settings.value.SUMMARIZATION_MODEL =
           PROVIDER_CONFIGS.deepseek.defaultModel
+      } else if (settings.value.aiProvider === 'api-route') {
+        settings.value.assistantModel =
+          PROVIDER_CONFIGS['api-route'].defaultModel
+        settings.value.SUMMARIZATION_MODEL =
+          PROVIDER_CONFIGS['api-route'].defaultModel
       } else if (settings.value.aiProvider === 'codex') {
         settings.value.assistantModel = PROVIDER_CONFIGS.codex.defaultModel
-        settings.value.SUMMARIZATION_MODEL =
-          PROVIDER_CONFIGS.codex.defaultModel
+        settings.value.SUMMARIZATION_MODEL = PROVIDER_CONFIGS.codex.defaultModel
       }
     }
     if (key === 'assistantReasoningEffort') {
@@ -816,6 +834,7 @@ export const useSettingsStore = defineStore('settings', () => {
       key === 'VITE_ZAI_API_KEY' ||
       key === 'VITE_MINIMAX_API_KEY' ||
       key === 'VITE_DEEPSEEK_API_KEY' ||
+      key === 'VITE_API_ROUTE_API_KEY' ||
       key === 'ollamaBaseUrl' ||
       key === 'lmStudioBaseUrl' ||
       key === 'zaiBaseUrl' ||
@@ -861,6 +880,7 @@ export const useSettingsStore = defineStore('settings', () => {
         VITE_ZAI_API_KEY: settings.value.VITE_ZAI_API_KEY,
         VITE_MINIMAX_API_KEY: settings.value.VITE_MINIMAX_API_KEY,
         VITE_DEEPSEEK_API_KEY: settings.value.VITE_DEEPSEEK_API_KEY,
+        VITE_API_ROUTE_API_KEY: settings.value.VITE_API_ROUTE_API_KEY,
         VITE_GROQ_API_KEY: settings.value.VITE_GROQ_API_KEY,
         VITE_GOOGLE_API_KEY: settings.value.VITE_GOOGLE_API_KEY,
         sttProvider: settings.value.sttProvider,
@@ -1007,6 +1027,13 @@ export const useSettingsStore = defineStore('settings', () => {
         isSaving.value = false
         return
       }
+    } else if (currentConfigForTest.aiProvider === 'api-route') {
+      if (!currentConfigForTest.VITE_API_ROUTE_API_KEY?.trim()) {
+        error.value = `Essential setting '${settingKeyToLabelMap.VITE_API_ROUTE_API_KEY}' is missing.`
+        generalStore.statusMessage = 'API Route API Key is required.'
+        isSaving.value = false
+        return
+      }
     } else if (currentConfigForTest.aiProvider === 'codex') {
       if (!currentConfigForTest.codexAuthConnected) {
         error.value = `Essential setting '${settingKeyToLabelMap.codexAuthConnected}' is missing.`
@@ -1133,6 +1160,7 @@ export const useSettingsStore = defineStore('settings', () => {
     VITE_ZAI_API_KEY?: string
     VITE_MINIMAX_API_KEY?: string
     VITE_DEEPSEEK_API_KEY?: string
+    VITE_API_ROUTE_API_KEY?: string
     sttProvider: 'openai' | 'groq' | 'google' | 'local'
     ttsProvider?: 'openai' | 'google' | 'local'
     embeddingProvider?: 'openai' | 'local'
@@ -1157,6 +1185,8 @@ export const useSettingsStore = defineStore('settings', () => {
       onboardingData.VITE_MINIMAX_API_KEY || ''
     settings.value.VITE_DEEPSEEK_API_KEY =
       onboardingData.VITE_DEEPSEEK_API_KEY || ''
+    settings.value.VITE_API_ROUTE_API_KEY =
+      onboardingData.VITE_API_ROUTE_API_KEY || ''
     settings.value.sttProvider = onboardingData.sttProvider
     settings.value.aiProvider = onboardingData.aiProvider
     settings.value.VITE_GROQ_API_KEY = onboardingData.VITE_GROQ_API_KEY

@@ -6,9 +6,13 @@ export type AIProviderKey =
   | 'zai'
   | 'minimax'
   | 'deepseek'
+  | 'api-route'
   | 'codex'
 
-export type ChatCompletionsProviderKey = Exclude<AIProviderKey, 'openai' | 'codex'>
+export type ChatCompletionsProviderKey = Exclude<
+  AIProviderKey,
+  'openai' | 'codex'
+>
 
 export interface ProviderConfig {
   displayName: string
@@ -89,6 +93,11 @@ export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
     defaultModel: 'deepseek-v4-flash',
     nativeWebSearch: false,
   },
+  'api-route': {
+    displayName: 'API Route',
+    defaultModel: 'gpt-5.4-mini',
+    nativeWebSearch: false,
+  },
   codex: {
     displayName: 'ChatGPT Codex',
     defaultModel: 'gpt-5.4',
@@ -99,6 +108,7 @@ export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
 export const ZAI_CODING_BASE_URL = 'https://api.z.ai/api/coding/paas/v4'
 export const MINIMAX_OPENAI_BASE_URL = 'https://api.minimax.io/v1'
 export const DEEPSEEK_OPENAI_BASE_URL = 'https://api.deepseek.com'
+export const API_ROUTE_OPENAI_BASE_URL = 'https://global.api-route.com/v1'
 
 export const CHAT_COMPLETIONS_PROVIDERS: ChatCompletionsProviderKey[] = [
   'openrouter',
@@ -107,6 +117,7 @@ export const CHAT_COMPLETIONS_PROVIDERS: ChatCompletionsProviderKey[] = [
   'zai',
   'minimax',
   'deepseek',
+  'api-route',
 ]
 
 export function getProviderDisplayName(provider: string): string {

@@ -10,7 +10,7 @@ import {
 } from './providerCatalog'
 
 type OpenAIClientGetter = () => OpenAI
-type OpenAICompatibleProviderKey = 'zai' | 'minimax' | 'deepseek'
+type OpenAICompatibleProviderKey = 'zai' | 'minimax' | 'deepseek' | 'api-route'
 
 function convertResponsesInputToChatMessages(
   input: OpenAI.Responses.Request.InputItemLike[]

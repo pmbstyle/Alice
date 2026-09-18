@@ -47,7 +47,7 @@
     "cross-env": "^10.1.0",
     "daisyui": "^5.1.26",
     "dotenv": "^17.4.2",
-    "electron": "43.2.0",
+    "electron": "44.0.0",
     "electron-builder": "26.15.3",
     "openai": "^7.4.0",
     "pinia": "^3.0.3",

@@ -159,6 +159,7 @@ const providerLabel = (provider: string) => {
     local: 'Local',
     minimax: 'MiniMax',
     deepseek: 'DeepSeek',
+    'api-route': 'API Route',
     ollama: 'Ollama',
     openai: 'OpenAI',
     openrouter: 'OpenRouter',

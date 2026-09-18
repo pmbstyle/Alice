@@ -55,6 +55,7 @@ describe('security boundaries', () => {
       'https://api.openai.com/v1/models',
       'https://openrouter.ai/api/v1/models',
       'https://api.minimax.io/v1/models',
+      'https://global.api-route.com/v1/models',
     ]) {
       expect(validateHttpBridgeUrl(url, origins)).toBe(url)
     }

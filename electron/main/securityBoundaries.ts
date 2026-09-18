@@ -6,6 +6,7 @@ const BUILT_IN_HTTP_BASE_URLS = [
   'https://api.z.ai',
   'https://api.minimax.io',
   'https://api.deepseek.com',
+  'https://global.api-route.com',
   'http://localhost:11434',
   'http://localhost:1234',
 ]

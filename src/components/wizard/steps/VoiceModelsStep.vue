@@ -156,7 +156,8 @@
               formData.aiProvider === 'openrouter' ||
               formData.aiProvider === 'zai' ||
               formData.aiProvider === 'minimax' ||
-              formData.aiProvider === 'deepseek') &&
+              formData.aiProvider === 'deepseek' ||
+              formData.aiProvider === 'api-route') &&
             !formData.VITE_OPENAI_API_KEY?.trim()
           "
           class="alert alert-warning text-sm"
@@ -208,7 +209,8 @@
             formData.aiProvider === 'openrouter' ||
             formData.aiProvider === 'zai' ||
             formData.aiProvider === 'minimax' ||
-            formData.aiProvider === 'deepseek'
+            formData.aiProvider === 'deepseek' ||
+            formData.aiProvider === 'api-route'
           "
           class="form-control"
         >

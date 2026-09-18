@@ -71,6 +71,8 @@
                 (currentSettings.aiProvider === 'deepseek' &&
                   currentSettings.VITE_DEEPSEEK_API_KEY &&
                   currentSettings.deepseekBaseUrl) ||
+                (currentSettings.aiProvider === 'api-route' &&
+                  currentSettings.VITE_API_ROUTE_API_KEY) ||
                 (currentSettings.aiProvider === 'ollama' &&
                   currentSettings.ollamaBaseUrl) ||
                 (currentSettings.aiProvider === 'lm-studio' &&
@@ -312,6 +314,8 @@
                 (currentSettings.aiProvider === 'deepseek' &&
                   currentSettings.VITE_DEEPSEEK_API_KEY &&
                   currentSettings.deepseekBaseUrl) ||
+                (currentSettings.aiProvider === 'api-route' &&
+                  currentSettings.VITE_API_ROUTE_API_KEY) ||
                 (currentSettings.aiProvider === 'ollama' &&
                   currentSettings.ollamaBaseUrl) ||
                 (currentSettings.aiProvider === 'lm-studio' &&
@@ -526,6 +530,7 @@ const getProviderDisplayName = (provider: string): string => {
     zai: 'Z.ai',
     minimax: 'MiniMax',
     deepseek: 'DeepSeek',
+    'api-route': 'API Route',
   }
   return providerNames[provider] || provider
 }

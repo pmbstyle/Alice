@@ -10,6 +10,7 @@ import {
   getZAIClient,
   getMiniMaxClient,
   getDeepSeekClient,
+  getAPIRouteClient,
 } from './apiClients'
 import {
   createOpenAIResponse as createOpenAIResponseWithOpenAI,
@@ -33,6 +34,10 @@ import {
   createDeepSeekResponse,
   listDeepSeekModels,
 } from './llmProviders/deepseek'
+import {
+  createAPIRouteResponse,
+  listAPIRouteModels,
+} from './llmProviders/apiRoute'
 import {
   createCodexResponse,
   createCodexTextResponse,
@@ -121,6 +126,8 @@ function getAIClient(): OpenAI {
       return getMiniMaxClient()
     case 'deepseek':
       return getDeepSeekClient()
+    case 'api-route':
+      return getAPIRouteClient()
     default:
       return getOpenAIClient()
   }
@@ -145,6 +152,9 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
   }
   if (settings.aiProvider === 'deepseek') {
     return listDeepSeekModels()
+  }
+  if (settings.aiProvider === 'api-route') {
+    return listAPIRouteModels()
   }
   if (settings.aiProvider === 'codex') {
     return listCodexModels()
@@ -208,6 +218,15 @@ export const createOpenAIResponse = async (
   }
   if (settings.aiProvider === 'deepseek') {
     return createDeepSeekResponse(
+      input,
+      previousResponseId,
+      stream,
+      customInstructions,
+      signal
+    )
+  }
+  if (settings.aiProvider === 'api-route') {
+    return createAPIRouteResponse(
       input,
       previousResponseId,
       stream,
@@ -905,9 +924,7 @@ export const createContextAnalysisResponse = async (
       ...(analysisModel.startsWith('gpt-5')
         ? {
             reasoning: {
-              effort: analysisModel.startsWith('gpt-5.6')
-                ? 'none'
-                : 'minimal',
+              effort: analysisModel.startsWith('gpt-5.6') ? 'none' : 'minimal',
             },
             text: {
               verbosity: 'low',

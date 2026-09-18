@@ -25,6 +25,7 @@
           @test-zai="testZAIKey"
           @test-minimax="testMiniMaxKey"
           @test-deepseek="testDeepSeekKey"
+          @test-api-route="testAPIRouteKey"
           @test-codex="testCodexAuth"
           @test-ollama="testOllamaConnection"
           @test-lmstudio="testLMStudioConnection"
@@ -83,6 +84,7 @@ import {
   type AIProviderKey,
 } from '../../services/llmProviders/providerCatalog'
 import { listDeepSeekModelsForConfig } from '../../services/llmProviders/deepseek'
+import { listAPIRouteModelsForConfig } from '../../services/llmProviders/apiRoute'
 import { listCodexModels } from '../../services/llmProviders/codex'
 import { listMiniMaxModelsForConfig } from '../../services/llmProviders/minimax'
 import { listOpenAIModelsForConfig } from '../../services/llmProviders/openai'
@@ -125,6 +127,7 @@ const formData = reactive({
   VITE_ZAI_API_KEY: '',
   VITE_MINIMAX_API_KEY: '',
   VITE_DEEPSEEK_API_KEY: '',
+  VITE_API_ROUTE_API_KEY: '',
   codexAuthConnected: false,
   codexAccountLabel: '',
   aiProvider: 'openai' as AIProviderKey,
@@ -151,6 +154,7 @@ const isTesting = reactive({
   zai: false,
   minimax: false,
   deepseek: false,
+  apiRoute: false,
   codex: false,
   ollama: false,
   lmStudio: false,
@@ -162,6 +166,7 @@ const testResult = reactive({
   zai: { success: false, error: '' },
   minimax: { success: false, error: '' },
   deepseek: { success: false, error: '' },
+  apiRoute: { success: false, error: '' },
   codex: { success: false, error: '' },
   ollama: { success: false, error: '' },
   lmStudio: { success: false, error: '' },
@@ -196,6 +201,7 @@ const canContinue = computed(() => {
           formData.aiProvider === 'zai' ||
           formData.aiProvider === 'minimax' ||
           formData.aiProvider === 'deepseek' ||
+          formData.aiProvider === 'api-route' ||
           formData.aiProvider === 'codex') &&
         !formData.VITE_OPENAI_API_KEY.trim()
       ) {
@@ -277,6 +283,17 @@ const fetchAvailableModels = async () => {
       baseURL = formData.minimaxBaseUrl
     } else if (formData.aiProvider === 'deepseek') {
       baseURL = formData.deepseekBaseUrl
+    } else if (formData.aiProvider === 'api-route') {
+      const models = await listAPIRouteModelsForConfig(
+        formData.VITE_API_ROUTE_API_KEY
+      )
+      formData.availableModels = models.map(model => model.id)
+
+      if (formData.availableModels.length > 0) {
+        formData.assistantModel = formData.availableModels[0]
+        formData.summarizationModel = formData.availableModels[0]
+      }
+      return
     } else if (formData.aiProvider === 'codex') {
       const models = await listCodexModels()
       formData.availableModels = models.map(model => model.id)
@@ -502,11 +519,40 @@ const testDeepSeekKey = async () => {
   }
 }
 
+const testAPIRouteKey = async () => {
+  if (!formData.VITE_API_ROUTE_API_KEY.trim()) {
+    testResult.apiRoute.error = 'API Key cannot be empty.'
+    testResult.apiRoute.success = false
+    return
+  }
+
+  isTesting.apiRoute = true
+  testResult.apiRoute.error = ''
+  testResult.apiRoute.success = false
+
+  try {
+    await fetchAvailableModels()
+    testResult.apiRoute.success = true
+  } catch (e: any) {
+    testResult.apiRoute.error = 'API key is invalid or has no permissions.'
+    if (e.message?.includes('401')) {
+      testResult.apiRoute.error = 'Invalid API key - please check your key.'
+    } else if (e.message?.includes('429')) {
+      testResult.apiRoute.error =
+        'Rate limit exceeded - please try again later.'
+    }
+  } finally {
+    isTesting.apiRoute = false
+  }
+}
+
 const syncCodexStatus = async () => {
   const status = await window.aliceIPC.invoke('codex-auth:status')
   const connected = Boolean(status?.connected)
   formData.codexAuthConnected = connected
-  formData.codexAccountLabel = connected ? status.accountLabel || 'Connected' : ''
+  formData.codexAccountLabel = connected
+    ? status.accountLabel || 'Connected'
+    : ''
   testResult.codex.success = connected
   testResult.codex.error = connected
     ? ''
@@ -549,7 +595,9 @@ const testCodexAuth = async () => {
 function handleCodexStatus(status: any) {
   const connected = Boolean(status?.connected)
   formData.codexAuthConnected = connected
-  formData.codexAccountLabel = connected ? status.accountLabel || 'Connected' : ''
+  formData.codexAccountLabel = connected
+    ? status.accountLabel || 'Connected'
+    : ''
   testResult.codex.success = connected
   testResult.codex.error = connected
     ? ''
@@ -656,6 +704,8 @@ const resetTestResults = () => {
   testResult.minimax.error = ''
   testResult.deepseek.success = false
   testResult.deepseek.error = ''
+  testResult.apiRoute.success = false
+  testResult.apiRoute.error = ''
   testResult.codex.success = false
   testResult.codex.error = ''
   testResult.ollama.success = false
@@ -684,6 +734,12 @@ const isCurrentProviderTested = () => {
   } else if (formData.aiProvider === 'deepseek') {
     return (
       testResult.deepseek.success &&
+      Boolean(formData.assistantModel) &&
+      Boolean(formData.summarizationModel)
+    )
+  } else if (formData.aiProvider === 'api-route') {
+    return (
+      testResult.apiRoute.success &&
       Boolean(formData.assistantModel) &&
       Boolean(formData.summarizationModel)
     )

@@ -25,6 +25,7 @@ export interface AppSettings {
   VITE_ZAI_API_KEY?: string
   VITE_MINIMAX_API_KEY?: string
   VITE_DEEPSEEK_API_KEY?: string
+  VITE_API_ROUTE_API_KEY?: string
   VITE_GROQ_API_KEY?: string
   sttProvider?: 'openai' | 'groq' | 'transformers'
   aiProvider?:
@@ -35,6 +36,7 @@ export interface AppSettings {
     | 'zai'
     | 'minimax'
     | 'deepseek'
+    | 'api-route'
     | 'codex'
 
   // Transformers STT settings

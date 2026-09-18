@@ -13,7 +13,6 @@ Alice is more than a chatbot; she’s built to feel present, responsive, emotion
     <img width="817" height="504" alt="AliceVideo" src="https://github.com/user-attachments/assets/9e0ffee2-198a-43a0-9f9a-a003d221e31d" />
   </a>
 </p>
-
 ## ✨ Key Features
 
 ### 💻 Local and Cloud use
@@ -84,7 +83,7 @@ With the local STT model, you can set a **wake-up word** (like "Hey, Siri").
 
 Fully customizable settings interface:
 
-* LLM provider selection between OpenAI, OpenRouter, DeepSeek, Z.ai(coding plan), Minimax(token plan), Ollama, LM Studio
+* LLM provider selection between OpenAI, OpenRouter, API Route, DeepSeek, Z.ai(coding plan), Minimax(token plan), Ollama, LM Studio
 * Cloud or local TTS, STT, Embeddings
 * Model choice & parameters (temperature, top\_p, history, etc)
 * Prompt and summarization tuning
@@ -131,7 +130,7 @@ Follow the [Setup Instructions](https://github.com/pmbstyle/Alice/blob/main/docs
 * **Frontend:** [Vue.js](https://vuejs.org/), [TailwindCSS](https://tailwindcss.com/)
 * **Desktop Shell:** [Electron](https://www.electronjs.org/)
 * **State Management:** [Pinia](https://pinia.vuejs.org/)
-* **AI APIs:** [OpenAI](https://platform.openai.com/), [OpenRouter](https://openrouter.ai/), [DeepSeek](https://platform.deepseek.com/), [Groq](https://console.groq.com/)
+* **AI APIs:** [OpenAI](https://platform.openai.com/), [OpenRouter](https://openrouter.ai/), [API Route](https://www.api-route.com/), [DeepSeek](https://platform.deepseek.com/), [Groq](https://console.groq.com/)
 * **Backend:** [Go](https://go.dev/)
 * **Vector search engine**: [hnswlib-node](https://github.com/nmslib/hnswlib)
 * **Local storage**: [better-sqlite3](https://github.com/WiseLibs/better-sqlite3)

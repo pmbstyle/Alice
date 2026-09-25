@@ -23,6 +23,7 @@
             <option value="minimax">MiniMax</option>
             <option value="deepseek">DeepSeek</option>
             <option value="api-route">API Route</option>
+            <option value="requesty">Requesty</option>
             <option value="codex">ChatGPT Codex</option>
             <option value="ollama">Ollama (Local)</option>
             <option value="lm-studio">LM Studio (Local)</option>
@@ -232,6 +233,28 @@
             Required for API Route chat models.
             <a
               href="https://www.api-route.com/api-keys"
+              target="_blank"
+              class="link"
+              >Get an API key</a
+            >.
+          </p>
+        </div>
+        <div v-if="currentSettings.aiProvider === 'requesty'">
+          <label for="requesty-key" class="block mb-1 text-sm"
+            >Requesty API Key *</label
+          >
+          <input
+            id="requesty-key"
+            type="password"
+            v-model="currentSettings.VITE_REQUESTY_API_KEY"
+            class="input focus:outline-none w-full"
+            autocomplete="new-password"
+            placeholder="rqsty-..."
+          />
+          <p class="text-xs text-gray-400 mt-1">
+            Required for chat models when using Requesty.
+            <a
+              href="https://app.requesty.ai/api-keys"
               target="_blank"
               class="link"
               >Get an API key</a

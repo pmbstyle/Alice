@@ -11,6 +11,7 @@ import {
   getMiniMaxClient,
   getDeepSeekClient,
   getAPIRouteClient,
+  getRequestyClient,
 } from './apiClients'
 import {
   createOpenAIResponse as createOpenAIResponseWithOpenAI,
@@ -38,6 +39,10 @@ import {
   createAPIRouteResponse,
   listAPIRouteModels,
 } from './llmProviders/apiRoute'
+import {
+  createRequestyResponse,
+  listRequestyModels,
+} from './llmProviders/requesty'
 import {
   createCodexResponse,
   createCodexTextResponse,
@@ -128,6 +133,8 @@ function getAIClient(): OpenAI {
       return getDeepSeekClient()
     case 'api-route':
       return getAPIRouteClient()
+    case 'requesty':
+      return getRequestyClient()
     default:
       return getOpenAIClient()
   }
@@ -155,6 +162,9 @@ export const fetchOpenAIModels = async (): Promise<OpenAI.Models.Model[]> => {
   }
   if (settings.aiProvider === 'api-route') {
     return listAPIRouteModels()
+  }
+  if (settings.aiProvider === 'requesty') {
+    return listRequestyModels()
   }
   if (settings.aiProvider === 'codex') {
     return listCodexModels()
@@ -227,6 +237,15 @@ export const createOpenAIResponse = async (
   }
   if (settings.aiProvider === 'api-route') {
     return createAPIRouteResponse(
+      input,
+      previousResponseId,
+      stream,
+      customInstructions,
+      signal
+    )
+  }
+  if (settings.aiProvider === 'requesty') {
+    return createRequestyResponse(
       input,
       previousResponseId,
       stream,

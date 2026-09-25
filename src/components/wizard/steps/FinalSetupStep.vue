@@ -160,6 +160,7 @@ const providerLabel = (provider: string) => {
     minimax: 'MiniMax',
     deepseek: 'DeepSeek',
     'api-route': 'API Route',
+    requesty: 'Requesty',
     ollama: 'Ollama',
     openai: 'OpenAI',
     openrouter: 'OpenRouter',

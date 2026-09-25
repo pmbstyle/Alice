@@ -6,6 +6,7 @@ import {
   API_ROUTE_OPENAI_BASE_URL,
   DEEPSEEK_OPENAI_BASE_URL,
   MINIMAX_OPENAI_BASE_URL,
+  REQUESTY_OPENAI_BASE_URL,
   ZAI_CODING_BASE_URL,
 } from './llmProviders/providerCatalog'
 
@@ -18,6 +19,7 @@ let zaiClient: OpenAI | null = null
 let minimaxClient: OpenAI | null = null
 let deepseekClient: OpenAI | null = null
 let apiRouteClient: OpenAI | null = null
+let requestyClient: OpenAI | null = null
 
 export function getOpenAIClient(): OpenAI {
   if (!openaiClient) {
@@ -107,6 +109,16 @@ export function getAPIRouteClient(): OpenAI {
     throw new Error('API Route client could not be initialized')
   }
   return apiRouteClient
+}
+
+export function getRequestyClient(): OpenAI {
+  if (!requestyClient) {
+    initializeRequestyClient()
+  }
+  if (!requestyClient) {
+    throw new Error('Requesty client could not be initialized')
+  }
+  return requestyClient
 }
 
 function initializeOpenAIClient(): void {
@@ -253,6 +265,21 @@ function initializeAPIRouteClient(): void {
   })
 }
 
+function initializeRequestyClient(): void {
+  const settings = useSettingsStore().config
+  if (!settings.VITE_REQUESTY_API_KEY) {
+    throw new Error('Requesty API Key is not configured.')
+  }
+
+  requestyClient = new OpenAI({
+    apiKey: settings.VITE_REQUESTY_API_KEY,
+    baseURL: REQUESTY_OPENAI_BASE_URL,
+    dangerouslyAllowBrowser: true,
+    timeout: 20 * 1000,
+    maxRetries: 1,
+  })
+}
+
 export function reinitializeClients(): void {
   console.log('Reinitializing API clients with updated settings...')
 
@@ -326,6 +353,14 @@ export function reinitializeClients(): void {
   } catch (error) {
     console.error('Failed to reinitialize API Route client:', error)
     apiRouteClient = null
+  }
+
+  try {
+    initializeRequestyClient()
+    console.log('Requesty client reinitialized successfully')
+  } catch (error) {
+    console.error('Failed to reinitialize Requesty client:', error)
+    requestyClient = null
   }
 }
 

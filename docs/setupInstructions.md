@@ -14,7 +14,7 @@ Run in your terminal `xattr -cr "/Applications/Alice AI App.app"`
 
 # AI Provider Setup
 
-Alice supports OpenAI, OpenRouter, API Route, DeepSeek, MiniMax, Z.ai, and local LLM inference.
+Alice supports OpenAI, OpenRouter, API Route, Requesty, DeepSeek, MiniMax, Z.ai, and local LLM inference.
 
 ## OpenAI (Default)
 
@@ -45,6 +45,15 @@ Alice supports OpenAI, OpenRouter, API Route, DeepSeek, MiniMax, Z.ai, and local
 - Alice loads the models available to your account from the API Route endpoint
 - API Route powers chat inference only; cloud TTS/STT/embeddings still require OpenAI or local voice and memory mode
 - No image generation support (use OpenAI provider for image-gen)
+
+## Requesty (Alternative)
+
+- Go to [Requesty](https://app.requesty.ai/api-keys) to get your Requesty API key
+- Select "AI Provider" in Core Settings as Requesty
+- Alice loads Requesty managed models (for example `claude-sonnet-4-5`) and the full model catalog (for example `openai/gpt-4o-mini`); the default model is `openai/gpt-4o-mini`
+- Requesty powers chat inference only; cloud TTS/STT/embeddings still require OpenAI or local voice and memory mode
+- No image generation support (use OpenAI provider for image-gen)
+- See the [Requesty docs](https://docs.requesty.ai) for more details
 
 ## Local Ollama / LM studio
 

@@ -25,6 +25,7 @@
         <option value="minimax">MiniMax (OpenAI-compatible)</option>
         <option value="deepseek">DeepSeek (OpenAI-compatible)</option>
         <option value="api-route">API Route (OpenAI-compatible)</option>
+        <option value="requesty">Requesty (OpenAI-compatible)</option>
         <option value="codex">ChatGPT Codex (subscription)</option>
         <option value="ollama">Ollama (Local LLMs)</option>
         <option value="lm-studio">LM Studio (Local LLMs)</option>
@@ -161,6 +162,69 @@
       </button>
 
       <TestResult :result="testResult.openrouter" />
+    </div>
+
+    <!-- Requesty Configuration -->
+    <div v-else-if="formData.aiProvider === 'requesty'" class="space-y-4">
+      <div class="alert alert-info text-sm">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          class="stroke-current shrink-0 w-5 h-5"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            stroke-width="2"
+            d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          ></path>
+        </svg>
+        <span
+          >Requesty routes to hundreds of models through one API key. You can
+          choose local models for voice features in the next step.</span
+        >
+      </div>
+
+      <!-- Requesty Key -->
+      <div class="form-control">
+        <label class="label">
+          <span class="label-text">Requesty API Key</span>
+        </label>
+        <div class="text-sm text-base-content/70 mb-2">
+          Get your key from the
+          <a
+            href="https://app.requesty.ai/api-keys"
+            target="_blank"
+            class="link"
+            >Requesty dashboard</a
+          >
+        </div>
+        <input
+          type="password"
+          v-model="formData.VITE_REQUESTY_API_KEY"
+          placeholder="rqsty-..."
+          class="input input-bordered w-full focus:input-primary"
+          :class="{
+            'input-error':
+              testResult.requesty.error && !testResult.requesty.success,
+          }"
+        />
+      </div>
+
+      <button
+        @click="$emit('test-requesty')"
+        class="btn btn-secondary w-full"
+        :disabled="isTesting.requesty || !formData.VITE_REQUESTY_API_KEY.trim()"
+      >
+        <span
+          v-if="isTesting.requesty"
+          class="loading loading-spinner loading-xs mr-2"
+        ></span>
+        Test Requesty Key
+      </button>
+
+      <TestResult :result="testResult.requesty" />
     </div>
 
     <!-- API Route Configuration -->
@@ -918,6 +982,7 @@ defineEmits<{
   'test-minimax': []
   'test-deepseek': []
   'test-api-route': []
+  'test-requesty': []
   'test-codex': []
   'test-ollama': []
   'test-lmstudio': []

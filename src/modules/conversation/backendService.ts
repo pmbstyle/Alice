@@ -11,6 +11,7 @@ export interface BackendServiceDependencies {
     VITE_MINIMAX_API_KEY?: string
     VITE_DEEPSEEK_API_KEY?: string
     VITE_API_ROUTE_API_KEY?: string
+    VITE_REQUESTY_API_KEY?: string
     codexAuthConnected?: boolean
     ollamaBaseUrl?: string
     lmStudioBaseUrl?: string
@@ -108,6 +109,10 @@ export function createBackendService(
       deps.logInfo('Cannot fetch models: API Route API Key is missing.')
       return
     }
+    if (provider === 'requesty' && !config.VITE_REQUESTY_API_KEY) {
+      deps.logInfo('Cannot fetch models: Requesty API Key is missing.')
+      return
+    }
     if (provider === 'codex' && !config.codexAuthConnected) {
       deps.logInfo('Cannot fetch models: ChatGPT Codex is not connected.')
       return
@@ -134,6 +139,7 @@ export function createBackendService(
         minimax: 'MiniMax',
         deepseek: 'DeepSeek',
         'api-route': 'API Route',
+        requesty: 'Requesty',
         codex: 'ChatGPT Codex',
       }
       const providerName = providerNameMap[provider] || provider

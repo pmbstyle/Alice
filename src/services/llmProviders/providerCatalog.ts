@@ -7,6 +7,7 @@ export type AIProviderKey =
   | 'minimax'
   | 'deepseek'
   | 'api-route'
+  | 'requesty'
   | 'codex'
 
 export type ChatCompletionsProviderKey = Exclude<
@@ -98,6 +99,11 @@ export const PROVIDER_CONFIGS: Record<AIProviderKey, ProviderConfig> = {
     defaultModel: 'gpt-5.4-mini',
     nativeWebSearch: false,
   },
+  requesty: {
+    displayName: 'Requesty',
+    defaultModel: 'openai/gpt-4o-mini',
+    nativeWebSearch: false,
+  },
   codex: {
     displayName: 'ChatGPT Codex',
     defaultModel: 'gpt-5.4',
@@ -109,6 +115,7 @@ export const ZAI_CODING_BASE_URL = 'https://api.z.ai/api/coding/paas/v4'
 export const MINIMAX_OPENAI_BASE_URL = 'https://api.minimax.io/v1'
 export const DEEPSEEK_OPENAI_BASE_URL = 'https://api.deepseek.com'
 export const API_ROUTE_OPENAI_BASE_URL = 'https://global.api-route.com/v1'
+export const REQUESTY_OPENAI_BASE_URL = 'https://router.requesty.ai/v1'
 
 export const CHAT_COMPLETIONS_PROVIDERS: ChatCompletionsProviderKey[] = [
   'openrouter',
@@ -118,6 +125,7 @@ export const CHAT_COMPLETIONS_PROVIDERS: ChatCompletionsProviderKey[] = [
   'minimax',
   'deepseek',
   'api-route',
+  'requesty',
 ]
 
 export function getProviderDisplayName(provider: string): string {

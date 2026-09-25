@@ -3,7 +3,13 @@ import { isExpectedAbortError } from '../../utils/isAbortError'
 export async function* convertLocalLLMStreamToResponsesFormat(
   stream: any,
   provider:
-    'ollama' | 'lm-studio' | 'zai' | 'minimax' | 'deepseek' | 'api-route'
+    | 'ollama'
+    | 'lm-studio'
+    | 'zai'
+    | 'minimax'
+    | 'deepseek'
+    | 'api-route'
+    | 'requesty'
 ) {
   let responseId = `${provider}-${Date.now()}`
   let messageItemId = `message-${Date.now()}`
@@ -207,7 +213,7 @@ export async function* convertLocalLLMStreamToResponsesFormat(
 
 export async function* convertChatCompletionToResponsesFormat(
   completion: any,
-  provider: 'zai' | 'minimax' | 'deepseek' | 'api-route'
+  provider: 'zai' | 'minimax' | 'deepseek' | 'api-route' | 'requesty'
 ) {
   const responseId = completion?.id || `${provider}-${Date.now()}`
   const messageItemId = `message-${Date.now()}`

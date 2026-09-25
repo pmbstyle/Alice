@@ -26,6 +26,7 @@
           @test-minimax="testMiniMaxKey"
           @test-deepseek="testDeepSeekKey"
           @test-api-route="testAPIRouteKey"
+          @test-requesty="testRequestyKey"
           @test-codex="testCodexAuth"
           @test-ollama="testOllamaConnection"
           @test-lmstudio="testLMStudioConnection"
@@ -85,6 +86,7 @@ import {
 } from '../../services/llmProviders/providerCatalog'
 import { listDeepSeekModelsForConfig } from '../../services/llmProviders/deepseek'
 import { listAPIRouteModelsForConfig } from '../../services/llmProviders/apiRoute'
+import { listRequestyModelsForConfig } from '../../services/llmProviders/requesty'
 import { listCodexModels } from '../../services/llmProviders/codex'
 import { listMiniMaxModelsForConfig } from '../../services/llmProviders/minimax'
 import { listOpenAIModelsForConfig } from '../../services/llmProviders/openai'
@@ -128,6 +130,7 @@ const formData = reactive({
   VITE_MINIMAX_API_KEY: '',
   VITE_DEEPSEEK_API_KEY: '',
   VITE_API_ROUTE_API_KEY: '',
+  VITE_REQUESTY_API_KEY: '',
   codexAuthConnected: false,
   codexAccountLabel: '',
   aiProvider: 'openai' as AIProviderKey,
@@ -155,6 +158,7 @@ const isTesting = reactive({
   minimax: false,
   deepseek: false,
   apiRoute: false,
+  requesty: false,
   codex: false,
   ollama: false,
   lmStudio: false,
@@ -167,6 +171,7 @@ const testResult = reactive({
   minimax: { success: false, error: '' },
   deepseek: { success: false, error: '' },
   apiRoute: { success: false, error: '' },
+  requesty: { success: false, error: '' },
   codex: { success: false, error: '' },
   ollama: { success: false, error: '' },
   lmStudio: { success: false, error: '' },
@@ -202,6 +207,7 @@ const canContinue = computed(() => {
           formData.aiProvider === 'minimax' ||
           formData.aiProvider === 'deepseek' ||
           formData.aiProvider === 'api-route' ||
+          formData.aiProvider === 'requesty' ||
           formData.aiProvider === 'codex') &&
         !formData.VITE_OPENAI_API_KEY.trim()
       ) {
@@ -546,6 +552,33 @@ const testAPIRouteKey = async () => {
   }
 }
 
+const testRequestyKey = async () => {
+  if (!formData.VITE_REQUESTY_API_KEY.trim()) {
+    testResult.requesty.error = 'API Key cannot be empty.'
+    testResult.requesty.success = false
+    return
+  }
+
+  isTesting.requesty = true
+  testResult.requesty.error = ''
+  testResult.requesty.success = false
+
+  try {
+    await listRequestyModelsForConfig(formData.VITE_REQUESTY_API_KEY)
+    testResult.requesty.success = true
+  } catch (e: any) {
+    testResult.requesty.error = 'API Key is invalid or has no permissions.'
+    if (e.message?.includes('401')) {
+      testResult.requesty.error = 'Invalid API key - please check your key.'
+    } else if (e.message?.includes('429')) {
+      testResult.requesty.error =
+        'Rate limit exceeded - please try again later.'
+    }
+  } finally {
+    isTesting.requesty = false
+  }
+}
+
 const syncCodexStatus = async () => {
   const status = await window.aliceIPC.invoke('codex-auth:status')
   const connected = Boolean(status?.connected)
@@ -706,6 +739,8 @@ const resetTestResults = () => {
   testResult.deepseek.error = ''
   testResult.apiRoute.success = false
   testResult.apiRoute.error = ''
+  testResult.requesty.success = false
+  testResult.requesty.error = ''
   testResult.codex.success = false
   testResult.codex.error = ''
   testResult.ollama.success = false
@@ -719,6 +754,8 @@ const isCurrentProviderTested = () => {
     return testResult.openai.success
   } else if (formData.aiProvider === 'openrouter') {
     return testResult.openrouter.success
+  } else if (formData.aiProvider === 'requesty') {
+    return testResult.requesty.success
   } else if (formData.aiProvider === 'zai') {
     return (
       testResult.zai.success &&

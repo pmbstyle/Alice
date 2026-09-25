@@ -7,6 +7,7 @@ const BUILT_IN_HTTP_BASE_URLS = [
   'https://api.minimax.io',
   'https://api.deepseek.com',
   'https://global.api-route.com',
+  'https://router.requesty.ai',
   'http://localhost:11434',
   'http://localhost:1234',
 ]

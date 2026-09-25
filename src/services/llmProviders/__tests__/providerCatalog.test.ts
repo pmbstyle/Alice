@@ -84,4 +84,12 @@ describe('providerCatalog', () => {
       'claude-sonnet-4-5'
     )
   })
+
+  it('accepts dynamically discovered Requesty models', () => {
+    expect(getStaticModelsForProvider('requesty')).toEqual([])
+    expect(getSafeProviderModel('requesty', '')).toBe('openai/gpt-4o-mini')
+    expect(getSafeProviderModel('requesty', 'claude-sonnet-4-5')).toBe(
+      'claude-sonnet-4-5'
+    )
+  })
 })
